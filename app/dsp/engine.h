@@ -81,6 +81,7 @@ typedef struct {
     VoiceEv q[EVQ]; int nq;
     int next_v;
     int8_t last_v[5]; float last_hz[5]; int last_n;   /* the last note's (or chord's) voices and pitches: glide, legato */
+    float lp_hz, hp_hz;                  /* its band's filters now (TONE, gliding there) */
     Dirt dirt;                           /* its own DIRT (the character EFFECTS', the amount its send's) */
 } Layer;
 

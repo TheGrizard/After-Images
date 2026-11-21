@@ -65,7 +65,7 @@ static void layer_sound(const Engine *e, int l, Sound *s)
 {
     const Piece *p = e->p; const LayerP *lp = &p->l[l];
     s->engine = lp->engine < NUM_ENGINES ? lp->engine : 0;
-    s->tone = clamp01(u(lp->tone) + e->L[l].tone_off + (u(p->mood) - 0.6f) * 0.35f
+    s->tone = clamp01(0.42f + (u(lp->tone) - 0.5f) * 0.5f + e->L[l].tone_off + (u(p->mood) - 0.6f) * 0.35f
                       + u(p->drift) * 0.25f * e->L[l].dtone.v);
     s->weight = u(lp->weight);
     s->weird = clamp01(u(lp->weird) + u(p->weird) * 0.6f);
@@ -327,13 +327,20 @@ void engine_block_begin(Engine *e, int nsub)
         }
         e->gains[k][KEYS] = e->fade * 1.2f + 0.3f;
     }
-    /* the bands: each layer's filters, from its role and its TONE */
+    /* the bands: each layer's filters, from its role; TONE a DJ's filter on them, at 12 o'clock open, to the left a
+     * low-pass sweeping down to a thud, to the right a high-pass sweeping up to air, a little resonance towards the ends */
     for (int l = 0; l < NUM_LAYERS; l++) {
         Layer *L = &e->L[l];
-        float t = u(p->l[l].tone), lp = ROLES[l].lp * (0.35f + 0.65f * t + 0.3f * (u(p->mood) - 0.5f));
+        float t = u(p->l[l].tone), lo = t < 0.5f ? (0.5f - t) * 2.0f : 0.0f, hi = t > 0.5f ? (t - 0.5f) * 2.0f : 0.0f;
+        float lp = ROLES[l].lp * (0.85f + 0.3f * (u(p->mood) - 0.5f)) * fm_exp2f(-7.0f * lo);
+        float hp = ROLES[l].hp * fm_exp2f(6.5f * hi);
         /* patched: the source layer's activity opens this one's filter, the random voltage moves it (LINK, DRIFT) */
         lp *= fm_exp2f(u(p->link) * 1.8f * (e->L[L->src].cv - 0.25f) + u(p->drift) * 0.9f * L->rnd);
-        for (int c = 0; c < 2; c++) { svf_set(&e->L[l].hp[c], ROLES[l].hp, 0.6f); svf_set(&e->L[l].lp[c], lp, 0.6f); }
+        lp = clampf(lp, 40.0f, 18000.0f); hp = clampf(hp, 15.0f, 12000.0f);
+        if (L->lp_hz <= 0) { L->lp_hz = lp; L->hp_hz = hp; }
+        L->lp_hz += (lp - L->lp_hz) * 0.35f; L->hp_hz += (hp - L->hp_hz) * 0.35f;   /* (turned smoothly, no steps) */
+        float q = 0.6f + 1.4f * (lo > hi ? lo : hi) * (lo > hi ? lo : hi);
+        for (int c = 0; c < 2; c++) { svf_set(&L->hp[c], L->hp_hz, hi > 0 ? q : 0.6f); svf_set(&L->lp[c], L->lp_hz, lo > 0 ? q : 0.6f); }
     }
     cost_add(e, NBUS, t0);
 }

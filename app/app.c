@@ -92,6 +92,7 @@ static void settings_load(void)
             Piece *pc = i ? &set.saved[i - 1] : &set.cur;
             memcpy(pc, raw + head + (uint32_t)i * ps, ps);
             if (magic == SET_MAGIC1) memset(&pc->dirt, 0, 4);   /* (v0.1's tape) */
+            for (int l = 0; l < NUM_LAYERS; l++) pc->l[l].tone = (uint8_t)(50 + ((int)pc->l[l].tone - 50) * 3 / 10);   /* (TONE: now a DJ's filter, 50 open) */
             piece_sends_default(pc);
         }
         if (magic == SET_MAGIC1) settings_v2();
@@ -277,7 +278,7 @@ static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX
  * MIDI IN, USB) */
 static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PALETTE, K_FRACTAL, K_DIRT, K_RVB, K_ECHO, K_GRAIN };
+       K_PALETTE, K_FRACTAL, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -285,7 +286,7 @@ typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   
 #define SO(f) (uint16_t)__builtin_offsetof(settings_t, f)
 static const Knob PAGES[NPAGES][4] = {
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
-    { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_PCT, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "DRIFT", K_PCT, 1, LO(weird) } },
+    { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_TONE, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "DRIFT", K_PCT, 1, LO(weird) } },
     { { "TYPE", K_SEQ, 1, LO(seq) }, { "DENSITY", K_PCT, 1, LO(density) }, { "RATE", K_RATE, 1, LO(rate) }, { "MUTATE", K_PCT, 1, LO(mutate) } },
     { { "LEVEL", K_PCT, 1, LO(level) }, { "ATTACK", K_PCT, 1, LO(attack) }, { "RELEASE", K_PCT, 1, LO(release) }, { "OCTAVE", K_OCT, 1, LO(octave) } },
     { { "F.GLIDE", K_PCT, 3, PO(glide) }, { "LEGATO", K_ONOFF, 3, PO(legato) }, { "SWEEP", K_PCT, 3, PO(sweep) }, { "RESO", K_PCT, 3, PO(reso) } },
@@ -365,6 +366,7 @@ static void knob_text(int pg, int k, char *s)
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_DIRT: text_cat(s, v < 34 ? "FOLD " : v < 67 ? "CRUSH " : "NOISE "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
     case K_GRAIN: if (v < 92) int_text(v, s); else text_cat(s, "FREEZE"); break;
+    case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PALETTE: text_cat(s, LPAL_NAME[v % NPAL]); break;
     case K_FRACTAL: text_cat(s, (set.full ? FIELD_NAME : FRACTAL_NAME)[v % NFRACTALS]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;

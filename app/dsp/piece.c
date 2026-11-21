@@ -19,7 +19,7 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
 {
     LayerP *lp = &p->l[l];
     lp->engine = POOL[l][rng_int(r, POOL_N[l])];
-    lp->tone = pick(r, 15, 62);
+    lp->tone = rng_chance(r, 0.8f) ? pick(r, 42, 58) : rng_chance(r, 0.6f) ? pick(r, 18, 38) : pick(r, 62, 80);   /* (TONE: 50 open)*/
     lp->weight = (uint8_t)weight;
     lp->weird = rng_chance(r, 0.25f) ? pick(r, 40, 85) : pick(r, 0, 35);
     lp->density = pick(r, 30, 70);

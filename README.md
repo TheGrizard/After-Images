@@ -44,7 +44,7 @@ stays clear.
 |---|---|
 | K1 to K4 | at HOME, the four layers' levels: they rise up from the bottom of the screen while you turn; on the other pages, the page's four macros (the one you turn shows big) |
 | HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), DRIFT (how far the sound strays from the harmonics into the strange) |
-| EDIT | SOUND for the chosen layer: ENGINE, TONE, WEIGHT (soft to heavy), DRIFT (the engine's own strangeness) |
+| EDIT | SOUND for the chosen layer: ENGINE, TONE (a DJ's filter: 12 o'clock open, left a low-pass sweeping down, right a high-pass sweeping up), WEIGHT (soft to heavy), DRIFT (the engine's own strangeness) |
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
 | ENV again | VOICE for the chosen layer: F.GLIDE (the filter glides after each new note; the pitch never slides), LEGATO (notes join, not started again), SWEEP (the filter opening over each note), RESO |

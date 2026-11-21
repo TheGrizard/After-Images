@@ -4,8 +4,10 @@
  * host/plat_host.c): gfx.c and announce.c are in scope.
  *
  * Controls
- *   K1-K4              the page's four macros
+ *   K1-K4              at HOME the layers' levels (shown while they turn); HOME held + K1-K4 the macros (MOOD,
+ *                      ACTIVITY, EVOLVE, WEIRD); on the other pages, their four macros
  *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI
+ *   HOME tapped at HOME   the processor's load, and whether saving works
  *   SELECT, SEL        the layer the SOUND, SEQUENCE and MIX pages (and the keys) play
  *   PRESET             the chosen layer's engine
  *   ALGORITHM          your saved pieces
@@ -208,11 +210,12 @@ static struct {
     int last_knob; uint32_t knob_at;      /* the knob turned last: its name and value, big */
     char pop_t[28], pop_s[28], pop_3[40]; uint16_t pop_c; uint32_t pop_until;
     uint32_t list_until;                  /* the saved pieces' list */
-    uint32_t rec_t; int rec_used, sel_used, home_tap;
+    uint32_t rec_t; int rec_used, sel_used, home_used;
+    uint32_t panel_until; int panel_kind;     /* HOME: the levels (0) or the macros (1), shown a moment after a turn */
     uint32_t last_view, last_panel, last_head;
     uint8_t key_notes[NKEYS][5], key_n[NKEYS];
     int last_note, last_chord;
-    char head_key[64]; uint32_t panel_key;
+    char head_key[64];
     float t;
     uint32_t uiq_tail;
     uint32_t splash_t0; int splash_on, touched;
@@ -418,9 +421,18 @@ static void knob_turn(int k, int d)
     if (ann_on()) { char s[24]; knob_text(ui.page, k, s); say_text(kn->name, s); }
 }
 
+/* HOME: the knobs are the layers' levels, shown while they turn (HOME held: the macros) */
+static void level_turn(int l, int d)
+{
+    LayerP *lp = &set.cur.l[l];
+    lp->level = (uint8_t)clamp(lp->level + 2 * d, 0, 100);
+    changed();
+    ui.panel_kind = 0; ui.panel_until = plat_ms() + 2000u; ui.last_knob = l; ui.knob_at = plat_ms(); ui.pop_until = 0;
+    if (ann_on()) { char n[8]; int_text(lp->level, n); say_text(LAYER_NAME[l], n); }
+}
+
 static void page_to(int pg)
 {
-    if (pg == PG_HOME && ui.page == PG_HOME) { info(); return; }   /* HOME again: how the FM-1 is doing */
     ui.page = pg; ui.knob_at = 0; ui.pop_until = 0;
     if (ann_on()) say_text(PAGE_NAME[pg], page_has_layer(pg) ? LAYER_NAME[ui.sel] : "");
 }
@@ -471,7 +483,10 @@ static void input(void)
     int32_t d;
     if (down || (keys & ~ui.keys)) ui.touched = 1;
 
-    for (int pg = 0; pg < NPAGES; pg++) if (down >> PAGE_BTN[pg] & 1u) page_to(pg);
+    for (int pg = 1; pg < NPAGES; pg++) if (down >> PAGE_BTN[pg] & 1u) page_to(pg);
+    /* HOME: from another page, home; held, the macros; tapped at home, how the FM-1 is doing */
+    if (down >> B_HOME & 1u) { ui.home_used = ui.page != PG_HOME; if (ui.page != PG_HOME) page_to(PG_HOME); }
+    if ((up >> B_HOME & 1u) && !ui.home_used) info();
     if (down >> B_SEL & 1u) ui.sel_used = 0;
     if ((up >> B_SEL & 1u) && !ui.sel_used) select_layer(ui.sel + 1);
     if (down >> B_REC & 1u) {
@@ -486,7 +501,13 @@ static void input(void)
     if (down >> B_OCTUP & 1u) hist_step(1);
     keys_input(keys);
 
-    for (int k = 0; k < 4; k++) if ((d = enc(EN_K1 + k)) != 0) knob_turn(k, (int)d);
+    for (int k = 0; k < 4; k++) {
+        if ((d = enc(EN_K1 + k)) == 0) continue;
+        if (ui.page != PG_HOME) knob_turn(k, (int)d);
+        else if (btn >> B_HOME & 1u) { knob_turn(k, (int)d); ui.home_used = 1; ui.panel_kind = 1; ui.panel_until = plat_ms() + 1500u; }
+        else level_turn(k, (int)d);
+    }
+    if (btn >> B_HOME & 1u) { ui.panel_kind = 1; ui.panel_until = plat_ms() + 300u; }   /* held: the macros stay up */
     if ((d = enc(EN_SELECT)) != 0) select_layer(ui.sel + (int)d);
     if ((d = enc(EN_ALGO)) != 0) load_step((int)d);
     if ((d = enc(EN_PRESET)) != 0) {
@@ -511,9 +532,9 @@ void app_input_only(void) { input(); }
  * low down, BODY rings, LIGHT a bright point joined to the last by a line (the melody drawn), DUST specks. */
 #define HEAD_H 30
 #define VIEW_Y HEAD_H
-#define VIEW_H 100
-#define PANEL_Y (VIEW_Y + VIEW_H)
-#define PANEL_H (240 - PANEL_Y)
+#define VIEW_H (240 - HEAD_H)
+#define PANEL_H 110
+#define PANEL_TOP (VIEW_H - PANEL_H)     /* the panel, over the view's lower part */
 #define NSHAPE 96
 typedef struct { uint8_t on, layer; float x, y, age, life, size, vel; float px, py; } shape_t;
 static shape_t shp[NSHAPE];
@@ -584,7 +605,7 @@ static void draw_harmony(void)
 {
     const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
     int n = sc->n, root = ((eng.root % n) + n) % n;
-    float cx = 120.0f, cy = (float)VIEW_H * 0.5f, r = 40.0f, rot = ui.t * 0.05f;
+    float cx = 120.0f, cy = (float)VIEW_H * 0.45f, r = 52.0f, rot = ui.t * 0.05f;
     float px = 0, py = 0, fx = 0, fy = 0;
     for (int i = 0; i <= n; i++) {
         float a = rot + (float)(i % n) / (float)n, x = cx + r * 1.5f * fm_sin_turns(a), y = cy - r * 0.9f * fm_sin_turns(a + 0.25f);
@@ -640,7 +661,7 @@ static void draw_popup(void)
     int wt = text_w(&FONT_S, ui.pop_t), ws = text_w(&FONT_M, ui.pop_s), w3 = ui.pop_3[0] ? text_w(&FONT_S, ui.pop_3) : 0;
     int w = wt > ws ? wt : ws; if (w3 > w) w = w3;
     w = clamp(w + 28, 120, 236);
-    int h = ui.pop_3[0] ? 78 : 58, y0 = (VIEW_H - h) / 2;
+    int h = ui.pop_3[0] ? 78 : 58, y0 = (PANEL_TOP - h) / 2 + 4;
     frame_box(120 - w / 2, y0, w, h, ui.pop_c);
     cv_text(120 - wt / 2, y0 + 7, &FONT_S, ui.pop_t, ui.pop_c);
     cv_text(120 - ws / 2, y0 + 25, &FONT_M, ui.pop_s, C_TXT);
@@ -651,7 +672,7 @@ static void draw_list(void)                 /* the saved pieces, around the one 
 {
     int n = set.nsaved, cur = set.slot == 255 ? 0 : set.slot, rows = 4;
     int first = clamp(cur - rows / 2, 0, n > rows ? n - rows : 0);
-    frame_box(6, 2, 228, 96, C_TXT);
+    frame_box(6, 4, 228, 94, C_TXT);
     cv_text(14, 6, &FONT_S, "PIECES", C_TXT);
     for (int i = 0; i < rows && first + i < n; i++) {
         char t[40], nm[32]; int y = 26 + i * 18;
@@ -661,15 +682,20 @@ static void draw_list(void)                 /* the saved pieces, around the one 
     }
 }
 
+static int panel_on(void) { return ui.page != PG_HOME || plat_ms() < ui.panel_until; }
+static void draw_panel_rows(int y0);
+
 static void draw_view(void)
 {
     uint32_t now = plat_ms();
-    for (int half = 0; half < 2; half++) {
-        int top = half ? VIEW_H / 2 : 0, h = half ? VIEW_H - VIEW_H / 2 : VIEW_H / 2;
+    int panel = panel_on();
+    for (int top = 0; top < VIEW_H; top += 60) {
+        int h = VIEW_H - top < 60 ? VIEW_H - top : 60;
         cv_begin(240, (uint32_t)h, C_BLACK);
         cv_oy = -top; cv_y0 = 0; cv_y1 = h;
         draw_shapes();
-        if (!set.playing) { int w = text_w(&FONT_M, "STOPPED"); cv_text(120 - w / 2, VIEW_H / 2 - 12, &FONT_M, "STOPPED", C_SUB); }
+        if (!set.playing) { int w = text_w(&FONT_M, "STOPPED"); cv_text(120 - w / 2, (panel ? PANEL_TOP : VIEW_H) / 2 - 12, &FONT_M, "STOPPED", C_SUB); }
+        if (panel && top + h > PANEL_TOP) { cv_rect(0, PANEL_TOP, 240, PANEL_H, C_BLACK); draw_panel_rows(PANEL_TOP); }
         if (now < ui.list_until) draw_list();
         else if (now < ui.pop_until) draw_popup();
         cv_blit(0, (uint32_t)(VIEW_Y + top));
@@ -698,31 +724,51 @@ static void draw_header(void)
     cv_blit(0, 0);
 }
 
-/* the panel: the page's name (and its layer), the knob turned last in big letters, then the four knobs */
-static void draw_panel_rows(void)
+/* the panel: the page's name (and its layer), the knob turned last in big letters, then the four knobs. At HOME:
+ * the four layers' levels (each column's bar the layer sounding now, the white mark its level), or, HOME held, the
+ * macros that steer where the music goes */
+static void draw_levels(int y0)
+{
+    cv_rect(0, y0, 240, 1, C_RULE);
+    for (int l = 0; l < NUM_LAYERS; l++) {
+        int cx = 30 + 60 * l, top = y0 + 26, h = 54, hot = ui.knob_at && plat_ms() - ui.knob_at < 2000u && ui.last_knob == l;
+        const char *nm = LAYER_NAME[l];
+        if (hot) cv_rect(60 * l + 1, y0 + 1, 58, PANEL_H - 1, RGB(20, 20, 26));
+        cv_text(cx - text_w(&FONT_B, nm) / 2, y0 + 6, &FONT_B, nm, LAYER_C[l]);
+        cv_rect(cx - 9, top, 18, h, C_WELL);
+        int m = (int)(eng.meter[l] * (float)h);
+        cv_rect(cx - 7, top + h - m, 14, m, dim(LAYER_C[l], 0.65f));
+        int lv = set.cur.l[l].level, my = top + h - lv * h / 100;
+        cv_rect(cx - 13, my - 1, 26, 3, C_WHITE);
+        char v[8]; int_text(lv, v);
+        cv_text(cx - text_w(&FONT_B, v) / 2, top + h + 5, &FONT_B, v, hot ? C_WHITE : C_TXT);
+    }
+}
+
+static void draw_panel_rows(int y0)
 {
     int pg = ui.page, lay = page_has_layer(pg);
     uint16_t pc = lay ? LAYER_C[ui.sel] : C_TXT;
-    cv_rect(0, 0, 240, 1, C_RULE);
-    cv_text(6, 4, &FONT_B, PAGE_NAME[pg], C_TXT);
-    if (lay) { const char *n = LAYER_NAME[ui.sel]; cv_text(234 - text_w(&FONT_B, n), 4, &FONT_B, n, pc); }
-    else if (pg == PG_HOME) { const char *n = set.playing ? "PLAYING" : "STOPPED"; cv_text(234 - text_w(&FONT_XS, n), 7, &FONT_XS, n, C_SUB); }
+    if (pg == PG_HOME && ui.panel_kind == 0) { draw_levels(y0); return; }
+    cv_rect(0, y0, 240, 1, C_RULE);
+    cv_text(6, y0 + 4, &FONT_B, pg == PG_HOME ? "MACROS" : PAGE_NAME[pg], C_TXT);
+    if (lay) { const char *n = LAYER_NAME[ui.sel]; cv_text(234 - text_w(&FONT_B, n), y0 + 4, &FONT_B, n, pc); }
     /* the knob turned last, big */
     int focus = ui.knob_at && plat_ms() - ui.knob_at < 2500u;
     if (focus) {
         char v[24]; knob_text(pg, ui.last_knob, v);
         const char *nm = PAGES[pg][ui.last_knob].name;
-        int x = cv_text(6, 24, &FONT_S, nm, C_SUB);
-        cv_text(x + 10, 20, &FONT_M, v, pc);
+        int x = cv_text(6, y0 + 24, &FONT_S, nm, C_SUB);
+        cv_text(x + 10, y0 + 20, &FONT_M, v, pc);
     } else {
         static const char *const HINT[NPAGES] = {
-            "TURN, LISTEN, REC FOR NEW", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER",
+            "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER",
             "THE SPACE AROUND IT", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE", "OUT OVER USB" };
-        cv_text(6, 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));
+        cv_text(6, y0 + 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));
     }
     /* four columns: label, value, bar */
     for (int k = 0; k < 4; k++) {
-        int x0 = 60 * k, cx = x0 + 30, y = 50;
+        int cx = 60 * k + 30, y = y0 + 50;
         int hot = focus && k == ui.last_knob;
         const char *nm = PAGES[pg][k].name;
         cv_text(cx - text_w(&FONT_XS, nm) / 2, y, &FONT_XS, nm, hot ? pc : C_SUB);
@@ -736,17 +782,6 @@ static void draw_panel_rows(void)
     }
 }
 
-static void draw_panel(void)
-{
-    for (int half = 0; half < 2; half++) {
-        int top = half ? PANEL_H / 2 : 0, h = half ? PANEL_H - PANEL_H / 2 : PANEL_H / 2;
-        cv_begin(240, (uint32_t)h, C_BLACK);
-        cv_oy = -top; cv_y0 = 0; cv_y1 = h;
-        draw_panel_rows();
-        cv_blit(0, (uint32_t)(PANEL_Y + top));
-    }
-}
-
 /* a screen reader that asks hears the whole screen */
 static void speak(void)
 {
@@ -756,7 +791,12 @@ static void speak(void)
         text_cat(t, NOTE_NAME[set.cur.key]); text_cat(t, " "); text_cat(t, SCALES[set.cur.scale].name); text_cat(t, ". ");
         text_cat(t, PAGE_NAME[ui.page]); text_cat(t, " page");
         if (page_has_layer(ui.page)) { text_cat(t, ", "); text_cat(t, LAYER_NAME[ui.sel]); }
-        for (int k = 0; k < 4; k++) { char v[24]; knob_text(ui.page, k, v); text_cat(t, ". "); text_cat(t, PAGES[ui.page][k].name); text_cat(t, " "); text_cat(t, v); }
+        for (int k = 0; k < 4; k++) {
+            char v[24];
+            if (ui.page == PG_HOME) { int_text(set.cur.l[k].level, v); text_cat(t, ". "); text_cat(t, LAYER_NAME[k]); }
+            else { knob_text(ui.page, k, v); text_cat(t, ". "); text_cat(t, PAGES[ui.page][k].name); }
+            text_cat(t, " "); text_cat(t, v);
+        }
         ann_say(t, 0, ANN_NOW);
     }
     ann_tick(plat_ms());
@@ -798,7 +838,7 @@ static void splash_end(void)
 {
     ui.splash_on = 0;
     lcd_fill(0, 0, 240, 240, C_BLACK);
-    ui.head_key[0] = 0; ui.panel_key = 0xFFFFFFFFu;
+    ui.head_key[0] = 0;
     ui.last_view = plat_ms();
 }
 
@@ -812,14 +852,6 @@ void app_ui_init(void)
     lcd_fill(0, 0, 240, 240, C_BLACK);
     app_splash();
     ui.splash_on = 1; ui.splash_t0 = plat_ms(); ui.touched = 0;
-}
-
-static uint32_t panel_hash(void)          /* what the panel shows: redrawn when it changes */
-{
-    uint32_t h = (uint32_t)ui.page * 131u + (uint32_t)ui.sel * 7u + (uint32_t)set.playing;
-    for (int k = 0; k < 4; k++) h = h * 33u + *knob_ptr(ui.page, k);
-    if (ui.knob_at && plat_ms() - ui.knob_at < 2500u) h = h * 33u + (uint32_t)ui.last_knob + 1u;
-    return h;
 }
 
 void app_frame(void)
@@ -838,10 +870,6 @@ void app_frame(void)
         ui.last_view = now; ui.t += dt;
         shapes_step(dt);
         draw_view();
-    }
-    {
-        uint32_t h = panel_hash();
-        if (h != ui.panel_key) { ui.panel_key = h; draw_panel(); }
     }
     {   /* the load guard: past 85 % of the render's time, fewer notes; back as it eases */
         uint32_t cpu = plat_cpu_pct();

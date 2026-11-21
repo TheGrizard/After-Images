@@ -4,11 +4,24 @@ wav home.wav
 expect page 0
 wait 8000
 shot home.png
+expect level3 56
 turn K4 5
 wait 200
 expect page 0
-shot knob.png
-wait 3000
+expect level3 66
+shot levels.png
+wait 2500
+press HOME
+wait 300
+shot macros.png
+turn K1 3
+wait 200
+expect mood 61
+shot macro_turn.png
+release HOME
+wait 2500
+expect page 0
+shot home_clear.png
 tap EDIT
 wait 200
 expect page 1

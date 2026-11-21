@@ -33,8 +33,8 @@ stays clear.
 
 | Control | What it does |
 |---|---|
-| K1 to K4 | the page's four macros (the one you turn shows big) |
-| HOME | MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), WEIRD |
+| K1 to K4 | at HOME, the four layers' levels: they rise up from the bottom of the screen while you turn; on the other pages, the page's four macros (the one you turn shows big) |
+| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), WEIRD |
 | EDIT | SOUND for the chosen layer: ENGINE, TONE, WEIGHT (soft to heavy), WEIRD |
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
@@ -50,7 +50,7 @@ stays clear.
 | OCT- / OCT+ | back and forward through the pieces REC replaced |
 | SAVE | keep the piece (up to 16); ALGORITHM steps through them |
 | PLAY | stop and start (it fades) |
-| HOME tapped on HOME | the processor's load and whether saving works |
+| HOME | back home from any page; tapped at home, the processor's load and whether saving works |
 | white keys | the scale's notes, up from the key, on the chosen layer's sound: no wrong notes |
 | black keys | the scale's chords: I to VII, then I to IV an octave up (CHORDS sets triads, sevenths, ninths, sus, spread, fifths) |
 

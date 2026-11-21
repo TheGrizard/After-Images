@@ -58,8 +58,8 @@ stays clear.
 | ARP a third time | USB AUDIO: RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1), STEMS (the four layers on USB audio channels 3-10, beside the mix on 1-2) |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |
 | PRESET | the chosen layer's engine |
-| REC | a new piece (your key, scale and tempo kept), featuring one effect: shimmer, reverse echo, a grain cloud, frozen grains, folded, crushed or wide space, dealt so none comes twice in a row |
-| REC held | a new world: a new key, scale and tempo too |
+| REC | a new piece at a new tempo (65 to 110 BPM; your key and scale kept), featuring one effect: shimmer, reverse echo, a grain cloud, frozen grains, folded, crushed or wide space, dealt so none comes twice in a row |
+| REC held | a new world: a new key and scale too |
 | SEL held + REC | the chosen layer anew: a new sequencer and sound |
 | OCT- / OCT+ | back and forward through the pieces REC replaced |
 | SAVE | keep the piece (up to 16); ALGORITHM steps through them |

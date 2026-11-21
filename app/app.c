@@ -496,7 +496,7 @@ static void new_piece(int all)
     changed();
     piece_name(seed, nm);
     pop(all ? "A NEW WORLD" : "NEW PIECE", nm, LAYER_C[(seed >> 3) % NUM_LAYERS]);
-    if (!all) { text_cat(ui.pop_3, "+ "); text_cat(ui.pop_3, FX_NAME[fx]); }
+    if (!all) { char n[8]; int_text(40 + set.cur.tempo, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM + "); text_cat(ui.pop_3, FX_NAME[fx]); }
     if (all) {
         text_cat(ui.pop_3, NOTE_NAME[set.cur.key]); text_cat(ui.pop_3, " "); text_cat(ui.pop_3, SCALES[set.cur.scale].name);
         char n[8]; text_cat(ui.pop_3, "  "); int_text(40 + set.cur.tempo, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM");

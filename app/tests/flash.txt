@@ -12,13 +12,13 @@ wait 300
 expect nsaved 1
 tap GLO
 wait 100
-turn K4 6
+turn K1 2
 wait 9500
-expect tempo 90
+expect key 11
 reboot
 wait 2500
 expect nsaved 1
-expect tempo 90
+expect key 11
 expect slot 0
 flash_fail 1
 tap SAVE

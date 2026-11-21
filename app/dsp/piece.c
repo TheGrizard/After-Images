@@ -109,11 +109,11 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     if (fx == FX_REVERSE) p->s_echo[L_LIGHT] = (uint8_t)clampi_(p->s_echo[L_LIGHT] + 30, 0, 100);
     p->rsv[0] = p->rsv[1] = p->rsv[2] = 0;
     p->link = pick(&r, 15, 60); p->warp = pick(&r, 0, 40); p->drift = pick(&r, 20, 60); p->chaos = pick(&r, 0, 30);
+    p->tempo = pick(&r, 25, 70);                     /* every new piece its own tempo: 65 to 110 BPM */
     if (all) {
         p->key = (uint8_t)rng_int(&r, 12);
         static const uint8_t FAV[10] = { 1, 2, 0, 4, 13, 14, 15, 16, 8, 5 };   /* the gentler scales come up more */
         p->scale = rng_chance(&r, 0.7f) ? FAV[rng_int(&r, 10)] : (uint8_t)rng_int(&r, NUM_SCALES);
-        p->tempo = pick(&r, 20, 90);
         p->mood = pick(&r, 20, 85); p->motion = pick(&r, 30, 70); p->evolve = pick(&r, 25, 70);
         p->weird = rng_chance(&r, 0.3f) ? pick(&r, 40, 80) : pick(&r, 0, 30);
     }
@@ -137,6 +137,7 @@ void piece_default(Piece *p)
     p->key = 9; p->scale = 1; p->chord = CH_SEVENTH; p->tempo = 44;   /* A minor, 84 BPM */
     p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 15;
     piece_roll(p, 0xAF7E1u, 0, FX_SPACE);
+    p->tempo = 44;                                   /* (the first piece: 84 BPM) */
 }
 
 int piece_ok(const Piece *p)

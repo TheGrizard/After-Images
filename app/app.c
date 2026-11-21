@@ -316,6 +316,8 @@ static const uint16_t LPAL[NPAL][NUM_LAYERS] = {
 static uint16_t LAYER_C[NUM_LAYERS + 1] = { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240), RGB(255, 255, 255) };
 static void palette_apply(void) { for (int l = 0; l < NUM_LAYERS; l++) LAYER_C[l] = LPAL[set.palette % NPAL][l]; }
 static const char *const FRACTAL_NAME[NFRACTALS] = { "JULIA", "FERN", "DRAGON", "POLYGON", "ATTRACTOR", "TREE" };
+/* with FULL on, each fractal has a field: every pixel of the screen computed, zooming into itself */
+static const char *const FIELD_NAME[NFRACTALS] = { "JULIA SEA", "MANDELBROT", "SHIP", "TRICORN", "CUBIC", "SPIRAL" };
 
 static struct {
     uint32_t btn, keys;
@@ -358,7 +360,7 @@ static void knob_text(int pg, int k, char *s)
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_DIRT: text_cat(s, v == 0 ? "OFF" : v < 34 ? "FOLD " : v < 67 ? "CRUSH " : "NOISE "); if (v) int_text(v, s + strlen_(s)); break;
     case K_PALETTE: text_cat(s, LPAL_NAME[v % NPAL]); break;
-    case K_FRACTAL: text_cat(s, FRACTAL_NAME[v % NFRACTALS]); break;
+    case K_FRACTAL: text_cat(s, (set.full ? FIELD_NAME : FRACTAL_NAME)[v % NFRACTALS]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
     case K_RATE: text_cat(s, RATE_NAME[v % NUM_RATES]); break;
@@ -457,10 +459,27 @@ static int fx_next(void)
     return fx_last = fxdeck[--fxdeck_n];
 }
 
+static float fz, fz_dir = 1.0f, fcol, frot;     /* FULL's field: zoom depth (octaves), its way, the colours' cycle, the turn */
+static float fcx, fcy; static int fcentred;     /* where it zooms: steered to keep the set's edge in the middle */
+static int ftarget;
+static uint8_t frdeck[NFRACTALS]; static int frdeck_n;
+static void fractal_next(void)
+{
+    if (frdeck_n == 0) {
+        for (int i = 0; i < NFRACTALS; i++) frdeck[i] = (uint8_t)i;
+        for (int i = NFRACTALS - 1; i > 0; i--) { int j = (int)((plat_ticks24() * 3266489917u ^ (uint32_t)i * 2654435761u) % (uint32_t)(i + 1)); uint8_t t = frdeck[i]; frdeck[i] = frdeck[j]; frdeck[j] = t; }
+        frdeck_n = NFRACTALS;
+        if (frdeck[frdeck_n - 1] == set.fractal) { uint8_t t = frdeck[0]; frdeck[0] = frdeck[frdeck_n - 1]; frdeck[frdeck_n - 1] = t; }
+    }
+    set.fractal = frdeck[--frdeck_n];
+    fz = 0; fz_dir = 1.0f; fcentred = 0;
+}
+
 static void new_piece(int all)
 {
     char nm[32];
     palette_next();
+    fractal_next();
     int fx = fx_next();
     hist_push();
     uint32_t seed = (set.cur.seed * 1664525u + 1013904223u) ^ plat_ms() * 2654435761u ^ plat_ticks24();
@@ -748,6 +767,13 @@ static void spawn(const UiNote *n)
     }
 }
 
+static uint16_t mix565(uint16_t a, uint16_t b, float k)
+{
+    uint32_t ar = (a >> 11) & 31u, ag = (a >> 5) & 63u, ab = a & 31u, br = (b >> 11) & 31u, bg = (b >> 5) & 63u, bb = b & 31u;
+    return (uint16_t)(((uint32_t)((float)ar + ((float)br - (float)ar) * k) << 11) | ((uint32_t)((float)ag + ((float)bg - (float)ag) * k) << 5)
+                      | (uint32_t)((float)ab + ((float)bb - (float)ab) * k));
+}
+
 static uint16_t dim(uint16_t c, float k)
 {
     if (k >= 1) return c;
@@ -910,8 +936,116 @@ static void tree(float x, float y, float len, float ang, int depth, int maxd, fl
     tree(x2, y2, len * 0.72f, ang + s + sway, depth - 1, maxd, spread, sway);
 }
 
+/* ------------------------------------------------------------------ FULL: the fields
+ * The whole screen computed as an escape-time fractal, 80 x 80 cells of 3 x 3 pixels, half the rows each frame (odd,
+ * then even), zooming in for a minute or two towards a point on the set's edge where it repeats itself, then out and on
+ * to the next. Each cell's colour: how quickly its point escaped, through the palette's four colours, cycling with the
+ * beat; the set itself black. The music moves it: BODY's swells speed the zoom, GROUND's notes kick the colours on, the
+ * chord's root bends JULIA SEA's c, DRIFT turns it. */
+#define FC 80                                    /* cells across and down */
+static uint8_t field[FC][FC];
+static int field_row;
+typedef struct { float x, y; } fpt;
+static const fpt FTARGETS[NFRACTALS][3] = {
+    { { 0, 0 }, { 0.3f, 0.1f }, { -0.4f, 0.2f } },                                              /* JULIA SEA */
+    { { -0.743644f, 0.131826f }, { 0.250999f, 0.000016f }, { -1.768778f, 0.001738f } },        /* MANDELBROT */
+    { { -1.761900f, -0.028000f }, { -1.625000f, -0.003000f }, { -0.512000f, -0.618000f } },    /* SHIP */
+    { { -1.007000f, 0.307000f }, { 0.130000f, -0.570000f }, { -0.360000f, 0.660000f } },        /* TRICORN */
+    { { -0.660000f, 0.390000f }, { 0.230000f, 0.920000f }, { -0.000400f, 0.799000f } },         /* CUBIC */
+    { { -0.761574f, -0.084760f }, { -0.088000f, 0.654000f }, { 0.432539f, 0.226118f } },       /* SPIRAL */
+};
+
+static void field_step(float dt)
+{
+    int type = set.fractal % NFRACTALS;
+    float body = eng.L[L_BODY].cv, ground = eng.L[L_GROUND].cv;
+    /* the zoom: in for a minute or two, out quicker, then on to the next point */
+    float speed = (0.05f + 0.05f * (float)set.cur.motion * 0.01f) * (1.0f + 1.5f * body);
+    fz += dt * speed * (fz_dir > 0 ? 1.0f : -2.5f);
+    if (fz > 11.0f) fz_dir = -1.0f;
+    if (fz < 0.0f) { fz = 0.0f; fz_dir = 1.0f; ftarget = (ftarget + 1) % 3; fcentred = 0; }
+    {   static int last_type = -1;
+        if (type != last_type) { last_type = type; fcentred = 0; fz = 0; fz_dir = 1.0f; } }
+    if (!fcentred) { fcx = FTARGETS[type][ftarget].x; fcy = FTARGETS[type][ftarget].y; fcentred = 1; }
+    fcol += dt * (0.4f + 1.5f * ground);
+    frot += dt * (0.004f + 0.02f * (float)set.cur.weird * 0.01f);
+    float scale = 3.2f * fm_exp2f(-fz) / (float)FC;   /* the plane's width of a cell */
+    fpt c0 = { fcx, fcy };
+    float jr = 0, ji = 0;
+    if (type == 0) {                             /* JULIA SEA: no zoom target, c wanders round the Mandelbrot set's edge */
+        const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
+        int n = sc->n, root = ((eng.root % n) + n) % n;
+        float a = fx_t * 0.02f + (float)root / (float)n * 0.25f, rad = 0.72f + 0.08f * body;
+        jr = rad * fm_sin_turns(a + 0.25f); ji = rad * fm_sin_turns(a);
+        c0.x = 0; c0.y = 0; scale = (3.0f - 1.2f * fm_sin_turns(fx_t * 0.01f) * 0.5f) / (float)FC;
+    }
+    int maxit = 24 + (int)(fz * 3.0f); if (maxit > 64) maxit = 64;
+    float cr = fm_sin_turns(frot + 0.25f), ci = fm_sin_turns(frot);
+    for (int row = field_row; row < FC; row += 2) {
+        for (int col = 0; col < FC; col++) {
+            float u = ((float)col - FC * 0.5f) * scale, v = ((float)row - FC * 0.5f) * scale;
+            float px = c0.x + u * cr - v * ci, py = c0.y + u * ci + v * cr;
+            float x, y, ar, ai;
+            if (type == 0) { x = px; y = py; ar = jr; ai = ji; } else { x = 0; y = 0; ar = px; ai = py; }
+            int it = 0;
+            for (; it < maxit; it++) {
+                float xx = x * x, yy = y * y;
+                if (xx + yy > 4.0f) break;
+                float nx, ny;
+                switch (type) {
+                case 2: { float ax = fm_fabsf(x), ay = fm_fabsf(y); nx = ax * ax - ay * ay + ar; ny = 2.0f * ax * ay + ai; break; }   /* SHIP */
+                case 3: nx = xx - yy + ar; ny = -2.0f * x * y + ai; break;                                                        /* TRICORN */
+                case 4: nx = x * (xx - 3.0f * yy) + ar; ny = y * (3.0f * xx - yy) + ai; break;                                   /* CUBIC */
+                default: nx = xx - yy + ar; ny = 2.0f * x * y + ai; break;
+                }
+                x = nx; y = ny;
+            }
+            field[row][col] = (uint8_t)(it >= maxit ? 255 : it);
+        }
+    }
+    field_row ^= 1;
+    /* steering: towards the slowest-escaping cell near the middle (the set's edge, where the detail never ends), so
+     * the zoom never sinks into a plain colour or into the set's black */
+    if (type != 0) {
+        int best_r = FC / 2, best_c = FC / 2; float best = -1e9f;
+        for (int row = 4; row < FC - 4; row += 2)
+            for (int col = 4; col < FC - 4; col += 2) {
+                int it = field[row][col];
+                if (it == 255) continue;
+                float dr = (float)(row - FC / 2), dc = (float)(col - FC / 2);
+                float sc = (float)it - 0.06f * (dr * dr + dc * dc) * 0.1f;
+                if (sc > best) { best = sc; best_r = row; best_c = col; }
+            }
+        float u = ((float)best_c - FC * 0.5f) * scale, v = ((float)best_r - FC * 0.5f) * scale;
+        fcx += (u * cr - v * ci) * clampf(dt * 0.6f, 0.0f, 0.2f);
+        fcy += (u * ci + v * cr) * clampf(dt * 0.6f, 0.0f, 0.2f);
+    }
+}
+
+static void draw_field(void)
+{
+    uint16_t lut[32];
+    float g = (float)set.glow * 0.01f;
+    for (int i = 0; i < 32; i++) {               /* the palette's four colours, round and round, as bright as GLOW */
+        float t = (float)i / 8.0f + fcol;
+        int a = (int)t & 3, b = (a + 1) & 3; float f = t - fm_floorf(t);
+        float lv = (0.25f + 0.75f * g) * (0.45f + 0.55f * eng.meter[a]);
+        lut[i] = dim(mix565(LAYER_C[a], LAYER_C[b], f), lv * (0.35f + 0.65f * (float)(i & 7) / 7.0f));
+    }
+    int y0 = VIEW_H > 230 ? 0 : -(240 - VIEW_H) / 2;     /* (with the header: the field's middle in the view) */
+    for (int row = 0; row < FC; row++) {
+        int y = y0 + row * 3;
+        if (y + 3 < -cv_oy || y > -cv_oy + (int)cv_h) continue;
+        for (int col = 0; col < FC; col++) {
+            uint8_t it = field[row][col];
+            cv_rect(col * 3, y, 3, 3, it == 255 ? C_BLACK : lut[it & 31]);
+        }
+    }
+}
+
 static void draw_julia(void)
 {
+    if (set.full) { draw_field(); return; }
     if (set.fractal == 5) {
         float vh = (float)VIEW_H, sway = 0.012f * fm_sin_turns(fx_t * 0.04f) * (0.5f + (float)set.cur.drift * 0.01f) + 0.01f * eng.L[L_LIGHT].cv;
         float spread = 0.05f + 0.06f * (float)set.cur.mood * 0.01f + 0.02f * eng.L[L_BODY].cv;
@@ -1200,7 +1334,7 @@ void app_frame(void)
         if (dt > 0.2f) dt = 0.2f;
         ui.last_view = now; ui.t += dt;
         shapes_step(dt);
-        fractal_step(dt);
+        if (set.full) field_step(dt); else fractal_step(dt);
         draw_view();
     }
     {   /* the load guard: past 85 % of the render's time, fewer notes; back as it eases */

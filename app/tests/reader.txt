@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MPL-2.0
+# the screen reader: the pages, the knobs, REC
+listen
+wait 2500
+tap FX
+wait 100
+said EFFECTS
+turn K1 1
+wait 100
+said REVERB
+tap REC
+wait 600
+said NEW PIECE
+turn SELECT 1
+wait 100
+said LAYER
+where
+wait 200
+said EFFECTS page

@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "id": "after-images",
+  "name": "After Images",
+  "author": "TheGrizard",
+  "license": "MPL-2.0",
+  "tagline": "a generative synth: four layers, one button, endless pieces",
+  "description": "After Images makes endless ambient pieces: four layers (GROUND, BODY, LIGHT, DUST), each a generative sequencer (Euclidean, Turing machine, Markov, Lorenz, bouncing balls, orbits, cellular automaton, wind chimes, phase, Brownian) driving one of ten sound engines in its own frequency band. Press REC for a new piece. Macros on every page, everything locked to the scale, white keys play the scale and black keys its chords, MIDI out over USB.",
+  "tags": ["ambient", "generative", "synth"],
+  "install": "https://github.com/TheGrizard/After-Images/releases/latest",
+  "source": "https://github.com/TheGrizard/After-Images",
+  "screenshot": "docs/screen.png",
+  "hardware": {
+    "models": ["FM-1"],
+    "flash": ["856014", "B36014"],
+    "features": ["usb-audio-in", "usb-audio-out", "second-core", "velocity", "pressure", "screen-reader"]
+  },
+  "credits": "Built on fm1-base by Charles Vestal and felucca-bsp by Leo Kuroshita."
+}

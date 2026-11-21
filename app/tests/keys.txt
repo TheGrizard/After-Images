@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MPL-2.0
+# the keys: white the scale's notes, black its chords, played on the chosen layer's sound (LIGHT: A4 in A minor);
+# MIDI in, put in the scale
+wait 2500
+tap PLAY
+wait 2500
+key w0 down 100
+wait 100
+expect lastnote 69
+key w0 up
+key w1 down 100
+wait 100
+expect lastnote 71
+key w1 up
+key w2 down 100
+wait 100
+expect lastnote 72
+key w2 up
+key w7 down 100
+wait 100
+expect lastnote 81
+key w7 up
+key b0 down
+wait 100
+expect lastnote 69
+expect lastchord 4
+key b0 up
+key b4 down
+wait 100
+expect lastnote 76
+key b4 up
+out
+midi 90 3A 64
+wait 50
+expect_out USB 94 39 64
+midi 90 3D 64
+wait 50
+expect_out USB 94 3C 64
+tap GLO
+turn K2 1
+wait 100
+expect scale 2
+key w5 down 100
+wait 100
+expect lastnote 78
+key w5 up
+wait 200

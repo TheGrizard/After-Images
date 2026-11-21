@@ -1,0 +1,113 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* After Images: the piece. Four layers (GROUND, BODY, LIGHT, DUST), each a sequencer driving a sound engine in its own
+ * frequency band; a conductor that moves the harmony and the form (which layers play, and how) as EVOLVE asks; LINK,
+ * by which the layers' notes nudge each other's sequencers; and the effects. Plain C, no hardware calls: the same code
+ * runs on the FM-1, in the host simulator and in tools/render. */
+#ifndef AI_ENGINE_H
+#define AI_ENGINE_H
+
+#include "music.h"
+#include "voice.h"
+#include "seq.h"
+#include "fx.h"
+
+/* ---------------- the settings: what the knobs set, what SAVE keeps (the app's settings hold these) */
+typedef struct {
+    uint8_t engine, tone, weight, weird;          /* EDIT: the sound (engine an index, the rest 0..100) */
+    uint8_t seq, density, rate, mutate;           /* SEQ: the sequencer (seq and rate indexes) */
+    uint8_t level, attack, release; int8_t octave;   /* ENV */
+    uint16_t salt;                                /* the layer's own part of the seed (a layer re-rolled alone) */
+} LayerP;
+
+typedef struct {
+    uint32_t seed;
+    uint8_t mood, motion, evolve, weird;          /* HOME */
+    uint8_t reverb, echo, grain, shimmer;         /* FX */
+    uint8_t link, warp, drift, chaos;             /* MOTION (the LFO button) */
+    uint8_t key, scale, chord, tempo;             /* SCALE (the GLO button): tempo is BPM - 40 */
+    LayerP l[NUM_LAYERS];
+} Piece;
+
+#define NUM_RATES 10
+extern const char *const RATE_NAME[NUM_RATES];
+extern const float RATES[NUM_RATES];
+
+/* REC: a new piece from a seed (the scale, the key and the tempo kept, unless `all`); one layer anew (SEL + REC) */
+void piece_roll(Piece *p, uint32_t seed, int all);
+void piece_roll_layer(Piece *p, int layer, uint32_t seed);
+void piece_default(Piece *p);
+int piece_ok(const Piece *p);
+void piece_name(uint32_t seed, char *out);    /* two words from the seed: GLASS HERON */
+
+/* ---------------- what the screen sees */
+typedef struct { uint8_t layer, note, vel; int8_t pan; } UiNote;
+#define UI_Q 64
+
+#define ENGINE_SUB 8                     /* control steps an app block holds (fm1-base's 256 samples) */
+#define KEYS 4                           /* the keyboard's voices are a fifth "layer" */
+#define NBUS (NUM_LAYERS + 1)
+#define MAX_POLY 6
+#define KEY_POLY 8
+#define EVQ 24
+
+typedef struct { uint8_t sub, voice, rel; int8_t note; float vel, dur, pan; Sound snd; uint32_t seed; } VoiceEv;
+
+typedef struct {
+    Seq seq;
+    Voice v[MAX_POLY];
+    int nv;
+    Svf hp[2], lp[2];
+    float gain, present, present_t;      /* level glide; the form's fade in and out */
+    Drift dtone, dpan;
+    float tone_off, dens_off;            /* the section's colour */
+    uint8_t type_now; uint32_t seed_now;
+    VoiceEv q[EVQ]; int nq;
+    int next_v;
+} Layer;
+
+typedef struct Engine Engine;
+struct Engine {
+    const Piece *p;                      /* the settings it follows (the app's) */
+    Layer L[NUM_LAYERS];
+    Voice kv[KEY_POLY]; VoiceEv kq[EVQ]; int nkq; int key_next;
+    int key_layer;                       /* the layer whose sound the keys play (SELECT) */
+    volatile uint32_t key_in[16]; volatile uint32_t key_w, key_r;   /* keys and MIDI notes in: (on, note, vel) */
+    float bus[ENGINE_SUB][NBUS][2][BLK];
+    float gains[ENGINE_SUB][NBUS];
+    int nsub;
+    /* the conductor */
+    Rng rng;
+    uint32_t seed_now;
+    float beat, bpm;                     /* the piece's position, in beats */
+    int bar, root, chord_bars, chord_left, sec_left, mask;
+    int want_change;                     /* LINK asked for a new chord at the next bar */
+    float duck, gov, fade;
+    int playing;
+    float gr_ratio[6];
+    /* effects */
+    Reverb rv; Echo echo; Grains gr;
+    float dc[2];
+    /* MIDI out: the app's; notes on their layers' channels, the clock */
+    void (*midi)(uint32_t pkt);
+    uint8_t midi_ch, midi_on, midi_clock, midi_keys_ch;
+    struct { uint8_t ch, note; float off; } mo[32]; int nmo;
+    float clock_acc; float t;
+    /* costs, for the balance between the cores (ticks an app block) */
+    uint32_t (*clock)(void);
+    float cost[NBUS + 1];
+    /* the screen's */
+    UiNote uiq[UI_Q]; volatile uint32_t uiq_head;
+    float meter[NUM_LAYERS];
+    int events[NUM_LAYERS];
+};
+
+void engine_init(Engine *e, const Piece *p);
+void engine_key(Engine *e, int on, int note, int vel);   /* the keys and MIDI in (main loop or render): a note */
+/* an app block of nsub control steps in three parts, as The Outside Inside's: control (one core: the sequencers, the
+ * conductor, MIDI out), the layers (any layer on either core), the mix and the effects (one core, after both) */
+void engine_block_begin(Engine *e, int nsub);
+void engine_block_layer(Engine *e, int bus);
+void engine_block_mix(Engine *e, float *outL, float *outR);
+void engine_all_off(Engine *e);          /* MIDI notes off (stop, a new piece) */
+
+#endif

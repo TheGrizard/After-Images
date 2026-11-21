@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MPL-2.0
+# saving: a piece kept across a power-off, the piece playing kept by itself, then a flash that refuses saves
+wait 2500
+tap HOME
+wait 200
+shot info.png
+expect store_writes >0
+tap REC
+wait 300
+tap SAVE
+wait 300
+expect nsaved 1
+tap GLO
+wait 100
+turn K4 6
+wait 9500
+expect tempo 90
+reboot
+wait 2500
+expect nsaved 1
+expect tempo 90
+expect slot 0
+flash_fail 1
+tap SAVE
+wait 300
+shot nosave.png
+expect nsaved 1
+flash_fail 0

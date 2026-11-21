@@ -1,0 +1,23 @@
+# After Images: a generative synth for the M-VAVE FM-1 (tools/build.py)
+# Build: ./build.sh (from the repository's root; it runs base/tools/build.py app with the Terminus pixel font)
+name = "AFTER-IMAGES"
+title = "After Images"
+id_prefix = "FM-1_78"          # package identity: dev FM-1_7800, releases FM-1_78XXYYZZ
+usb_manufacturer = "After Images"
+usb_product = "After Images FM-1"
+o2 = ["dsp/voice.c", "dsp/seq.c", "dsp/fx.c", "dsp/music.c", "dsp/engine.c", "dsp/piece.c"]   # the sound engine, at -O2
+words = "words.tsv"
+ble = false                    # no Bluetooth: its RAM goes to the reverb, the echo and the grains
+cpu2 = true                    # the second core renders some of the layers (app_render)
+cpu2_fallback = true           # if it fails, carry on with one core instead of restarting
+cpu2_stack = 8192
+# the site and firmware.json
+tagline = "a generative synth: four layers, one button, endless pieces"
+licence = "MPL-2.0"
+credits = "Built on fm1-base by Charles Vestal and felucca-bsp by Leo Kuroshita."
+author = "TheGrizard"
+repo = "https://github.com/TheGrizard/After-Images"
+install = "https://github.com/TheGrizard/After-Images/releases/latest"
+screenshot = "docs/screen.png"
+description = "After Images makes endless ambient pieces: four layers (GROUND, BODY, LIGHT, DUST), each a generative sequencer (Euclidean, Turing machine, Markov, Lorenz, bouncing balls, orbits, cellular automaton, wind chimes, phase, Brownian) driving one of ten sound engines in its own frequency band. Press REC for a new piece. Macros on every page, everything locked to the scale, white keys play the scale and black keys its chords, MIDI out over USB."
+tags = ["ambient", "generative", "synth"]

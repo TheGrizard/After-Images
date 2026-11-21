@@ -4,7 +4,7 @@ listen
 wait 2500
 tap FX
 wait 100
-said EFFECTS
+said SENDS
 turn K1 1
 wait 100
 said REVERB
@@ -16,4 +16,4 @@ wait 100
 said LAYER
 where
 wait 200
-said EFFECTS page
+said SENDS page

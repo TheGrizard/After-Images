@@ -48,11 +48,12 @@ stays clear.
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
 | ENV again | VOICE for the chosen layer: F.GLIDE (the filter glides after each new note; the pitch never slides), LEGATO (notes join, not started again), SWEEP (the filter opening over each note), RESO |
-| FX | EFFECTS: REVERB (to 12 o'clock a reverb; past it the shimmer, an octave up, and by full an octave down too), ECHO (to 12 o'clock a tempo-locked echo with a tape wobble; past it a reversed, smeared wash), GRAIN (turned right up: freeze), DIRT (a wavefolder up to a third, a bit crusher to two thirds, noise past that) |
+| FX | SENDS for the chosen layer: how much of it goes to the REVERB, the ECHO, the GRAIN, and how much DIRT it gets (so GROUND can go only to the reverb while LIGHT is folded and echoed) |
+| FX again | EFFECTS, shared by the layers: REVERB (to 12 o'clock the room, small to vast; past it the shimmer, an octave up, and by full an octave down too), ECHO (to 12 o'clock a tempo-locked echo with a tape wobble; past it a reversed, smeared wash), GRAIN (a cloud; right up, FREEZE), DIRT (the character: FOLD, CRUSH, then NOISE) |
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
 | GLO again | SCREEN: PALETTE (nine), FRACTAL (JULIA, FERN, DRAGON, POLYGON, ATTRACTOR, TREE), FULL (the whole screen at HOME, every pixel a fractal zooming endlessly into itself, steered along the set's edge: JULIA SEA, MANDELBROT, SHIP, TRICORN, CUBIC, SPIRAL), GLOW. REC deals a new palette and a new fractal each time, none twice until all have come |
-| ARP | MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK out |
+| ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK out |
 | ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (follow MIDI clock's tempo, start and stop), CC |
 | ARP a third time | USB AUDIO: RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1), STEMS (the four layers on USB audio channels 3-10, beside the mix on 1-2) |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |

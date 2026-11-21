@@ -187,9 +187,10 @@ void dirt_init(Dirt *d, uint32_t seed)
     op_set(&d->tone[0], 9000.0f); op_set(&d->tone[1], 9000.0f);
 }
 
-void dirt_run(Dirt *d, float a, float *L, float *R, int n)
+void dirt_run(Dirt *d, float a, float mix, float *L, float *R, int n)
 {
-    if (a < 0.005f) return;
+    if (mix < 0.005f) return;
+    a = 0.08f + 0.92f * a;                               /* (its gentlest still a fold) */
     float f = clamp01(a * 3.0f), c = clamp01(a * 3.0f - 1.0f), z = clamp01(a * 3.0f - 2.0f);
     float gain = 1.0f + 5.0f * f, norm = 1.0f / (1.0f + 1.2f * f);
     float bits = 4096.0f * fm_exp2f(-9.0f * c);              /* 12 bits down to 3 */
@@ -210,6 +211,7 @@ void dirt_run(Dirt *d, float a, float *L, float *R, int n)
                 y = op_lp(&d->tone[ch], y);
             }
             y += nz;                                         /* the noise */
+            y = x[ch] + (y - x[ch]) * mix;
             if (ch) R[i] = y; else L[i] = y;
         }
         if (++d->hold_i >= hold) d->hold_i = 0;

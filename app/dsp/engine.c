@@ -99,7 +99,7 @@ void engine_init(Engine *e, const Piece *p)
     reverb_init(&e->rv, 1.3f);
     echo_init(&e->echo);
     grains_init(&e->gr, p->seed);
-    dirt_init(&e->dirt, p->seed);
+    for (int l = 0; l < NUM_LAYERS; l++) dirt_init(&e->L[l].dirt, p->seed + (uint32_t)l);
     patch(e, p->seed);
     e->mask = 0xF; e->chord_bars = 4; e->chord_left = 4; e->sec_left = 32;
     rng_seed(&e->rng, p->seed);
@@ -370,6 +370,7 @@ void engine_block_layer(Engine *e, int b)
             Lb[i] = svf_lp(&L->lp[0], svf_hp(&L->hp[0], Lb[i]));
             Rb[i] = svf_lp(&L->lp[1], svf_hp(&L->hp[1], Rb[i]));
         }
+        dirt_run(&L->dirt, u(e->p->dirt), u(e->p->s_dirt[b]), Lb, Rb, BLK);   /* its own DIRT, its send's amount */
     }
     cost_add(e, b, t0);
 }
@@ -382,7 +383,7 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
      * ECHO: up to 12 o'clock the echo; past it, it turns into a reversed smear */
     float rk = u(p->reverb), rvk = clamp01(rk * 2.0f), shk = clamp01(rk * 2.0f - 1.0f);
     float ek = u(p->echo), eck = clamp01(ek * 2.0f), rev = clamp01(ek * 2.0f - 1.0f);
-    float grk = u(p->grain), dk = u(p->dirt);
+    float grk = u(p->grain);
     reverb_set(&e->rv, 2.5f + 12.0f * rvk * rvk - 3.0f * shk, 1800.0f + 4200.0f * u(p->mood) + 4000.0f * shk);
     e->echo.time_s = clampf(60.0f / e->bpm * 0.75f, 0.12f, 0.7f);   /* a dotted eighth */
     while (e->echo.time_s > 0.7f) e->echo.time_s *= 0.5f;
@@ -401,9 +402,11 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
         float dl[BLK] = { 0 }, dr[BLK] = { 0 }, rl[BLK] = { 0 }, rr[BLK] = { 0 }, el[BLK] = { 0 }, er[BLK] = { 0 }, gm[BLK] = { 0 };
         for (int b = 0; b < NBUS; b++) {
             float g = e->gains[k][b], *Lb = e->bus[k][b][0], *Rb = e->bus[k][b][1];
-            float rs = (b < NUM_LAYERS ? ROLES[b].rv : 0.4f) * (0.3f + 1.2f * rvk) * g;
-            float es = (b < NUM_LAYERS ? ROLES[b].echo : 0.3f) * eck * 1.4f * g;
-            float gs = (b < NUM_LAYERS ? ROLES[b].grain : 0.3f) * g;
+            /* the sends: each layer's own (SENDS), the keys' the chosen layer's */
+            int sl = b < NUM_LAYERS ? b : e->key_layer;
+            float rs = u(p->s_rv[sl]) * 0.8f * (0.3f + 1.2f * rvk) * g;
+            float es = u(p->s_echo[sl]) * eck * 1.4f * g;
+            float gs = u(p->s_grain[sl]) * 0.9f * g;
             float ss = 0;
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];
@@ -434,7 +437,6 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
             shifter_run(&e->shim, e->shim_prev, up, dn_, BLK);
             for (int i = 0; i < BLK; i++) { float x = up[i] * gu + dn_[i] * gd; rl[i] += x; rr[i] += x; }
         }
-        dirt_run(&e->dirt, dk, dl, dr, BLK);            /* the dry sound only */
         float vl[BLK], vr[BLK];
         reverb_run(&e->rv, rl, rr, vl, vr, BLK);
         for (int i = 0; i < BLK; i++) e->shim_prev[i] = (vl[i] + vr[i]) * 0.5f;

@@ -32,6 +32,28 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
     lp->salt = (uint16_t)rng_u32(r);
 }
 
+static int clampi_(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+/* each role's sends, as the mix had them before there were sends: reverb, echo, grains */
+static const uint8_t SEND_DEF[NUM_LAYERS][3] = { { 15, 0, 0 }, { 60, 15, 45 }, { 45, 50, 40 }, { 85, 40, 75 } };
+
+void piece_sends_default(Piece *p)
+{
+    for (int l = 0; l < NUM_LAYERS; l++) {
+        p->s_rv[l] = SEND_DEF[l][0]; p->s_echo[l] = SEND_DEF[l][1]; p->s_grain[l] = SEND_DEF[l][2];
+        p->s_dirt[l] = p->dirt ? 100 : 0;        /* (v0.2's DIRT was on everything) */
+    }
+}
+
+static void roll_sends(Piece *p, int l, Rng *r)   /* near the role's, now and then far from it */
+{
+    int far = rng_chance(r, 0.25f);
+    p->s_rv[l] = (uint8_t)clampi_(SEND_DEF[l][0] + (far ? rng_int(r, 81) - 40 : rng_int(r, 31) - 15), 0, 100);
+    p->s_echo[l] = (uint8_t)clampi_(SEND_DEF[l][1] + (far ? rng_int(r, 81) - 30 : rng_int(r, 21) - 10), 0, 100);
+    p->s_grain[l] = (uint8_t)clampi_(SEND_DEF[l][2] + (far ? rng_int(r, 81) - 40 : rng_int(r, 31) - 15), 0, 100);
+    p->s_dirt[l] = 0;
+}
+
 static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and then a glide, legato, a sweep, resonance */
 {
     int slides = l == L_GROUND || l == L_LIGHT;
@@ -62,6 +84,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
         int w = l == heavy ? pick(&r, 65, 95) : l == soft ? pick(&r, 0, 25) : pick(&r, 20, 65);
         roll_layer(p, l, &r, w);
         roll_voice(p, l, &r);
+        roll_sends(p, l, &r);
         p->l[l].seq = s[l];
     }
     /* the effects: each modest, then one featured (REVERB and ECHO past 50 are the shimmer and the reverse smear) */
@@ -74,10 +97,16 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     case FX_REVERSE: p->echo = pick(&r, 62, 95); break;
     case FX_CLOUD:   p->grain = pick(&r, 45, 85); break;
     case FX_FREEZE:  p->grain = pick(&r, 93, 100); break;
-    case FX_FOLD:    p->dirt = pick(&r, 10, 32); break;
+    case FX_FOLD:    p->dirt = pick(&r, 5, 32); break;
     case FX_CRUSH:   p->dirt = pick(&r, 40, 64); break;
     default:         p->reverb = pick(&r, 46, 50); p->echo = pick(&r, 35, 50); break;   /* WIDE SPACE: all reverb, all echo */
     }
+    if (fx == FX_FOLD || fx == FX_CRUSH) {           /* the dirt on one or two layers, never the whole */
+        int a = rng_int(&r, NUM_LAYERS), b = rng_chance(&r, 0.4f) ? (a + 1 + rng_int(&r, NUM_LAYERS - 1)) % NUM_LAYERS : a;
+        p->s_dirt[a] = pick(&r, 55, 100); p->s_dirt[b] = pick(&r, 40, 100);
+    }
+    if (fx == FX_SHIMMER) p->s_rv[L_LIGHT] = (uint8_t)clampi_(p->s_rv[L_LIGHT] + 25, 0, 100);
+    if (fx == FX_REVERSE) p->s_echo[L_LIGHT] = (uint8_t)clampi_(p->s_echo[L_LIGHT] + 30, 0, 100);
     p->rsv[0] = p->rsv[1] = p->rsv[2] = 0;
     p->link = pick(&r, 15, 60); p->warp = pick(&r, 0, 40); p->drift = pick(&r, 20, 60); p->chaos = pick(&r, 0, 30);
     if (all) {
@@ -97,6 +126,8 @@ void piece_roll_layer(Piece *p, int l, uint32_t seed)
     do t = rng_int(&r, NUM_SEQS); while (t == p->l[l].seq || t == other);
     roll_layer(p, l, &r, pick(&r, 0, 95));
     roll_voice(p, l, &r);
+    roll_sends(p, l, &r);
+    if (p->dirt && rng_chance(&r, 0.3f)) p->s_dirt[l] = pick(&r, 30, 90);
     p->l[l].seq = (uint8_t)t;
 }
 
@@ -117,6 +148,7 @@ int piece_ok(const Piece *p)
         const LayerP *x = &p->l[l];
         if (x->engine >= NUM_ENGINES || x->seq >= NUM_SEQS || x->rate >= NUM_RATES || x->octave < -2 || x->octave > 2) return 0;
         if (p->glide[l] > 100 || p->legato[l] > 1 || p->sweep[l] > 100 || p->reso[l] > 100) return 0;
+        if (p->s_rv[l] > 100 || p->s_echo[l] > 100 || p->s_grain[l] > 100 || p->s_dirt[l] > 100) return 0;
         if (x->tone > 100 || x->weight > 100 || x->weird > 100 || x->density > 100 || x->mutate > 100 || x->level > 100
             || x->attack > 100 || x->release > 100) return 0;
     }

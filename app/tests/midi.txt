@@ -4,7 +4,7 @@ wait 2500
 tap ARP
 tap ARP
 wait 100
-expect page 10
+expect page 11
 turn K3 1
 wait 100
 clock 96 25

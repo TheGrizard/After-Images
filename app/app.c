@@ -21,8 +21,9 @@
 static Engine eng PLAT_POOL;
 
 /* ------------------------------------------------------------------ settings */
-#define SET_MAGIC 0x41465432u            /* "AFT2" (AFT1: v0.1's, without what follows saved: moved on at load) */
+#define SET_MAGIC 0x41465433u            /* "AFT3" (AFT1: v0.1's, AFT2: v0.2's and v0.3's: moved on at load) */
 #define SET_MAGIC1 0x41465431u
+#define SET_MAGIC2 0x41465432u
 #define NSAVED 16
 typedef struct {
     uint32_t magic;
@@ -81,17 +82,20 @@ static void settings_load(void)
 {
     static uint8_t raw[sizeof(settings_t)];
     int n = plat_store_load(OBJ_SETTINGS, raw, sizeof raw);
-    const uint32_t head = __builtin_offsetof(settings_t, cur), p1 = PIECE_SIZE1;
-    if (n == (int)(head + (1 + NSAVED) * p1) && *(const uint32_t *)raw == SET_MAGIC1) {
-        /* v0.1's: its pieces kept (each a little shorter then), its tape's bytes zeroed, the new settings as they start */
+    const uint32_t head = __builtin_offsetof(settings_t, cur), tail = sizeof set - __builtin_offsetof(settings_t, in_ch);
+    uint32_t magic = n >= 4 ? *(const uint32_t *)raw : 0, ps = magic == SET_MAGIC1 ? PIECE_SIZE1 : PIECE_SIZE2;
+    if ((magic == SET_MAGIC1 && n == (int)(head + (1 + NSAVED) * ps)) || (magic == SET_MAGIC2 && n == (int)(head + (1 + NSAVED) * ps + tail))) {
+        /* an older version's: its pieces kept (each shorter then: what came later as it starts), its settings too */
         memset(&set, 0, sizeof set);
         memcpy(&set, raw, head);
         for (int i = 0; i <= NSAVED; i++) {
             Piece *pc = i ? &set.saved[i - 1] : &set.cur;
-            memcpy(pc, raw + head + (uint32_t)i * p1, p1);
-            memset(&pc->dirt, 0, 4);
+            memcpy(pc, raw + head + (uint32_t)i * ps, ps);
+            if (magic == SET_MAGIC1) memset(&pc->dirt, 0, 4);   /* (v0.1's tape) */
+            piece_sends_default(pc);
         }
-        settings_v2();
+        if (magic == SET_MAGIC1) settings_v2();
+        else memcpy(&set.in_ch, raw + head + (1 + NSAVED) * ps, tail);
         set.magic = SET_MAGIC;
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
@@ -266,14 +270,14 @@ static void int_text(int32_t v, char *b)
 static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 /* ------------------------------------------------------------------ the pages */
-enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_MOTION, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "EFFECTS", "MOTION", "SCALE", "SCREEN",
+enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB, NPAGES };
+static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "SENDS", "EFFECTS", "MOTION", "SCALE", "SCREEN",
                                                 "MIDI OUT", "MIDI IN", "USB AUDIO" };
 /* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: SCALE, SCREEN; ARP: MIDI OUT,
  * MIDI IN, USB) */
-static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
+static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PALETTE, K_FRACTAL, K_DIRT, K_RVB, K_ECHO };
+       K_PALETTE, K_FRACTAL, K_DIRT, K_RVB, K_ECHO, K_GRAIN };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -285,7 +289,8 @@ static const Knob PAGES[NPAGES][4] = {
     { { "TYPE", K_SEQ, 1, LO(seq) }, { "DENSITY", K_PCT, 1, LO(density) }, { "RATE", K_RATE, 1, LO(rate) }, { "MUTATE", K_PCT, 1, LO(mutate) } },
     { { "LEVEL", K_PCT, 1, LO(level) }, { "ATTACK", K_PCT, 1, LO(attack) }, { "RELEASE", K_PCT, 1, LO(release) }, { "OCTAVE", K_OCT, 1, LO(octave) } },
     { { "F.GLIDE", K_PCT, 3, PO(glide) }, { "LEGATO", K_ONOFF, 3, PO(legato) }, { "SWEEP", K_PCT, 3, PO(sweep) }, { "RESO", K_PCT, 3, PO(reso) } },
-    { { "REVERB", K_RVB, 0, PO(reverb) }, { "ECHO", K_ECHO, 0, PO(echo) }, { "GRAIN", K_PCT, 0, PO(grain) }, { "DIRT", K_DIRT, 0, PO(dirt) } },
+    { { "REVERB", K_PCT, 3, PO(s_rv) }, { "ECHO", K_PCT, 3, PO(s_echo) }, { "GRAIN", K_PCT, 3, PO(s_grain) }, { "DIRT", K_PCT, 3, PO(s_dirt) } },
+    { { "REVERB", K_RVB, 0, PO(reverb) }, { "ECHO", K_ECHO, 0, PO(echo) }, { "GRAIN", K_GRAIN, 0, PO(grain) }, { "DIRT", K_DIRT, 0, PO(dirt) } },
     { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "FLOW", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "PALETTE", K_PALETTE, 2, SO(palette) }, { "FRACTAL", K_FRACTAL, 2, SO(fractal) }, { "FULL", K_ONOFF, 2, SO(full) }, { "GLOW", K_PCT, 2, SO(glow) } },
@@ -293,7 +298,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_ONOFF, 2, SO(clock_in) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
     { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "STEMS", K_ONOFF, 2, SO(stems) }, { "", K_NONE, 2, 0 } },
 };
-static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE; }
+static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
 
 #define C_TXT RGB(232, 232, 232)
 #define C_SUB RGB(150, 150, 160)
@@ -358,7 +363,8 @@ static void knob_text(int pg, int k, char *s)
     case K_REC: text_cat(s, v ? "FULL" : "MASTER"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
-    case K_DIRT: text_cat(s, v == 0 ? "OFF" : v < 34 ? "FOLD " : v < 67 ? "CRUSH " : "NOISE "); if (v) int_text(v, s + strlen_(s)); break;
+    case K_DIRT: text_cat(s, v < 34 ? "FOLD " : v < 67 ? "CRUSH " : "NOISE "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
+    case K_GRAIN: if (v < 92) int_text(v, s); else text_cat(s, "FREEZE"); break;
     case K_PALETTE: text_cat(s, LPAL_NAME[v % NPAL]); break;
     case K_FRACTAL: text_cat(s, (set.full ? FIELD_NAME : FRACTAL_NAME)[v % NFRACTALS]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
@@ -1212,7 +1218,12 @@ static void draw_panel_rows(int y0)
     uint16_t pc = lay ? LAYER_C[ui.sel] : C_TXT;
     if (pg == PG_HOME && ui.panel_kind == 0) { draw_levels(y0); return; }
     cv_rect(0, y0, 240, lay ? 2 : 1, lay ? pc : C_RULE);   /* a layer's page: its colour across the top */
-    cv_text(6, y0 + 4, &FONT_B, pg == PG_HOME ? "MACROS" : PAGE_NAME[pg], lay ? pc : C_TXT);
+    int tx = cv_text(6, y0 + 4, &FONT_B, pg == PG_HOME ? "MACROS" : PAGE_NAME[pg], lay ? pc : C_TXT);
+    if (pg != PG_HOME) {                         /* a button with more pages: a dot each, this one lit */
+        int n = 0, at = 0;
+        for (int q = 1; q < NPAGES; q++) if (PAGE_BTN[q] == PAGE_BTN[pg]) { if (q == pg) at = n; n++; }
+        for (int d = 0; n > 1 && d < n; d++) cv_rect(tx + 8 + d * 8, y0 + 10, 5, 5, d == at ? (lay ? pc : C_TXT) : C_RULE);
+    }
     if (lay) { const char *n = LAYER_NAME[ui.sel]; cv_text(234 - text_w(&FONT_B, n), y0 + 4, &FONT_B, n, pc); }
     /* the knob turned last, big */
     int focus = ui.knob_at && plat_ms() - ui.knob_at < 2500u;
@@ -1225,7 +1236,7 @@ static void draw_panel_rows(int y0)
         static const char *const HINT[NPAGES] = {
             "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT: THE LAYER  (ENV AGAIN: VOICE)",
             "THE FILTER GLIDES, THE PITCH NEVER",
-            "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE  (GLO AGAIN: SCREEN)",
+            "THIS LAYER INTO EACH  (FX AGAIN: EFFECTS)", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE  (GLO AGAIN: SCREEN)",
             "COLOURS AND FRACTALS", "THE LAYERS ON FOUR CHANNELS  (ARP AGAIN: IN)", "LAYER CHANNELS PLAY THE LAYERS",
             "RECORDING THE FM-1 OVER USB" };
         cv_text(6, y0 + 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));
@@ -1370,6 +1381,8 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "midi_ch")) *got = set.midi_ch;
     else if (!strcmp(what, "hist")) *got = hist_n;
     else if (!strcmp(what, "lastnote")) *got = ui.last_note;
+    else if (!strncmp(what, "sweep", 5)) *got = set.cur.sweep[atoi(what + 5) & 3];
+    else if (!strcmp(what, "layers_in")) *got = set.layers_in;
     else if (!strcmp(what, "clockbpm")) *got = (int)(eng.bpm + 0.5f);
     else if (!strcmp(what, "lastchord")) *got = ui.last_chord;
     else if (!strncmp(what, "seq", 3)) *got = set.cur.l[atoi(what + 3) & 3].seq;

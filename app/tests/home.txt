@@ -49,21 +49,27 @@ shot voice.png
 tap FX
 wait 200
 expect page 5
+turn K4 20
+wait 200
 shot fx.png
-tap LFO
+tap FX
 wait 200
 expect page 6
+shot effects.png
+tap LFO
+wait 200
+expect page 7
 shot motion.png
 tap GLO
 wait 200
-expect page 7
+expect page 8
 turn K2 1
 wait 300
 expect scale 2
 shot scale.png
 tap GLO
 wait 200
-expect page 8
+expect page 9
 turn K1 2
 wait 200
 shot screen.png
@@ -87,19 +93,19 @@ turn K1 -2
 wait 200
 tap ARP
 wait 200
-expect page 9
+expect page 10
 shot midi.png
 tap ARP
 wait 200
-expect page 10
+expect page 11
 shot midi_in.png
 tap ARP
 wait 200
-expect page 11
+expect page 12
 shot usb.png
 tap ARP
 wait 200
-expect page 9
+expect page 10
 tap HOME
 wait 200
 expect page 0
@@ -148,7 +154,7 @@ wait 5000
 tap GLO
 tap GLO
 wait 100
-expect page 8
+expect page 9
 turn K3 1
 wait 100
 tap HOME

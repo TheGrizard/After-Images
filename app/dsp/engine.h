@@ -32,8 +32,12 @@ typedef struct {
     uint8_t legato[NUM_LAYERS];                   /* 1: a note playing slides on to the next, not started again */
     uint8_t sweep[NUM_LAYERS];                    /* 0..100: the filter opening over each note */
     uint8_t reso[NUM_LAYERS];                     /* 0..100: the filter's resonance */
+    /* v0.4: each layer's SENDS (FX): how much of it goes to the reverb, the echo, the grains, and how much DIRT it gets */
+    uint8_t s_rv[NUM_LAYERS], s_echo[NUM_LAYERS], s_grain[NUM_LAYERS], s_dirt[NUM_LAYERS];
 } Piece;
 #define PIECE_SIZE1 __builtin_offsetof(Piece, glide)   /* v0.1's Piece: up to here */
+#define PIECE_SIZE2 __builtin_offsetof(Piece, s_rv)    /* v0.2's and v0.3's */
+void piece_sends_default(Piece *p);                     /* each layer's sends as its role has them (an older piece's) */
 
 #define NUM_RATES 10
 extern const char *const RATE_NAME[NUM_RATES];
@@ -77,6 +81,7 @@ typedef struct {
     VoiceEv q[EVQ]; int nq;
     int next_v;
     int8_t last_v[5]; float last_hz[5]; int last_n;   /* the last note's (or chord's) voices and pitches: glide, legato */
+    Dirt dirt;                           /* its own DIRT (the character EFFECTS', the amount its send's) */
 } Layer;
 
 typedef struct Engine Engine;
@@ -100,7 +105,7 @@ struct Engine {
     int playing;
     float gr_ratio[6];
     /* effects */
-    Reverb rv; Echo echo; Grains gr; Dirt dirt; Shifter shim; float shim_prev[BLK];
+    Reverb rv; Echo echo; Grains gr; Shifter shim; float shim_prev[BLK];
     float dc[2];
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */

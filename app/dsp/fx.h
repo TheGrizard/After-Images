@@ -54,7 +54,7 @@ void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shi
  * On the dry sound only: the reverb's tails stay clean */
 typedef struct { float held[2]; int hold_n, hold_i; Rng rng; OnePole tone[2]; float env; } Dirt;
 void dirt_init(Dirt *d, uint32_t seed);
-void dirt_run(Dirt *d, float amount, float *L, float *R, int n);
+void dirt_run(Dirt *d, float character, float mix, float *L, float *R, int n);   /* character: fold .. crush .. noise; mix: how much */
 
 /* SHIMMER (REVERB past 12 o'clock): the reverb's own sound pitched an octave up and an octave down (two heads each over a
  * short line, crossfaded) and fed back into it, so the shimmer climbs and sinks as it rings */

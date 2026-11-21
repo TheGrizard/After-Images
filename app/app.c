@@ -193,7 +193,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "TYPE", K_SEQ, 1, LO(seq) }, { "DENSITY", K_PCT, 1, LO(density) }, { "RATE", K_RATE, 1, LO(rate) }, { "MUTATE", K_PCT, 1, LO(mutate) } },
     { { "LEVEL", K_PCT, 1, LO(level) }, { "ATTACK", K_PCT, 1, LO(attack) }, { "RELEASE", K_PCT, 1, LO(release) }, { "OCTAVE", K_OCT, 1, LO(octave) } },
     { { "REVERB", K_PCT, 0, PO(reverb) }, { "ECHO", K_PCT, 0, PO(echo) }, { "GRAIN", K_PCT, 0, PO(grain) }, { "SHIMMER", K_PCT, 0, PO(shimmer) } },
-    { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "WANDER", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
+    { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "FLOW", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "MIDI OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
     { { "TAPE", K_PCT, 0, PO(tape) }, { "WOW", K_PCT, 0, PO(wow) }, { "HISS", K_PCT, 0, PO(hiss) }, { "AGE", K_PCT, 0, PO(age) } },

@@ -6,8 +6,8 @@
  * Controls
  *   K1-K4              at HOME the layers' levels (shown while they turn); HOME held + K1-K4 the macros (MOOD,
  *                      ACTIVITY, EVOLVE, DRIFT); on the other pages, their four macros
- *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI; FX
- *                      again: TAPE (TAPE, WOW, HISS, AGE)
+ *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI OUT;
+ *                      pressed again ENV: VOICE; GLO: SCREEN; ARP: MIDI IN, then USB AUDIO
  *   HOME tapped at HOME   the processor's load, and whether saving works
  *   SELECT, SEL        the layer the SOUND, SEQUENCE and MIX pages (and the keys) play
  *   PRESET             the chosen layer's engine
@@ -21,7 +21,8 @@
 static Engine eng PLAT_POOL;
 
 /* ------------------------------------------------------------------ settings */
-#define SET_MAGIC 0x41465431u            /* "AFT1" */
+#define SET_MAGIC 0x41465432u            /* "AFT2" (AFT1: v0.1's, without what follows saved: moved on at load) */
+#define SET_MAGIC1 0x41465431u
 #define NSAVED 16
 typedef struct {
     uint32_t magic;
@@ -29,12 +30,32 @@ typedef struct {
     uint8_t nsaved, midi_on, midi_ch, midi_keys, midi_clock, playing, rsv;
     Piece cur;
     Piece saved[NSAVED];
+    /* v0.2 */
+    uint8_t in_ch;                       /* MIDI in: notes on this channel play the chosen layer (0: any) */
+    uint8_t layers_in;                   /* notes on the layers' channels (CHANNEL's four) play those layers */
+    uint8_t clock_in;                    /* follow MIDI clock: its tempo, its start and stop */
+    uint8_t cc_in;                       /* CCs move the macros */
+    uint8_t usb_full;                    /* USB recording at full level, not at MASTER */
+    uint8_t usb_play;                    /* the computer's audio through the FM-1, 0..100 */
+    uint8_t stems;                       /* the four layers on USB audio channels 3-10 */
+    uint8_t palette, fractal, full, glow;   /* the screen */
+    uint8_t rsv2[5];
 } settings_t;
 static settings_t set;
+#define NPAL 9
+#define NFRACTALS 6
 static uint8_t set_dirty;
 static int store_ok = 1;
 static uint32_t autosave_at;
 #define AUTOSAVE_MS 8000u
+
+static void settings_v2(void)             /* what v0.2 added, as it starts */
+{
+    set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
+    set.usb_full = 0; set.usb_play = 100; set.stems = 0;
+    set.palette = 0; set.fractal = 0; set.full = 0; set.glow = 60;
+    memset(set.rsv2, 0, sizeof set.rsv2);
+}
 
 static void settings_defaults(void)
 {
@@ -42,12 +63,15 @@ static void settings_defaults(void)
     set.magic = SET_MAGIC; set.slot = 255;
     set.midi_on = 1; set.midi_ch = 0; set.midi_keys = 4; set.midi_clock = 0;
     piece_default(&set.cur);
+    settings_v2();
 }
 
 static int settings_ok(void)
 {
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.midi_clock > 1) return 0;
+    if (set.in_ch > 16 || set.layers_in > 1 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
+        || set.stems > 1 || set.palette >= NPAL || set.fractal >= NFRACTALS || set.full > 1 || set.glow > 100) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -55,7 +79,22 @@ static int settings_ok(void)
 
 static void settings_load(void)
 {
-    int n = plat_store_load(OBJ_SETTINGS, &set, sizeof set);
+    static uint8_t raw[sizeof(settings_t)];
+    int n = plat_store_load(OBJ_SETTINGS, raw, sizeof raw);
+    const uint32_t head = __builtin_offsetof(settings_t, cur), p1 = PIECE_SIZE1;
+    if (n == (int)(head + (1 + NSAVED) * p1) && *(const uint32_t *)raw == SET_MAGIC1) {
+        /* v0.1's: its pieces kept (each a little shorter then), its tape's bytes zeroed, the new settings as they start */
+        memset(&set, 0, sizeof set);
+        memcpy(&set, raw, head);
+        for (int i = 0; i <= NSAVED; i++) {
+            Piece *pc = i ? &set.saved[i - 1] : &set.cur;
+            memcpy(pc, raw + head + (uint32_t)i * p1, p1);
+            memset(&pc->dirt, 0, 4);
+        }
+        settings_v2();
+        set.magic = SET_MAGIC;
+        if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
+    } else memcpy(&set, raw, sizeof set);
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -95,23 +134,69 @@ static void midi_send(uint32_t pkt) { plat_midi_send(pkt, TO_USB); }
 
 static void cc_set(uint8_t *v, uint32_t x) { *v = (uint8_t)(x * 100u / 127u); }
 
-/* MIDI in: notes play the chosen layer's sound, in the scale; CC 20-23 HOME, 24-27 EFFECTS, 28-31 MOTION */
+/* MIDI in. Notes: on the layers' four channels (MIDI OUT's CHANNEL) they play those layers' sounds, on IN CH (or any)
+ * the chosen layer's; every note put into the scale. CC 20-23 HOME's macros, 24-27 EFFECTS', 28-31 MOTION's. Clock:
+ * its tempo followed, start and stop obeyed (CLOCK IN) */
+static volatile float ext_bpm; static volatile uint32_t ext_at, ext_last;
 static void midi_in(void)
 {
     uint32_t pkt; int port;
     const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
     while (plat_midi_in(&pkt, &port)) {
-        uint32_t st = (pkt >> 8) & 0xF0u, d1 = (pkt >> 16) & 0x7Fu, d2 = pkt >> 24 & 0x7Fu;
-        if (st == 0x90u || st == 0x80u) {
-            int note = deg_note(sc, set.cur.key, note_deg(sc, set.cur.key, (int)d1));
-            engine_key(&eng, st == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64));
-        } else if (st == 0xB0u) {
-            uint8_t *g[16] = { &set.cur.mood, &set.cur.motion, &set.cur.evolve, &set.cur.weird, &set.cur.reverb, &set.cur.echo,
-                               &set.cur.grain, &set.cur.shimmer, &set.cur.link, &set.cur.warp, &set.cur.drift, &set.cur.chaos,
-                               &set.cur.tape, &set.cur.wow, &set.cur.hiss, &set.cur.age };
-            if (d1 >= 20u && d1 < 36u) cc_set(g[d1 - 20u], d2);
+        uint32_t st = (pkt >> 8) & 0xFFu, d1 = (pkt >> 16) & 0x7Fu, d2 = pkt >> 24 & 0x7Fu, ch = st & 15u, ty = st & 0xF0u;
+        if (st == 0xF8u) {                               /* clock: 24 a beat, timed a beat at a time */
+            static uint32_t count, beat_at;
+            uint32_t now = plat_ms();
+            if (now - ext_last > 500u) { count = 0; beat_at = now; }   /* (a pause: start counting again) */
+            ext_last = now;
+            if (++count >= 24u) {
+                uint32_t ms = now - beat_at;
+                count = 0; beat_at = now;
+                if (set.clock_in && ms >= 200u && ms <= 3000u) {   /* (20 to 300 BPM) */
+                    float b = 60000.0f / (float)ms;
+                    ext_bpm = ext_bpm > 0 ? ext_bpm + (b - ext_bpm) * 0.5f : b;
+                }
+            }
+            if (set.clock_in) ext_at = now;
+        } else if ((st == 0xFAu || st == 0xFBu) && set.clock_in) { eng.playing = set.playing = 1; if (st == 0xFAu) eng.beat = 0; }
+        else if (st == 0xFCu && set.clock_in) { eng.playing = set.playing = 0; engine_all_off(&eng); }
+        else if (ty == 0x90u || ty == 0x80u) {
+            int note = deg_note(sc, set.cur.key, note_deg(sc, set.cur.key, (int)d1)), layer = -1;
+            if (set.layers_in && ch >= set.midi_ch && ch < set.midi_ch + 4u) layer = (int)(ch - set.midi_ch);
+            else if (set.in_ch && ch != set.in_ch - 1u) continue;
+            engine_key(&eng, ty == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64), layer);
+        } else if (ty == 0xB0u && set.cc_in) {
+            uint8_t *g[12] = { &set.cur.mood, &set.cur.motion, &set.cur.evolve, &set.cur.weird, &set.cur.reverb, &set.cur.echo,
+                               &set.cur.grain, &set.cur.dirt, &set.cur.link, &set.cur.warp, &set.cur.drift, &set.cur.chaos };
+            if (d1 >= 20u && d1 < 32u) cc_set(g[d1 - 20u], d2);
         }
     }
+    if (ext_bpm > 0 && plat_ms() - ext_at > 1000u) ext_bpm = 0;   /* the clock stopped: our own tempo again */
+    eng.ext_bpm = set.clock_in ? ext_bpm : 0.0f;
+}
+
+/* STEMS: each layer, dry, on its own pair of the USB audio input's channels (3-4 GROUND ... 9-10 DUST) */
+static void stems_out(uint32_t n)
+{
+#if FM1B_UAC_CH >= 10
+    if (!set.stems) return;
+    for (uint32_t off = 0; off < n;) {
+        uint32_t run = 0;
+        int16_t *p = plat_usb_ch(off, &run);
+        if (!p || !run) return;
+        for (uint32_t i = 0; i < run && off + i < n; i++, p += PLAT_USB_CH_STRIDE) {
+            uint32_t f = off + i, k = f / BLK, j = f % BLK;
+            for (int l = 0; l < NUM_LAYERS; l++) {
+                float g = eng.gains[k][l] * 16000.0f;
+                p[2 * l] = (int16_t)clampf(eng.bus[k][l][0][j] * g, -32767.0f, 32767.0f);
+                p[2 * l + 1] = (int16_t)clampf(eng.bus[k][l][1][j] * g, -32767.0f, 32767.0f);
+            }
+        }
+        off += run;
+    }
+#else
+    (void)n;
+#endif
 }
 
 static void layers_job(uint32_t mask) { for (int b = 0; b < NUM_LAYERS; b++) if (mask >> b & 1u) engine_block_layer(&eng, b); }
@@ -145,6 +230,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     engine_block_layer(&eng, KEYS);
     if (sent && plat_cpu2_wait() != 0) layers_job(mask);
     engine_block_mix(&eng, L, R);
+    stems_out(n);
     if (two_cores) on2_mask = balance();
     for (uint32_t i = 0; i < n && i < (uint32_t)(nsub * BLK); i++) {
         gain_now += (g - gain_now) * 0.002f;
@@ -168,6 +254,7 @@ void app_init(void)
 
 /* ------------------------------------------------------------------ text */
 static void text_cat(char *d, const char *s) { while (*d) d++; while (*s) *d++ = *s++; *d = 0; }
+static int strlen_(const char *s) { int n = 0; while (s[n]) n++; return n; }
 static void int_text(int32_t v, char *b)
 {
     char t[12]; int n = 0; uint32_t u = (uint32_t)(v < 0 ? -v : v);
@@ -179,37 +266,60 @@ static void int_text(int32_t v, char *b)
 static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 /* ------------------------------------------------------------------ the pages */
-enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_FX, PG_MOTION, PG_SCALE, PG_MIDI, PG_TAPE, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "EFFECTS", "MOTION", "SCALE", "MIDI", "TAPE" };
-static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_FX, B_LFO, B_GLO, B_ARP, B_FX };   /* FX again: TAPE */
-enum { K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH };
-typedef struct { const char *name; uint8_t kind, where, off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings */
-#define PO(f) (uint8_t)__builtin_offsetof(Piece, f)
-#define LO(f) (uint8_t)__builtin_offsetof(LayerP, f)
-#define SO(f) (uint8_t)__builtin_offsetof(settings_t, f)
+enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_MOTION, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB, NPAGES };
+static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "EFFECTS", "MOTION", "SCALE", "SCREEN",
+                                                "MIDI OUT", "MIDI IN", "USB AUDIO" };
+/* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: SCALE, SCREEN; ARP: MIDI OUT,
+ * MIDI IN, USB) */
+static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
+enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
+       K_PALETTE, K_FRACTAL, K_DIRT };
+typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
+                                                                                  * 3 the piece's per-layer arrays (VOICE) */
+#define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
+#define LO(f) (uint16_t)__builtin_offsetof(LayerP, f)
+#define SO(f) (uint16_t)__builtin_offsetof(settings_t, f)
 static const Knob PAGES[NPAGES][4] = {
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
     { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_PCT, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "DRIFT", K_PCT, 1, LO(weird) } },
     { { "TYPE", K_SEQ, 1, LO(seq) }, { "DENSITY", K_PCT, 1, LO(density) }, { "RATE", K_RATE, 1, LO(rate) }, { "MUTATE", K_PCT, 1, LO(mutate) } },
     { { "LEVEL", K_PCT, 1, LO(level) }, { "ATTACK", K_PCT, 1, LO(attack) }, { "RELEASE", K_PCT, 1, LO(release) }, { "OCTAVE", K_OCT, 1, LO(octave) } },
-    { { "REVERB", K_PCT, 0, PO(reverb) }, { "ECHO", K_PCT, 0, PO(echo) }, { "GRAIN", K_PCT, 0, PO(grain) }, { "SHIMMER", K_PCT, 0, PO(shimmer) } },
+    { { "GLIDE", K_PCT, 3, PO(glide) }, { "LEGATO", K_ONOFF, 3, PO(legato) }, { "SWEEP", K_PCT, 3, PO(sweep) }, { "RESO", K_PCT, 3, PO(reso) } },
+    { { "REVERB", K_PCT, 0, PO(reverb) }, { "ECHO", K_PCT, 0, PO(echo) }, { "GRAIN", K_PCT, 0, PO(grain) }, { "DIRT", K_DIRT, 0, PO(dirt) } },
     { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "FLOW", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
-    { { "MIDI OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
-    { { "TAPE", K_PCT, 0, PO(tape) }, { "WOW", K_PCT, 0, PO(wow) }, { "HISS", K_PCT, 0, PO(hiss) }, { "AGE", K_PCT, 0, PO(age) } },
+    { { "PALETTE", K_PALETTE, 2, SO(palette) }, { "FRACTAL", K_FRACTAL, 2, SO(fractal) }, { "FULL", K_ONOFF, 2, SO(full) }, { "GLOW", K_PCT, 2, SO(glow) } },
+    { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
+    { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_ONOFF, 2, SO(clock_in) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
+    { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "STEMS", K_ONOFF, 2, SO(stems) }, { "", K_NONE, 2, 0 } },
 };
-static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX; }
+static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE; }
 
 #define C_TXT RGB(232, 232, 232)
 #define C_SUB RGB(150, 150, 160)
 #define C_RULE RGB(40, 40, 48)
 #define C_WELL RGB(30, 30, 36)
 #define C_RED RGB(255, 90, 78)
-/* each layer its colour, everywhere: on the view and on its pages. GROUND red, BODY blue, LIGHT green, DUST white */
-static const uint16_t LAYER_C[NUM_LAYERS + 1] = { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240), RGB(255, 255, 255) };
+/* each layer its colour, everywhere: on the view and on its pages; the palettes (SCREEN), GROUND BODY LIGHT DUST */
+static const char *const LPAL_NAME[NPAL] = { "PRIMARY", "SUNSET", "OCEAN", "VAPOUR", "EMBER", "FOREST", "MONO", "PHOSPHOR", "AMBER" };
+static const uint16_t LPAL[NPAL][NUM_LAYERS] = {
+    { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240) },
+    { RGB(215, 45, 70), RGB(235, 90, 170), RGB(255, 150, 60), RGB(255, 230, 170) },
+    { RGB(40, 90, 210), RGB(40, 165, 235), RGB(60, 230, 215), RGB(220, 245, 255) },
+    { RGB(150, 70, 255), RGB(255, 90, 200), RGB(60, 220, 255), RGB(240, 220, 255) },
+    { RGB(190, 35, 25), RGB(240, 95, 30), RGB(255, 175, 45), RGB(255, 235, 190) },
+    { RGB(120, 140, 45), RGB(45, 175, 95), RGB(155, 230, 85), RGB(220, 255, 210) },
+    { RGB(110, 110, 110), RGB(160, 160, 160), RGB(210, 210, 210), RGB(255, 255, 255) },
+    { RGB(25, 120, 45), RGB(45, 175, 75), RGB(90, 235, 120), RGB(195, 255, 205) },
+    { RGB(150, 75, 0), RGB(205, 115, 15), RGB(255, 165, 35), RGB(255, 222, 145) },
+};
+static uint16_t LAYER_C[NUM_LAYERS + 1] = { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240), RGB(255, 255, 255) };
+static void palette_apply(void) { for (int l = 0; l < NUM_LAYERS; l++) LAYER_C[l] = LPAL[set.palette % NPAL][l]; }
+static const char *const FRACTAL_NAME[NFRACTALS] = { "JULIA", "FERN", "DRAGON", "POLYGON", "ATTRACTOR", "TREE" };
 
 static struct {
     uint32_t btn, keys;
+    int was_full;
     int page, sel;
     int last_knob; uint32_t knob_at;      /* the knob turned last: its name and value, big */
     char pop_t[28], pop_s[28], pop_3[40]; uint16_t pop_c; uint32_t pop_until;
@@ -225,11 +335,14 @@ static struct {
     uint32_t splash_t0; int splash_on, touched;
 } ui;
 
+static void settings_apply(void);
+
 static uint8_t *knob_ptr(int pg, int k)
 {
     const Knob *kn = &PAGES[pg][k];
     if (kn->where == 1) return (uint8_t *)&set.cur.l[ui.sel] + kn->off;
     if (kn->where == 2) return (uint8_t *)&set + kn->off;
+    if (kn->where == 3) return (uint8_t *)&set.cur + kn->off + ui.sel;
     return (uint8_t *)&set.cur + kn->off;
 }
 
@@ -238,6 +351,12 @@ static void knob_text(int pg, int k, char *s)
     const Knob *kn = &PAGES[pg][k]; uint8_t v = *knob_ptr(pg, k);
     s[0] = 0;
     switch (kn->kind) {
+    case K_NONE: break;
+    case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
+    case K_REC: text_cat(s, v ? "FULL" : "MASTER"); break;
+    case K_DIRT: text_cat(s, v == 0 ? "OFF" : v < 34 ? "FOLD " : v < 67 ? "CRUSH " : "NOISE "); if (v) int_text(v, s + strlen_(s)); break;
+    case K_PALETTE: text_cat(s, LPAL_NAME[v % NPAL]); break;
+    case K_FRACTAL: text_cat(s, FRACTAL_NAME[v % NFRACTALS]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
     case K_RATE: text_cat(s, RATE_NAME[v % NUM_RATES]); break;
@@ -258,6 +377,11 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
 {
     const Knob *kn = &PAGES[pg][k]; uint8_t v = *knob_ptr(pg, k);
     switch (kn->kind) {
+    case K_NONE: return 0.0f;
+    case K_INCH: return (float)v / 16.0f;
+    case K_REC: return v ? 1.0f : 0.0f;
+    case K_PALETTE: return (float)v / (NPAL - 1);
+    case K_FRACTAL: return (float)v / (NFRACTALS - 1);
     case K_ENGINE: return (float)v / (NUM_ENGINES - 1);
     case K_SEQ: return (float)v / (NUM_SEQS - 1);
     case K_RATE: return (float)v / (NUM_RATES - 1);
@@ -304,9 +428,24 @@ static void piece_label(char *t)          /* its name, and a star once it is cha
     if (set.slot != 255 && memcmp(&set.cur, &set.saved[set.slot], sizeof(Piece))) text_cat(t, "*");
 }
 
+/* REC's palettes: a shuffled deck, so none comes twice until all have */
+static uint8_t deck[NPAL]; static int deck_n;
+static void palette_next(void)
+{
+    if (deck_n == 0) {
+        for (int i = 0; i < NPAL; i++) deck[i] = (uint8_t)i;
+        for (int i = NPAL - 1; i > 0; i--) { int j = (int)((plat_ticks24() ^ (uint32_t)i * 2654435761u) % (uint32_t)(i + 1)); uint8_t t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
+        deck_n = NPAL;
+        if (deck[deck_n - 1] == set.palette) { uint8_t t = deck[0]; deck[0] = deck[deck_n - 1]; deck[deck_n - 1] = t; }   /* (not the one showing) */
+    }
+    set.palette = deck[--deck_n];
+    palette_apply();
+}
+
 static void new_piece(int all)
 {
     char nm[32];
+    palette_next();
     hist_push();
     uint32_t seed = (set.cur.seed * 1664525u + 1013904223u) ^ plat_ms() * 2654435761u ^ plat_ticks24();
     piece_roll(&set.cur, seed, all);
@@ -401,7 +540,12 @@ static void knob_turn(int k, int d)
 {
     const Knob *kn = &PAGES[ui.page][k]; uint8_t *p = knob_ptr(ui.page, k);
     int v = kn->kind == K_OCT ? (int8_t)*p : *p, lo = 0, hi = 100, step = 2, wrap = 0;
+    if (kn->kind == K_NONE) return;
     switch (kn->kind) {
+    case K_INCH: hi = 16; step = 1; break;
+    case K_REC: hi = 1; step = 1; break;
+    case K_PALETTE: hi = NPAL - 1; step = 1; wrap = 1; break;
+    case K_FRACTAL: hi = NFRACTALS - 1; step = 1; wrap = 1; break;
     case K_ENGINE: hi = NUM_ENGINES - 1; step = 1; wrap = 1; break;
     case K_SEQ: hi = NUM_SEQS - 1; step = 1; wrap = 1; break;
     case K_RATE: hi = NUM_RATES - 1; step = 1; break;
@@ -418,11 +562,19 @@ static void knob_turn(int k, int d)
     if (wrap) v = ((v - lo) % (hi - lo + 1) + (hi - lo + 1)) % (hi - lo + 1) + lo;
     else v = v < lo ? lo : v > hi ? hi : v;
     if (kn->kind == K_OCT) *(int8_t *)p = (int8_t)v; else *p = (uint8_t)v;
-    if (kn->where == 2) { store_ok = 1; autosave_at = plat_ms() + AUTOSAVE_MS; }
+    if (kn->where == 2) { autosave_at = plat_ms() + AUTOSAVE_MS; settings_apply(); }
     else changed();
     if (kn->kind == K_ONOFF && kn->off == SO(midi_on) && !v) engine_all_off(&eng);
     ui.last_knob = k; ui.knob_at = plat_ms(); ui.pop_until = 0;
     if (ann_on()) { char s[24]; knob_text(ui.page, k, s); say_text(kn->name, s); }
+}
+
+/* the settings that reach the platform and the screen */
+static void settings_apply(void)
+{
+    plat_usb_audio_full(set.usb_full);
+    plat_usb_play_gain((uint32_t)set.usb_play * 4096u / 100u);
+    palette_apply();
 }
 
 /* HOME: the knobs are the layers' levels, shown while they turn (HOME held: the macros) */
@@ -453,7 +605,7 @@ static void keys_input(uint32_t keys)
         if ((keys & b) && !(ui.keys & b)) {
             int note = deg_note(sc, base, i), v = touch_vel((uint32_t)kk);
             ui.key_notes[kk][0] = (uint8_t)note; ui.key_n[kk] = 1; ui.last_note = note;
-            engine_key(&eng, 1, note, v ? v : 100);
+            engine_key(&eng, 1, note, v ? v : 100, -1);
         }
     }
     for (int j = 0; j < 11; j++) {
@@ -462,7 +614,7 @@ static void keys_input(uint32_t keys)
         if ((keys & b) && !(ui.keys & b)) {
             int d[5], n = chord_degs(set.cur.chord, j, d), v = touch_vel((uint32_t)kk);
             if (ui.sel == L_GROUND) base += 12;      /* (chords down there would be mud) */
-            for (int c = 0; c < n; c++) { int note = deg_note(sc, base, d[c]); ui.key_notes[kk][c] = (uint8_t)note; engine_key(&eng, 1, note, (v ? v : 100) * 3 / 4); }
+            for (int c = 0; c < n; c++) { int note = deg_note(sc, base, d[c]); ui.key_notes[kk][c] = (uint8_t)note; engine_key(&eng, 1, note, (v ? v : 100) * 3 / 4, -1); }
             ui.last_note = ui.key_notes[kk][0]; ui.last_chord = n;
             ui.key_n[kk] = (uint8_t)n;
             if (ui.sel == L_GROUND) base -= 12;
@@ -470,7 +622,7 @@ static void keys_input(uint32_t keys)
     }
     for (int k = 0; k < NKEYS; k++)
         if (!(keys >> k & 1u) && (ui.keys >> k & 1u)) {
-            for (int c = 0; c < ui.key_n[k]; c++) engine_key(&eng, 0, ui.key_notes[k][c], 0);
+            for (int c = 0; c < ui.key_n[k]; c++) engine_key(&eng, 0, ui.key_notes[k][c], 0, -1);
             ui.key_n[k] = 0;
         }
 }
@@ -487,8 +639,15 @@ static void input(void)
     int32_t d;
     if (down || (keys & ~ui.keys)) ui.touched = 1;
 
-    for (int pg = 1; pg < NPAGES; pg++) if (pg != PG_FX && pg != PG_TAPE && (down >> PAGE_BTN[pg] & 1u)) page_to(pg);
-    if (down >> B_FX & 1u) page_to(ui.page == PG_FX ? PG_TAPE : PG_FX);   /* FX: the effects, again the tape */
+    {   /* a page's button: its page; pressed again, the next of its pages (GLO, ARP) */
+        static const uint8_t BTNS[7] = { B_EDIT, B_SEQ, B_ENV, B_FX, B_LFO, B_GLO, B_ARP };
+        for (int b = 0; b < 7; b++) {
+            if (!(down >> BTNS[b] & 1u)) continue;
+            int first = -1, next = -1;
+            for (int pg = 1; pg < NPAGES; pg++) if (PAGE_BTN[pg] == BTNS[b]) { if (first < 0) first = pg; if (next < 0 && pg > ui.page && PAGE_BTN[ui.page] == BTNS[b]) next = pg; }
+            page_to(PAGE_BTN[ui.page] == BTNS[b] ? (next >= 0 ? next : first) : first);
+        }
+    }
     /* HOME: from another page, home; held, the macros; tapped at home, how the FM-1 is doing */
     if (down >> B_HOME & 1u) { ui.home_used = ui.page != PG_HOME; if (ui.page != PG_HOME) page_to(PG_HOME); }
     if ((up >> B_HOME & 1u) && !ui.home_used) info();
@@ -536,8 +695,9 @@ void app_input_only(void) { input(); }
  * Each note leaves a shape where its pitch and its place in the stereo field put it, fading slowly: GROUND a wide bar
  * low down, BODY rings, LIGHT a bright point joined to the last by a line (the melody drawn), DUST specks. */
 #define HEAD_H 30
-#define VIEW_Y HEAD_H
-#define VIEW_H (240 - HEAD_H)
+static int full_now(void);
+#define VIEW_Y (full_now() ? 0 : HEAD_H)   /* SCREEN's FULL: at HOME, the view the whole screen, no header */
+#define VIEW_H (240 - VIEW_Y)
 #define PANEL_H 110
 #define PANEL_TOP (VIEW_H - PANEL_H)     /* the panel, over the view's lower part */
 #define NSHAPE 96
@@ -594,54 +754,156 @@ static void shapes_step(float dt)
     }
 }
 
-/* Behind everything, a Julia set, drawn as points by inverse iteration (z -> +-sqrt(z - c)), its c wandering with the
- * music: round the edge of the Mandelbrot set's heart as the beats go by, pulled in and out as BODY swells, turned
- * by the chord's root. Each point coloured by the layer whose band its height falls in, as bright as that layer
- * sounds. The last few c's leave fainter copies behind: the set's own afterimages. */
+/* Behind everything, a fractal (SCREEN's FRACTAL), always moving by itself and moved by the music. Its points are
+ * coloured by the layers, as bright as each sounds (GLOW); the last few frames stay as fainter copies, its own
+ * afterimages.
+ *   JULIA      the Julia set by inverse iteration (z -> +-sqrt(z - c)), c going round the edge of the Mandelbrot set's
+ *              heart as the beats go by, pulled in and out as BODY swells, turned by the chord's root
+ *   FERN       Barnsley's fern, swaying with FLOW, its fronds' angle breathing with BODY
+ *   DRAGON     the Heighway dragon's two maps, their angle bent by the music (it folds into its cousins)
+ *   POLYGON    the chaos game on as many corners as the scale has notes, each corner a layer pulling as it sounds
+ *   ATTRACTOR  Peter de Jong's attractor, its four numbers wandering
+ *   TREE       a tree, drawn branch by branch, swaying, its tips the layers */
 #define JPTS 1100
 #define JGHOST 3
 static int16_t jx[JGHOST][JPTS], jy[JGHOST][JPTS];
 static uint8_t jc[JGHOST][JPTS];
 static int jcur;
 static uint32_t jrng = 0x2545F491u;
+static float fx_t, fx_x, fx_y;                 /* the fractals' own clock, and a chaos game's point */
 
-static void julia_step(float dt)
+static uint32_t jr(void) { jrng ^= jrng << 13; jrng ^= jrng >> 17; jrng ^= jrng << 5; return jrng; }
+static float jf(void) { return (float)(jr() >> 8) * (1.0f / 16777216.0f); }
+
+static void fractal_step(float dt)
 {
     const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
     int n = sc->n, root = ((eng.root % n) + n) % n;
-    static float th, rad = 0.72f;
-    th += dt * (0.02f + 0.06f * (float)set.cur.motion * 0.01f);
-    float aim = 0.70f + 0.12f * eng.L[L_BODY].cv + 0.04f * eng.L[L_GROUND].cv;
-    rad += (aim - rad) * clampf(dt * 0.8f, 0.0f, 1.0f);
-    float a = th + (float)root / (float)n * 0.35f;
-    float cr = rad * fm_sin_turns(a + 0.25f), ci = rad * fm_sin_turns(a);
+    float vh = (float)VIEW_H, cy = vh * (set.full ? 0.5f : 0.44f), big = vh / 210.0f * (set.full ? 1.12f : 1.0f);
+    float body = eng.L[L_BODY].cv, light = eng.L[L_LIGHT].cv, ground = eng.L[L_GROUND].cv;
+    fx_t += dt * (0.6f + 0.8f * (float)set.cur.motion * 0.01f);   /* it moves even in silence */
+    float t = fx_t;
     jcur = (jcur + 1) % JGHOST;
-    float zr = 1.0f, zi = 0.0f;
-    float sx = 64.0f + 30.0f * (float)set.cur.weird * 0.01f, sy = sx * 0.85f, cy = (float)VIEW_H * 0.42f;
-    for (int i = 0; i < JPTS + 12; i++) {
-        float wr = zr - cr, wi = zi - ci;                  /* sqrt(w): r = |w|, then the half angle */
-        float m = fm_sqrtf(wr * wr + wi * wi);
-        float sr = fm_sqrtf((m + wr) * 0.5f), si = fm_sqrtf(fm_maxf((m - wr) * 0.5f, 0.0f));
-        if (wi < 0) si = -si;
-        jrng ^= jrng << 13; jrng ^= jrng >> 17; jrng ^= jrng << 5;
-        if (jrng & 1u) { sr = -sr; si = -si; }
-        zr = sr; zi = si;
-        if (i < 12) continue;
-        int k = i - 12;
-        jx[jcur][k] = (int16_t)(120.0f + zr * sx);
-        jy[jcur][k] = (int16_t)(cy + zi * sy);
-        jc[jcur][k] = (uint8_t)(zi > 0.35f ? L_GROUND : zi > 0.0f ? L_BODY : zi > -0.35f ? L_LIGHT : L_DUST);
+    int16_t *X = jx[jcur], *Y = jy[jcur]; uint8_t *C = jc[jcur];
+    switch (set.fractal) {
+    default:
+    case 0: {                                    /* JULIA */
+        static float rad = 0.72f;
+        float aim = 0.70f + 0.12f * body + 0.04f * ground;
+        rad += (aim - rad) * clampf(dt * 0.8f, 0.0f, 1.0f);
+        float a = t * 0.035f + (float)root / (float)n * 0.35f;
+        float cr = rad * fm_sin_turns(a + 0.25f), ci = rad * fm_sin_turns(a);
+        float zr = 1.0f, zi = 0.0f, sx = (64.0f + 30.0f * (float)set.cur.weird * 0.01f) * big, sy = sx * 0.85f;
+        for (int i = 0; i < JPTS + 12; i++) {
+            float wr = zr - cr, wi = zi - ci, m = fm_sqrtf(wr * wr + wi * wi);
+            float sr = fm_sqrtf((m + wr) * 0.5f), si = fm_sqrtf(fm_maxf((m - wr) * 0.5f, 0.0f));
+            if (wi < 0) si = -si;
+            if (jr() & 1u) { sr = -sr; si = -si; }
+            zr = sr; zi = si;
+            if (i < 12) continue;
+            int k = i - 12;
+            X[k] = (int16_t)(120.0f + zr * sx); Y[k] = (int16_t)(cy + zi * sy);
+            C[k] = (uint8_t)(zi > 0.35f ? L_GROUND : zi > 0.0f ? L_BODY : zi > -0.35f ? L_LIGHT : L_DUST);
+        }
+        break;
     }
+    case 1: {                                    /* FERN */
+        float sway = 0.05f * fm_sin_turns(t * 0.05f) * (0.4f + (float)set.cur.drift * 0.012f), lean = 0.03f * body;
+        float k = vh / 10.8f, x = fx_x, y = fx_y;
+        for (int i = 0; i < JPTS; i++) {
+            float r = jf(), nx, ny;
+            if (r < 0.01f) { nx = 0; ny = 0.16f * y; }
+            else if (r < 0.86f) { nx = 0.85f * x + (0.04f + sway) * y; ny = (-0.04f - lean) * x + 0.85f * y + 1.6f; }
+            else if (r < 0.93f) { nx = 0.2f * x - 0.26f * y; ny = 0.23f * x + 0.22f * y + 1.6f; }
+            else { nx = -0.15f * x + 0.28f * y; ny = 0.26f * x + 0.24f * y + 0.44f; }
+            x = nx; y = ny;
+            X[i] = (int16_t)(120.0f + x * k * 1.05f); Y[i] = (int16_t)(vh - 4.0f - y * k);
+            C[i] = (uint8_t)(y < 2.2f ? L_GROUND : y < 5.0f ? L_BODY : y < 7.8f ? L_LIGHT : L_DUST);
+        }
+        fx_x = x; fx_y = y;
+        break;
+    }
+    case 2: {                                    /* DRAGON: z -> a z, z -> 1 - b z, a and b turned by the music */
+        float ph = 0.125f + 0.025f * fm_sin_turns(t * 0.03f) + 0.03f * body - 0.02f * light;
+        float r = 0.7071f, ar = r * fm_sin_turns(ph + 0.25f), ai = r * fm_sin_turns(ph);
+        float rot = t * 0.01f, cr = fm_sin_turns(rot + 0.25f), ci = fm_sin_turns(rot);
+        float x = fx_x, y = fx_y, k = vh * 0.62f * big;
+        for (int i = 0; i < JPTS; i++) {
+            uint32_t b = jr();
+            float nx, ny;
+            if (b & 1u) { nx = ar * x - ai * y; ny = ar * y + ai * x; }
+            else { nx = 1.0f - (ar * x + ai * y); ny = -(ar * y - ai * x); }
+            x = nx; y = ny;
+            float px = x - 0.4f, py = y - 0.15f, qx = px * cr - py * ci, qy = px * ci + py * cr;
+            X[i] = (int16_t)(120.0f + qx * k); Y[i] = (int16_t)(cy + qy * k);
+            C[i] = (uint8_t)((b >> 1) & 3u);
+        }
+        fx_x = x; fx_y = y;
+        break;
+    }
+    case 3: {                                    /* POLYGON: the chaos game, each corner a layer pulling as it sounds */
+        float rr = (float)n / (float)(n + 3), rad = vh * 0.46f * big, rot = t * 0.008f;
+        float w[8], sum = 0;
+        for (int v = 0; v < n; v++) { w[v] = 0.25f + eng.meter[v % NUM_LAYERS]; sum += w[v]; }
+        float x = fx_x, y = fx_y;
+        for (int i = 0; i < JPTS; i++) {
+            float pick = jf() * sum; int v = 0;
+            while (v < n - 1 && pick >= w[v]) { pick -= w[v]; v++; }
+            float a = rot + (float)v / (float)n, vx = fm_sin_turns(a), vy = -fm_sin_turns(a + 0.25f);
+            x += (vx - x) * rr; y += (vy - y) * rr;
+            X[i] = (int16_t)(120.0f + x * rad); Y[i] = (int16_t)(cy + y * rad);
+            C[i] = (uint8_t)(v % NUM_LAYERS);
+        }
+        fx_x = x; fx_y = y;
+        break;
+    }
+    case 4: {                                    /* ATTRACTOR: Peter de Jong's */
+        float a = 1.4f + 0.5f * fm_sin_turns(t * 0.006f + (float)root * 0.07f), b = -2.3f + 0.35f * fm_sin_turns(t * 0.0045f) + 0.25f * body;
+        float c = 2.4f + 0.3f * fm_sin_turns(t * 0.005f + 0.25f), d = -2.1f + 0.35f * fm_sin_turns(t * 0.0037f) + 0.25f * light;
+        float x = fx_x, y = fx_y, k = vh * (set.full ? 0.235f : 0.21f);
+        for (int i = 0; i < JPTS; i++) {
+            float nx = fm_sin_turns(a * y * 0.159f) - fm_sin_turns(b * x * 0.159f + 0.25f);
+            float ny = fm_sin_turns(c * x * 0.159f) - fm_sin_turns(d * y * 0.159f + 0.25f);
+            int q = (nx > x) + 2 * (ny > y);
+            x = nx; y = ny;
+            X[i] = (int16_t)(120.0f + x * k); Y[i] = (int16_t)(cy + y * k * 0.95f);
+            C[i] = (uint8_t)q;
+        }
+        fx_x = x; fx_y = y;
+        break;
+    }
+    case 5: break;                               /* TREE: drawn as it is (draw_tree) */
+    }
+}
+
+static uint16_t glow_c(int l, float extra)
+{
+    float g = (float)set.glow * 0.01f;
+    return dim(LAYER_C[l], (0.05f + 0.25f * g + 0.55f * g * eng.meter[l]) * extra);
+}
+
+static void tree(float x, float y, float len, float ang, int depth, int maxd, float spread, float sway)
+{
+    float x2 = x + len * fm_sin_turns(ang), y2 = y - len * fm_sin_turns(ang + 0.25f);
+    int l = (maxd - depth) * NUM_LAYERS / (maxd + 1);
+    cv_line((int32_t)x, (int32_t)y, (int32_t)x2, (int32_t)y2, glow_c(l, 1.0f));
+    if (depth <= 0) return;
+    float s = spread * (0.85f + 0.3f * fm_sin_turns(fx_t * 0.02f + (float)depth * 0.13f));
+    tree(x2, y2, len * 0.72f, ang - s + sway, depth - 1, maxd, spread, sway);
+    tree(x2, y2, len * 0.72f, ang + s + sway, depth - 1, maxd, spread, sway);
 }
 
 static void draw_julia(void)
 {
+    if (set.fractal == 5) {
+        float vh = (float)VIEW_H, sway = 0.012f * fm_sin_turns(fx_t * 0.04f) * (0.5f + (float)set.cur.drift * 0.01f) + 0.01f * eng.L[L_LIGHT].cv;
+        float spread = 0.05f + 0.06f * (float)set.cur.mood * 0.01f + 0.02f * eng.L[L_BODY].cv;
+        tree(120.0f, vh - 4.0f, vh * 0.25f, 0.0f, 7, 7, spread, sway);
+        return;
+    }
     uint16_t col[JGHOST][NUM_LAYERS];
     for (int g = 0; g < JGHOST; g++)
-        for (int l = 0; l < NUM_LAYERS; l++) {
-            float age = (float)((jcur - g + JGHOST) % JGHOST);   /* 0 the newest */
-            col[g][l] = dim(LAYER_C[l], (0.16f + 0.6f * eng.meter[l]) * (1.0f - 0.3f * age));
-        }
+        for (int l = 0; l < NUM_LAYERS; l++) col[g][l] = glow_c(l, 1.0f - 0.3f * (float)g);
     for (int g = JGHOST - 1; g >= 0; g--) {
         int b = (jcur - g + JGHOST) % JGHOST;
         for (int i = 0; i < JPTS; i++) cv_pset(jx[b][i], jy[b][i], col[g][jc[b][i]]);
@@ -747,6 +1009,8 @@ static void draw_view(void)
     }
 }
 
+static int full_now(void) { return set.full && ui.page == PG_HOME; }
+
 static void draw_header(void)
 {
     char name[40], right[32] = "";
@@ -808,9 +1072,11 @@ static void draw_panel_rows(int y0)
         cv_text(x + 10, y0 + 20, &FONT_M, v, pc);
     } else {
         static const char *const HINT[NPAGES] = {
-            "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER",
-            "THE SPACE AROUND IT  (FX AGAIN: TAPE)", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE", "OUT OVER USB",
-            "EVERYTHING THROUGH OLD TAPE" };
+            "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT: THE LAYER  (ENV AGAIN: VOICE)",
+            "SLIDES AND FILTER SWEEPS",
+            "THE SPACE AROUND IT", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE  (GLO AGAIN: SCREEN)",
+            "COLOURS AND FRACTALS", "THE LAYERS ON FOUR CHANNELS  (ARP AGAIN: IN)", "LAYER CHANNELS PLAY THE LAYERS",
+            "RECORDING THE FM-1 OVER USB" };
         cv_text(6, y0 + 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));
     }
     /* four columns: label, value, bar */
@@ -894,6 +1160,7 @@ void app_ui_init(void)
     memset(shp, 0, sizeof shp);
     touch_on(1);
     ui.sel = L_LIGHT; eng.key_layer = ui.sel;
+    settings_apply();
     ui.page = PG_HOME;
     ui.uiq_tail = eng.uiq_head;
     lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -916,7 +1183,7 @@ void app_frame(void)
         if (dt > 0.2f) dt = 0.2f;
         ui.last_view = now; ui.t += dt;
         shapes_step(dt);
-        julia_step(dt);
+        fractal_step(dt);
         draw_view();
     }
     {   /* the load guard: past 85 % of the render's time, fewer notes; back as it eases */
@@ -928,7 +1195,7 @@ void app_frame(void)
         autosave_at = 0;
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
     }
-    if (now - ui.last_head >= 100u) {            /* the header: its words, and the layers' lights */
+    if (now - ui.last_head >= 100u && !full_now()) {   /* the header: its words, and the layers' lights */
         ui.last_head = now;
         draw_header();
     }
@@ -952,6 +1219,7 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "midi_ch")) *got = set.midi_ch;
     else if (!strcmp(what, "hist")) *got = hist_n;
     else if (!strcmp(what, "lastnote")) *got = ui.last_note;
+    else if (!strcmp(what, "clockbpm")) *got = (int)(eng.bpm + 0.5f);
     else if (!strcmp(what, "lastchord")) *got = ui.last_chord;
     else if (!strncmp(what, "seq", 3)) *got = set.cur.l[atoi(what + 3) & 3].seq;
     else if (!strncmp(what, "engine", 6)) *got = set.cur.l[atoi(what + 6) & 3].engine;

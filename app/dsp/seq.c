@@ -3,7 +3,7 @@
 #include "seq.h"
 
 const char *const SEQ_NAME[NUM_SEQS] = {
-    "EUCLID", "TURING", "MARKOV", "LORENZ", "BOUNCE", "ORBITS", "LIFE", "CHIMES", "PHASE", "DRUNK"
+    "EUCLID", "TURING", "MARKOV", "LORENZ", "BOUNCE", "ORBITS", "LIFE", "CHIMES", "PHASE", "DRUNK", "MELODY"
 };
 
 static int clampi(int x, int lo, int hi) { return x < lo ? lo : x > hi ? hi : x; }
@@ -42,6 +42,33 @@ static void mel_new(Seq *s, int m)
         s->mel[i] = (int8_t)d;
         d = clampi(d + rng_int(&s->rng, 5) - 2, 0, s->range - 1);
     }
+}
+
+/* MELODY: a phrase of up to 16 notes. A motif (4 to 5 notes, mostly steps, a leap now and then), the motif answered a
+ * step or two away, a contrasting turn, then the motif again coming home to the root. Long notes, at their ends most
+ * of all */
+static void melody_new(Seq *s)
+{
+    Rng *r = &s->rng;
+    static const uint8_t DUR[8] = { 2, 2, 4, 4, 6, 8, 3, 2 };
+    int8_t mo[5]; uint8_t md[5];
+    int m = 4 + rng_int(r, 2), c = s->range / 2, d = c + rng_int(r, 3) - 1, n = 0;
+    for (int i = 0; i < m; i++) {
+        mo[i] = (int8_t)d; md[i] = DUR[rng_int(r, 8)];
+        int step = rng_chance(r, 0.75f) ? (rng_chance(r, 0.5f) ? 1 : -1) * (1 + rng_chance(r, 0.25f)) : (rng_chance(r, 0.5f) ? 4 : -3);
+        d = clampi(d + step, 1, s->range - 2);
+    }
+    md[m - 1] = (uint8_t)(md[m - 1] < 4 ? 6 : md[m - 1] + 2);
+    int ans = rng_chance(r, 0.5f) ? 2 : -1;
+    for (int i = 0; i < m; i++) { s->mel[n] = mo[i]; s->mdur[n++] = md[i]; }                        /* A */
+    for (int i = 0; i < m; i++) { s->mel[n] = (int8_t)clampi(mo[i] + ans, 0, s->range - 1); s->mdur[n++] = md[i]; }   /* A' */
+    for (int i = 0; i < 3 && n < 13; i++) {                                                          /* B: a turn */
+        d = clampi(c + (rng_chance(r, 0.5f) ? 3 : -2) + rng_int(r, 3) - 1, 0, s->range - 1);
+        s->mel[n] = (int8_t)d; s->mdur[n++] = DUR[rng_int(r, 8)];
+    }
+    for (int i = 0; i < m - 1 && n < 15; i++) { s->mel[n] = mo[i]; s->mdur[n++] = md[i]; }          /* A, home */
+    s->mel[n] = (int8_t)(c - c % 7 > 0 ? c - c % 7 : c); s->mdur[n++] = 8;                           /* (the root, held) */
+    s->len = n; s->pos = 0; s->k = 0;
 }
 
 void seq_init(Seq *s, int type, int range, uint32_t seed)
@@ -98,10 +125,28 @@ void seq_init(Seq *s, int type, int range, uint32_t seed)
         s->cells = (uint16_t)(rng_u32(r) | 1u);       /* which of the phrase's steps play */
         s->rate2 = 1.0f + rng_range(r, 0.006f, 0.02f);
         break;
+    case S_MELODY:
+        melody_new(s);
+        break;
     case S_DRUNK:
     default:
         s->idx = s->range / 2;
         break;
+    }
+}
+
+static void step_melody(Seq *s)
+{
+    if (s->k-- > 0) return;                              /* (the note before still sounding) */
+    int i = s->pos % s->len, d = s->mdur[i];
+    if (s->density < 0.4f) d *= 2;                       /* sparse: slower */
+    s->k = d - 1;
+    s->mod = (float)i / (float)s->len;
+    emit(s, s->mel[i], i == 0 ? 0.85f : 0.55f + 0.2f * (d >= 4), (float)d * 0.25f * 1.08f, 9);   /* (a touch long: they join) */
+    if (++s->pos >= s->len) {                            /* the phrase again: MUTATE may change a note, or write a new turn */
+        s->pos = 0;
+        if (rng_chance(&s->rng, s->mutate * 0.6f)) { int j = 1 + rng_int(&s->rng, s->len - 2); s->mel[j] = (int8_t)clampi(s->mel[j] + (rng_chance(&s->rng, 0.5f) ? 1 : -1), 0, s->range - 1); }
+        if (rng_chance(&s->rng, s->mutate * s->mutate * 0.3f)) melody_new(s);
     }
 }
 
@@ -295,6 +340,7 @@ void seq_run(Seq *s, float beats)
     case S_MARKOV: step_markov(s); break;
     case S_LIFE:   step_life(s); break;
     case S_PHASE:  step_phase(s); break;
+    case S_MELODY: step_melody(s); break;
     case S_DRUNK:
     default:       step_drunk(s); break;
     }
@@ -313,6 +359,7 @@ void seq_poke(Seq *s)
     case S_LIFE:   s->cells ^= (uint16_t)(1u << rng_int(r, 16)); break;
     case S_CHIMES: s->wind = clamp01(s->wind + 0.4f); break;
     case S_PHASE:  s->ph2 = 0; s->idx = s->pos; break;
+    case S_MELODY: s->mel[rng_int(r, s->len)] += (int8_t)(rng_chance(r, 0.5f) ? 1 : -1); break;
     case S_DRUNK:
     default:       s->idx = rng_int(r, s->range); break;
     }

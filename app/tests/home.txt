@@ -4,11 +4,11 @@ wav home.wav
 expect page 0
 wait 8000
 shot home.png
-expect level3 56
+expect level3 48
 turn K4 5
 wait 200
 expect page 0
-expect level3 66
+expect level3 58
 shot levels.png
 wait 2500
 press HOME
@@ -39,31 +39,67 @@ shot seq.png
 tap ENV
 wait 200
 expect page 3
-tap FX
+tap ENV
 wait 200
 expect page 4
-shot fx.png
+turn K1 10
+turn K2 1
+wait 200
+shot voice.png
 tap FX
 wait 200
-expect page 8
-turn K2 5
-wait 300
-shot tape.png
+expect page 5
+shot fx.png
 tap LFO
 wait 200
-expect page 5
+expect page 6
 shot motion.png
 tap GLO
 wait 200
-expect page 6
+expect page 7
 turn K2 1
 wait 300
 expect scale 2
 shot scale.png
+tap GLO
+wait 200
+expect page 8
+turn K1 2
+wait 200
+shot screen.png
+turn K2 1
+wait 1500
+shot fern.png
+turn K2 1
+wait 1500
+shot dragon.png
+turn K2 1
+wait 1500
+shot polygon.png
+turn K2 1
+wait 1500
+shot attractor.png
+turn K2 1
+wait 1500
+shot tree.png
+turn K2 1
+turn K1 -2
+wait 200
 tap ARP
 wait 200
-expect page 7
+expect page 9
 shot midi.png
+tap ARP
+wait 200
+expect page 10
+shot midi_in.png
+tap ARP
+wait 200
+expect page 11
+shot usb.png
+tap ARP
+wait 200
+expect page 9
 tap HOME
 wait 200
 expect page 0
@@ -109,3 +145,19 @@ wait 1500
 shot stopped.png
 tap PLAY
 wait 5000
+tap GLO
+tap GLO
+wait 100
+expect page 8
+turn K3 1
+wait 100
+tap HOME
+wait 3000
+shot full.png
+tap GLO
+tap GLO
+turn K2 4
+wait 100
+tap HOME
+wait 3000
+shot full_attractor.png

@@ -65,11 +65,14 @@ static void layer_sound(const Engine *e, int l, Sound *s)
 {
     const Piece *p = e->p; const LayerP *lp = &p->l[l];
     s->engine = lp->engine < NUM_ENGINES ? lp->engine : 0;
-    s->tone = clamp01(u(lp->tone) + e->L[l].tone_off + (u(p->mood) - 0.5f) * 0.35f
+    s->tone = clamp01(u(lp->tone) + e->L[l].tone_off + (u(p->mood) - 0.6f) * 0.35f
                       + u(p->drift) * 0.25f * e->L[l].dtone.v);
     s->weight = u(lp->weight);
     s->weird = clamp01(u(lp->weird) + u(p->weird) * 0.6f);
     s->attack = attack_s(lp->attack); s->release = release_s(lp->release);
+    s->glide = p->glide[l] ? 0.02f + 0.9f * u(p->glide[l]) * u(p->glide[l]) : 0.0f;
+    s->sweep = u(p->sweep[l]); s->reso = u(p->reso[l]);
+    s->pan_move = clamp01(0.15f * u(p->drift) + 0.55f * u(p->weird) + 0.45f * u(p->chaos)) * ROLES[l].width;   /* DRIFT and CHAOS: more */
 }
 
 static void layer_seq_check(Engine *e, int l)
@@ -96,18 +99,18 @@ void engine_init(Engine *e, const Piece *p)
     reverb_init(&e->rv, 1.3f);
     echo_init(&e->echo);
     grains_init(&e->gr, p->seed);
-    tape_init(&e->tape, p->seed);
+    dirt_init(&e->dirt, p->seed);
     patch(e, p->seed);
     e->mask = 0xF; e->chord_bars = 4; e->chord_left = 4; e->sec_left = 32;
     rng_seed(&e->rng, p->seed);
     e->seed_now = p->seed;
 }
 
-void engine_key(Engine *e, int on, int note, int vel)
+void engine_key(Engine *e, int on, int note, int vel, int layer)
 {
     uint32_t w = e->key_w;
     if (w - e->key_r >= 16u) return;
-    e->key_in[w % 16u] = (uint32_t)(on & 1) | (uint32_t)(note & 127) << 8 | (uint32_t)(vel & 127) << 16;
+    e->key_in[w % 16u] = (uint32_t)(on & 1) | (uint32_t)(note & 127) << 8 | (uint32_t)(vel & 127) << 16 | (uint32_t)(layer + 1) << 24;
     e->key_w = w + 1;
 }
 
@@ -117,7 +120,7 @@ static void queue(VoiceEv *q, int *nq, int sub, int voice, int note, float vel, 
     if (*nq >= EVQ) return;
     VoiceEv *v = &q[(*nq)++];
     v->sub = (uint8_t)sub; v->voice = (uint8_t)voice; v->rel = 0; v->note = (int8_t)note; v->vel = vel; v->dur = dur;
-    v->pan = pan; v->snd = *snd; v->seed = seed;
+    v->pan = pan; v->snd = *snd; v->seed = seed; v->from_hz = 0;
 }
 
 static int pick_voice(Voice *v, int n, int *next)
@@ -162,12 +165,25 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
         while (note < 12) note += 12;
         while (note > 120) note -= 12;
         float pan = sn->pan < 2.0f ? sn->pan * w : (nn > 1 ? ((float)i / (float)(nn - 1) * 2.0f - 1.0f) * w : rng_bi(&e->rng) * w);
-        pan = clampf(pan + u(p->drift) * 0.3f * L->dpan.v, -1.0f, 1.0f);
-        int vi = pick_voice(L->v, L->nv, &L->next_v);
-        queue(L->q, &L->nq, sub, vi, note, vel / (nn > 1 ? 1.0f + 0.25f * (float)nn : 1.0f), dur, pan, &snd, rng_u32(&e->rng));
+        pan += u(p->drift) * 0.3f * L->dpan.v;                       /* FLOW: the layer's slow wandering */
+        pan += rng_bi(&e->rng) * (0.15f + 0.5f * u(p->weird) + 0.6f * u(p->chaos)) * (0.4f + 0.6f * w);   /* each note somewhere new */
+        pan = clampf(pan, -1.0f, 1.0f);
+        float nv = vel / (nn > 1 ? 1.0f + 0.25f * (float)nn : 1.0f);
+        /* LEGATO: the voice that played this part of the last note (or chord) slides on to this one, not started again */
+        if (p->legato[l] && i < L->last_n && L->last_v[i] >= 0 && L->v[L->last_v[i]].on && L->v[L->last_v[i]].hold > 0) {
+            int vi = L->last_v[i];
+            if (L->nq < EVQ) { VoiceEv *q = &L->q[L->nq++]; q->sub = (uint8_t)sub; q->voice = (uint8_t)vi; q->rel = 2; q->note = (int8_t)note; q->vel = nv; q->dur = dur; }
+            L->last_hz[i] = mtof((float)note);
+        } else {
+            int vi = pick_voice(L->v, L->nv, &L->next_v);
+            queue(L->q, &L->nq, sub, vi, note, nv, dur, pan, &snd, rng_u32(&e->rng));
+            if (p->glide[l] && i < L->last_n) L->q[L->nq - 1].from_hz = L->last_hz[i];   /* GLIDE: from the last note */
+            L->last_v[i] = (int8_t)vi; L->last_hz[i] = mtof((float)note);
+        }
         midi_note(e, (e->midi_ch + l) & 15, note, vel, dur);
         post(e, l, note, vel, pan);
     }
+    L->last_n = nn;
     e->events[l]++;
     L->cv = fm_maxf(L->cv, sn->vel);
     if (l == L_GROUND) e->duck = fm_maxf(e->duck, vel * u(lp->weight) * 0.45f);
@@ -184,12 +200,13 @@ static void keys_in(Engine *e, int sub)
 {
     while (e->key_r != e->key_w) {
         uint32_t k = e->key_in[e->key_r % 16u]; e->key_r++;
-        int on = (int)(k & 1u), note = (int)(k >> 8 & 127u); float vel = (float)(k >> 16 & 127u) / 127.0f;
+        int on = (int)(k & 1u), note = (int)(k >> 8 & 127u), lay = (int)(k >> 24 & 7u) - 1; float vel = (float)(k >> 16 & 127u) / 127.0f;
+        if (lay < 0 || lay >= NUM_LAYERS) lay = e->key_layer;
         if (on) {
-            Sound snd; layer_sound(e, e->key_layer, &snd);
+            Sound snd; layer_sound(e, lay, &snd);
             int vi = pick_voice(e->kv, KEY_POLY, &e->key_next);
             queue(e->kq, &e->nkq, sub, vi, note, vel, 600.0f, rng_bi(&e->rng) * 0.3f, &snd, rng_u32(&e->rng));
-            post(e, e->key_layer, note, vel, 0);
+            post(e, lay, note, vel, 0);
             if (e->midi && e->midi_on) e->midi(0x09u | (0x90u | e->midi_keys_ch) << 8 | (uint32_t)note << 16 | (uint32_t)(vel * 127.0f) << 24);
         } else {
             for (int i = 0; i < KEY_POLY; i++)          /* (a key's voice: the one playing its note, held) */
@@ -248,7 +265,7 @@ static void bar(Engine *e)
 static void control(Engine *e, int sub)
 {
     const Piece *p = e->p;
-    e->bpm = 40.0f + (float)p->tempo;
+    e->bpm = e->ext_bpm > 20.0f ? clampf(e->ext_bpm, 30.0f, 240.0f) : 40.0f + (float)p->tempo;
     float beats = BLK_S * e->bpm / 60.0f;
     e->t += BLK_S;
     if (e->seed_now != p->seed) {                    /* a new piece: the conductor starts again */
@@ -326,8 +343,9 @@ static void apply(VoiceEv *q, int nq, Voice *v, int sub)
     for (int i = 0; i < nq; i++) {
         if (q[i].sub != sub) continue;
         Voice *x = &v[q[i].voice];
-        if (q[i].rel) voice_release(x);
-        else voice_start(x, &q[i].snd, q[i].note, q[i].vel, q[i].dur, q[i].pan, 0.5f, 0.0f, q[i].seed);
+        if (q[i].rel == 1) voice_release(x);
+        else if (q[i].rel == 2) voice_legato(x, q[i].note, q[i].vel, q[i].dur);
+        else voice_start(x, &q[i].snd, q[i].note, q[i].vel, q[i].dur, q[i].pan, q[i].from_hz, q[i].seed);
     }
 }
 
@@ -360,14 +378,13 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
 {
     uint32_t t0 = now(e);
     const Piece *p = e->p;
-    float rvk = u(p->reverb), eck = u(p->echo), grk = u(p->grain), shk = u(p->shimmer);
-    reverb_set(&e->rv, 2.5f + 14.0f * rvk * rvk, 2500.0f + 6000.0f * u(p->mood));
+    float rvk = u(p->reverb), eck = u(p->echo), grk = u(p->grain), shk = 0.0f, dk = u(p->dirt);
+    reverb_set(&e->rv, 2.5f + 14.0f * rvk * rvk, 1800.0f + 4200.0f * u(p->mood));
     e->echo.time_s = clampf(60.0f / e->bpm * 0.75f, 0.12f, 0.7f);   /* a dotted eighth */
     while (e->echo.time_s > 0.7f) e->echo.time_s *= 0.5f;
     e->echo.fb = 0.2f + 0.65f * eck; e->echo.wow = u(p->warp) + u(p->drift) * 0.5f;
     e->gr.density = grk < 0.9f ? grk : 1.0f; e->gr.frozen = grk >= 0.92f; e->gr.size = 0.3f + 0.7f * grk;
-    e->gr.spread = 0.3f + 0.7f * grk; e->gr.shimmer = shk;
-    e->tape.amount = u(p->tape); e->tape.wow = u(p->wow); e->tape.hiss = u(p->hiss); e->tape.age = u(p->age);
+    e->gr.spread = 0.3f + 0.7f * grk; e->gr.shimmer = 0;   /* (SHIMMER gave way to DIRT) */
     {   /* the grains' pitches: octaves, and the fifth only where the scale has one */
         const Scale *sc = &SCALES[p->scale % NUM_SCALES]; int has5 = 0;
         for (int i = 0; i < sc->n; i++) if (sc->st[i] == 7) has5 = 1;
@@ -406,16 +423,26 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
             rl[i] += ol[i] * 0.3f + gl[i] * gg * 0.5f + sh[i] * shk * 1.6f;
             rr[i] += orr[i] * 0.3f + grr[i] * gg * 0.5f + sh[i] * shk * 1.6f;
         }
+        dirt_run(&e->dirt, dk, dl, dr, BLK);            /* the dry sound only */
         float vl[BLK], vr[BLK];
         reverb_run(&e->rv, rl, rr, vl, vr, BLK);
         float *L = outL + k * BLK, *R = outR + k * BLK;
         for (int i = 0; i < BLK; i++) { dl[i] += vl[i] * 0.55f; dr[i] += vr[i] * 0.55f; }
-        tape_run(&e->tape, dl, dr, BLK);
         for (int i = 0; i < BLK; i++) {
             float l = dl[i], r = dr[i];
             e->dc[0] += 0.0035f * (l - e->dc[0]); e->dc[1] += 0.0035f * (r - e->dc[1]);
             L[i] = l - e->dc[0]; R[i] = r - e->dc[1];
         }
+        /* the leveller: pieces come out at about the same loudness (+-8 dB at most), over seconds, never pumping */
+        float ss = 0;
+        for (int i = 0; i < BLK; i++) ss += L[i] * L[i] + R[i] * R[i];
+        e->lev_ss += (ss / (2.0f * BLK) - e->lev_ss) * (BLK_S / 4.0f);
+        if (e->lev_g <= 0) e->lev_g = 1.0f;
+        if (e->lev_ss > 1e-6f) {
+            float want = clampf(0.12f * fm_rsqrtf(e->lev_ss), 0.4f, 2.5f);
+            e->lev_g += (want - e->lev_g) * (BLK_S / 3.0f);
+        }
+        for (int i = 0; i < BLK; i++) { L[i] *= e->lev_g; R[i] *= e->lev_g; }
     }
     cost_add(e, NBUS, t0);
 }

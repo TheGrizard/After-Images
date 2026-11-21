@@ -4,9 +4,9 @@
 
 /* the engines that suit each role's band */
 static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB };
-static const uint8_t POOL_B[] = { E_SAW, E_GLASS, E_VOX, E_FM, E_PULSE, E_BREATH, E_PLUCK, E_SAW };
-static const uint8_t POOL_L[] = { E_PLUCK, E_BELL, E_FM, E_PULSE, E_GLASS, E_FOLD, E_VOX };
-static const uint8_t POOL_D[] = { E_BREATH, E_BELL, E_GLASS, E_PLUCK, E_VOX, E_FM };
+static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW };
+static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM };
+static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS };
 static const uint8_t *const POOL[NUM_LAYERS] = { POOL_G, POOL_B, POOL_L, POOL_D };
 static const uint8_t POOL_N[NUM_LAYERS] = { sizeof POOL_G, sizeof POOL_B, sizeof POOL_L, sizeof POOL_D };
 /* each role's rates (RATES' indexes) and envelopes (attack, release ranges, 0..100) */
@@ -19,7 +19,7 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
 {
     LayerP *lp = &p->l[l];
     lp->engine = POOL[l][rng_int(r, POOL_N[l])];
-    lp->tone = pick(r, 25, 80);
+    lp->tone = pick(r, 15, 62);
     lp->weight = (uint8_t)weight;
     lp->weird = rng_chance(r, 0.25f) ? pick(r, 40, 85) : pick(r, 0, 35);
     lp->density = pick(r, 30, 70);
@@ -27,9 +27,18 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
     lp->mutate = pick(r, 10, 60);
     lp->attack = pick(r, ENV_R[l][0], ENV_R[l][1]);
     lp->release = pick(r, ENV_R[l][2], ENV_R[l][3]);
-    lp->level = l == L_GROUND ? 70 : l == L_BODY ? 72 : l == L_LIGHT ? 64 : 56;
+    lp->level = l == L_GROUND ? 70 : l == L_BODY ? 72 : l == L_LIGHT ? 62 : 48;
     lp->octave = 0;
     lp->salt = (uint16_t)rng_u32(r);
+}
+
+static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and then a glide, legato, a sweep, resonance */
+{
+    int slides = l == L_GROUND || l == L_LIGHT;
+    p->glide[l] = rng_chance(r, slides ? 0.4f : 0.12f) ? pick(r, 10, 55) : 0;
+    p->legato[l] = (uint8_t)(p->glide[l] && l != L_BODY && rng_chance(r, 0.55f));
+    p->sweep[l] = rng_chance(r, 0.3f) ? pick(r, 20, 70) : 0;
+    p->reso[l] = rng_chance(r, 0.25f) ? pick(r, 15, 60) : 0;
 }
 
 void piece_roll(Piece *p, uint32_t seed, int all)
@@ -42,15 +51,21 @@ void piece_roll(Piece *p, uint32_t seed, int all)
     for (int i = NUM_SEQS - 1; i > 0; i--) { int j = rng_int(&r, i + 1); uint8_t t = s[i]; s[i] = s[j]; s[j] = t; }
     /* contrast: one layer heavy, one soft, always */
     int heavy = rng_chance(&r, 0.5f) ? L_GROUND : rng_int(&r, NUM_LAYERS), soft = (heavy + 1 + rng_int(&r, NUM_LAYERS - 1)) % NUM_LAYERS;
+    /* the long melodies: LIGHT sings one in half the pieces (the early-90s Warp way), gliding now and then */
+    if (rng_chance(&r, 0.5f)) {
+        int at = 0; while (at < NUM_SEQS && s[at] != S_MELODY) at++;
+        if (at < NUM_SEQS) { uint8_t t = s[L_LIGHT]; s[L_LIGHT] = s[at]; s[at] = t; }
+    }
     for (int l = 0; l < NUM_LAYERS; l++) {
         int w = l == heavy ? pick(&r, 65, 95) : l == soft ? pick(&r, 0, 25) : pick(&r, 20, 65);
         roll_layer(p, l, &r, w);
+        roll_voice(p, l, &r);
         p->l[l].seq = s[l];
     }
     p->reverb = pick(&r, 35, 80); p->echo = pick(&r, 10, 55); p->grain = rng_chance(&r, 0.5f) ? pick(&r, 10, 60) : 0;
-    p->shimmer = rng_chance(&r, 0.4f) ? pick(&r, 10, 50) : 0;
-    if (rng_chance(&r, 0.55f)) { p->tape = pick(&r, 10, 55); p->wow = pick(&r, 5, 45); p->hiss = pick(&r, 0, 25); p->age = pick(&r, 0, 35); }
-    else p->tape = p->wow = p->hiss = p->age = 0;
+    p->shimmer = 0;
+    p->dirt = rng_chance(&r, 0.35f) ? pick(&r, 5, 45) : 0;
+    p->rsv[0] = p->rsv[1] = p->rsv[2] = 0;
     p->link = pick(&r, 15, 60); p->warp = pick(&r, 0, 40); p->drift = pick(&r, 20, 60); p->chaos = pick(&r, 0, 30);
     if (all) {
         p->key = (uint8_t)rng_int(&r, 12);
@@ -68,6 +83,7 @@ void piece_roll_layer(Piece *p, int l, uint32_t seed)
     int other = p->l[(l + 1) % NUM_LAYERS].seq, t;
     do t = rng_int(&r, NUM_SEQS); while (t == p->l[l].seq || t == other);
     roll_layer(p, l, &r, pick(&r, 0, 95));
+    roll_voice(p, l, &r);
     p->l[l].seq = (uint8_t)t;
 }
 
@@ -77,18 +93,17 @@ void piece_default(Piece *p)
     p->key = 9; p->scale = 1; p->chord = CH_SEVENTH; p->tempo = 44;   /* A minor, 84 BPM */
     p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 15;
     piece_roll(p, 0xAF7E1u, 0);
-    p->tape = 25; p->wow = 15; p->hiss = 8; p->age = 10;   /* (a little tape, to start) */
 }
 
 int piece_ok(const Piece *p)
 {
-    if (p->scale >= NUM_SCALES || p->key >= 12 || p->chord >= NUM_CHORDS || p->tempo > 140) return 0;
-    if (p->tape > 100 || p->wow > 100 || p->hiss > 100 || p->age > 100) return 0;
+    if (p->scale >= NUM_SCALES || p->key >= 12 || p->chord >= NUM_CHORDS || p->tempo > 140 || p->dirt > 100) return 0;
     const uint8_t *v = &p->mood;
     for (int i = 0; i < 12; i++) if (v[i] > 100) return 0;
     for (int l = 0; l < NUM_LAYERS; l++) {
         const LayerP *x = &p->l[l];
         if (x->engine >= NUM_ENGINES || x->seq >= NUM_SEQS || x->rate >= NUM_RATES || x->octave < -2 || x->octave > 2) return 0;
+        if (p->glide[l] > 100 || p->legato[l] > 1 || p->sweep[l] > 100 || p->reso[l] > 100) return 0;
         if (x->tone > 100 || x->weight > 100 || x->weird > 100 || x->density > 100 || x->mutate > 100 || x->level > 100
             || x->attack > 100 || x->release > 100) return 0;
     }
@@ -106,12 +121,40 @@ static const char *const W2[32] = {
     "MACHINE", "CANYON", "BELL", "ROOM", "DUNE", "SWARM", "ARCHIVE", "CURRENT"
 };
 
+/* the name: from the seed, one of five kinds. Two words (GLASS HERON), one word (LATTICE), a made-up word from syllables
+ * (VEKTRAL), one chopped from two words or stripped of its vowels, sometimes with a number (COPPRAL, LTTC 4, HERON-21),
+ * or a made-up word with a number (QUELLAX 7) */
+static const char *const ON[20] = { "V", "TR", "GL", "SK", "PL", "DR", "CR", "K", "X", "QU", "ST", "BL", "ZH", "N", "R", "M",
+                                     "F", "TH", "GR", "KR" };
+static const char *const VO[10] = { "A", "E", "I", "O", "U", "AE", "IA", "OU", "Y", "EI" };
+static const char *const CO[16] = { "N", "X", "RK", "LL", "ST", "MT", "ND", "P", "", "", "R", "KS", "TCH", "PH", "L", "SM" };
+
+static char *put(char *o, const char *s, int max) { for (int i = 0; s[i] && i < max; i++) *o++ = s[i]; *o = 0; return o; }
+static char *num(char *o, int v) { char t[6]; int n = 0; do t[n++] = (char)('0' + v % 10); while ((v /= 10) && n < 5); while (n) *o++ = t[--n]; *o = 0; return o; }
+
 void piece_name(uint32_t seed, char *out)
 {
     Rng r; rng_seed(&r, seed ^ 0x4E414D45u);
     const char *a = W1[rng_int(&r, 32)], *b = W2[rng_int(&r, 32)];
-    while (*a) *out++ = *a++;
-    *out++ = ' ';
-    while (*b) *out++ = *b++;
-    *out = 0;
+    int kind = rng_int(&r, 10);
+    char *o = out; *o = 0;
+    if (kind < 3) { o = put(o, a, 12); o = put(o, " ", 1); put(o, b, 12); }             /* two words */
+    else if (kind < 5) put(o, rng_chance(&r, 0.5f) ? a : b, 12);                         /* one */
+    else if (kind < 7 || kind == 9) {                                                       /* made up */
+        int syl = 2 + rng_int(&r, 2);
+        for (int i = 0; i < syl; i++) { o = put(o, ON[rng_int(&r, 20)], 3); o = put(o, VO[rng_int(&r, 10)], 2); if (i == syl - 1 || rng_chance(&r, 0.3f)) o = put(o, CO[rng_int(&r, 16)], 3); }
+        if (kind == 9) { o = put(o, " ", 1); num(o, 1 + rng_int(&r, 99)); }
+    } else {                                                                                /* chopped */
+        int la = 0, lb = 0; while (a[la]) la++; while (b[lb]) lb++;
+        if (rng_chance(&r, 0.5f)) {                     /* the front of one, the back of the other */
+            int ca = 2 + rng_int(&r, la - 2 > 1 ? la - 2 : 1), cb = rng_int(&r, lb - 2 > 1 ? lb - 2 : 1);
+            o = put(o, a, ca); o = put(o, b + cb, 12);
+        } else {                                        /* a word without its vowels */
+            const char *w = rng_chance(&r, 0.5f) ? a : b;
+            *o++ = *w;
+            for (const char *c = w + 1; *c; c++) if (*c != 'A' && *c != 'E' && *c != 'I' && *c != 'O' && *c != 'U') *o++ = *c;
+            *o = 0;
+        }
+        if (rng_chance(&r, 0.5f)) { o = put(o, rng_chance(&r, 0.5f) ? " " : "-", 1); num(o, 1 + rng_int(&r, rng_chance(&r, 0.5f) ? 9 : 99)); }
+    }
 }

@@ -56,7 +56,7 @@ const char *const LAYER_NAME[NUM_LAYERS] = { "GROUND", "BODY", "LIGHT", "DUST" }
 /*                    base span  hp      lp       rv    echo  grain width poly */
 const Role ROLES[NUM_LAYERS] = {
     { 36,  5,   28.0f,   420.0f,   0.10f, 0.00f, 0.00f, 0.15f, 2 },   /* GROUND: sub and bass, the weight */
-    { 48,  7,  110.0f,  3200.0f,   0.45f, 0.12f, 0.35f, 0.70f, 6 },   /* BODY: chords, the low mids */
-    { 60, 10,  260.0f,  9000.0f,   0.35f, 0.40f, 0.30f, 0.55f, 3 },   /* LIGHT: the melody */
-    { 72, 12, 1400.0f, 16000.0f,   0.70f, 0.30f, 0.60f, 1.00f, 4 },   /* DUST: the air */
+    { 48,  7,  110.0f,  2400.0f,   0.45f, 0.12f, 0.35f, 0.70f, 6 },   /* BODY: chords, the low mids */
+    { 60, 10,  260.0f,  5600.0f,   0.35f, 0.40f, 0.30f, 0.55f, 3 },   /* LIGHT: the melody */
+    { 72, 12, 1200.0f,  9500.0f,   0.70f, 0.30f, 0.60f, 1.00f, 4 },   /* DUST: the air */
 };

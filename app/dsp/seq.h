@@ -19,6 +19,7 @@ enum {
     S_CHIMES,   /* wind chimes: gusts knock them together */
     S_PHASE,    /* one phrase on two players at slightly different speeds */
     S_DRUNK,    /* a Brownian walk: each note a small step from the last */
+    S_MELODY,   /* a long melody, early-90s Warp style: a motif, its answer, a turn, the motif resolved; looped, slowly changing */
     NUM_SEQS
 };
 extern const char *const SEQ_NAME[NUM_SEQS];
@@ -39,6 +40,7 @@ typedef struct {
     /* each type's own state */
     int n, k, rot, m, pos, mpos, len;
     int8_t mel[16];
+    uint8_t mdur[16];                    /* MELODY: each note's length, in steps */
     uint32_t reg;
     uint8_t mk[8][8];                    /* MARKOV's table */
     float x, y, z, dz, rho, g, h, v, e;  /* LORENZ, BOUNCE */

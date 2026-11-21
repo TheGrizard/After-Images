@@ -2,7 +2,8 @@
 
 A generative synth for the M-VAVE FM-1. Press REC and it makes a new piece of ambient music that keeps evolving:
 four layers, each its own sequencer driving its own sound in its own part of the spectrum, listening to each other.
-Musical (everything is locked to the scale), but DRIFT takes it somewhere strange.
+Musical (everything is locked to the scale), but DRIFT takes it somewhere strange. A slow leveller keeps every piece
+at about the same loudness.
 
 By [TheGrizard](https://github.com/TheGrizard). Built on [fm1-base](https://github.com/charlesvestal/fm1-base) (MPL-2.0)
 and felucca-bsp. Works on both FM-1 flash chips.
@@ -21,8 +22,11 @@ and felucca-bsp. Works on both FM-1 flash chips.
 Each piece gives every layer one of ten **sequencers**, shuffled: EUCLID (Euclidean rings), TURING (a looping shift
 register that flips bits), MARKOV (a table of chances), LORENZ (the attractor: a note at each loop's peak), BOUNCE
 (bouncing balls), ORBITS (planets with different years), LIFE (a cellular automaton), CHIMES (wind chimes in gusts),
-PHASE (one phrase on two players drifting apart, Steve Reich's way) and DRUNK (a Brownian walk). And one of ten
-**engines**: DRIFT SAW, FM, STRING, BELL, BLEEP, GLASS, BREATH, VOICE, FOLD and SUB. Every piece has at least one
+PHASE (one phrase on two players drifting apart, Steve Reich's way), DRUNK (a Brownian walk) and MELODY (a long
+melody the early-90s Warp way: a motif, its answer, a turn, the motif coming home; looped, changing slowly; LIGHT sings
+one in half the pieces). And one of ten
+**engines** (twelve): DRIFT SAW, FM, DX (four-operator FM, four algorithms, each modulator fading at its own pace),
+STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an 80s string machine) and E.PIANO (an 80s FM electric piano). Every piece has at least one
 heavy layer and one soft one. A piece is a seed: the same piece always starts the same way.
 
 It is patched like a modular. Every sequencer has a second output, a CV, that shapes each note's sound: the
@@ -43,11 +47,14 @@ stays clear.
 | EDIT | SOUND for the chosen layer: ENGINE, TONE, WEIGHT (soft to heavy), DRIFT (the engine's own strangeness) |
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
-| FX | EFFECTS: REVERB, ECHO (tempo-locked, tape wobble), GRAIN (turned right up: freeze), SHIMMER |
-| FX again | TAPE, on everything: TAPE (saturation, the head's bump, lost highs), WOW (wow and flutter), HISS, AGE (dropouts, crackle, a coarser grain) |
+| ENV again | VOICE for the chosen layer: GLIDE (notes slide to their pitch, the filter with them), LEGATO (one note slides on into the next, not started again), SWEEP (the filter opening over each note), RESO |
+| FX | EFFECTS: REVERB, ECHO (tempo-locked, tape wobble), GRAIN (turned right up: freeze), DIRT (a wavefolder up to a third, a bit crusher to two thirds, noise past that) |
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
-| ARP | MIDI: MIDI OUT on or off, CHANNEL (the layers on four in a row), KEYS CH, CLOCK out |
+| GLO again | SCREEN: PALETTE (nine; REC deals a new one each time, none twice until all have come), FRACTAL (JULIA, FERN, DRAGON, POLYGON, ATTRACTOR, TREE), FULL (the fractal fills the whole screen at HOME), GLOW |
+| ARP | MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK out |
+| ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (follow MIDI clock's tempo, start and stop), CC |
+| ARP a third time | USB AUDIO: RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1), STEMS (the four layers on USB audio channels 3-10, beside the mix on 1-2) |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |
 | PRESET | the chosen layer's engine |
 | REC | a new piece (your key, scale and tempo kept) |
@@ -60,15 +67,21 @@ stays clear.
 | white keys | the scale's notes, up from the key, on the chosen layer's sound: no wrong notes |
 | black keys | the scale's chords: I to VII, then I to IV an octave up (CHORDS sets triads, sevenths, ninths, sus, spread, fifths) |
 
-The home screen is abstract: a Julia set drawn behind everything, its shape wandering with the music (round the
-Mandelbrot set's edge as the beats go by, pulled in and out as BODY swells), coloured by the layers as they sound;
+The home screen is abstract: a fractal behind everything (SCREEN chooses which, and FULL lets it fill the screen),
+always moving by itself and moved by the music, coloured by the layers as they sound;
 over it each note leaves a fading afterimage in its layer's colour: GROUND a bar, BODY a branching fractal, LIGHT the
 melody drawn as a line, DUST sparks.
+
+Each piece gets a name from its seed: two words, one, a made-up one, or one chopped up and numbered (FLS 74,
+QURIDIAN, ZHEIGRO 17).
 
 The piece playing is kept by itself a few seconds after your last change, so the FM-1 comes back where you left it.
 
 MIDI out (USB): each layer's notes on its own channel (1-4 by default), the keys on another (5), clock if you want it.
-MIDI in: notes play the chosen layer, put into the scale; CC 20-23 are HOME's macros, 24-27 EFFECTS', 28-31 MOTION's, 32-35 TAPE's.
+MIDI in (USB or the TRS jack): notes on the layers' channels play those layers, others the chosen layer, all put into
+the scale; CC 20-23 are HOME's macros, 24-27 EFFECTS', 28-31 MOTION's; clock, start and stop followed with CLOCK on.
+
+Every note lands somewhere new in the stereo field and wanders as it sounds: DRIFT and CHAOS throw them wider.
 
 ## Building it
 

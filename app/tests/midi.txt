@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MPL-2.0
+# MIDI in: the layers' channels play the layers, clock in sets the tempo, start and stop
+wait 2500
+tap ARP
+tap ARP
+wait 100
+expect page 10
+turn K3 1
+wait 100
+clock 96 25
+wait 100
+expect tempo 84
+expect clockbpm >97
+expect clockbpm <103
+midi FC 00 00
+wait 100
+expect playing 0
+midi FA 00 00
+wait 100
+expect playing 1

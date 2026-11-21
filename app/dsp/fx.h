@@ -45,18 +45,11 @@ void grains_init(Grains *g, uint32_t seed);
 /* in: mono; out: stereo, and the octaves for the reverb */
 void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shim, int n);
 
-/* tape: wow and flutter (a short line read at a wandering point), saturation with the head's low bump and lost highs,
- * hiss and crackle, and with AGE dropouts and a coarser grain */
-#define TAPE_LINE 2048
-typedef struct {
-    int16_t buf[2][TAPE_LINE]; int pos;
-    float amount, wow, hiss, age;        /* 0..1 each */
-    float wph, fph, wdrift, wtarget, wleft;
-    OnePole hf[2], bump[2];
-    float drop, drop_t, held[2]; int hold_n, hold_i;
-    Rng rng;
-} Tape;
-void tape_init(Tape *t, uint32_t seed);
-void tape_run(Tape *t, float *L, float *R, int n);
+/* DIRT: one knob, three characters as it turns. Up to a third, a wavefolder (warm, then buzzing); to two thirds, a bit
+ * and sample-rate crusher comes in over it (lo-fi); past that, noise that follows the signal and crackles (broken).
+ * On the dry sound only: the reverb's tails stay clean */
+typedef struct { float held[2]; int hold_n, hold_i; Rng rng; OnePole tone[2]; float env; } Dirt;
+void dirt_init(Dirt *d, uint32_t seed);
+void dirt_run(Dirt *d, float amount, float *L, float *R, int n);
 
 #endif

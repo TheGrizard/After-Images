@@ -25,9 +25,15 @@ typedef struct {
     uint8_t reverb, echo, grain, shimmer;         /* FX */
     uint8_t link, warp, drift, chaos;             /* MOTION (the LFO button) */
     uint8_t key, scale, chord, tempo;             /* SCALE (the GLO button): tempo is BPM - 40 */
-    uint8_t tape, wow, hiss, age;                 /* TAPE (FX tapped again): the lo-fi tape on everything */
+    uint8_t dirt, rsv[3];                         /* EFFECTS' DIRT (in v0.1, the tape's: zeroed at the upgrade) */
     LayerP l[NUM_LAYERS];
+    /* v0.2: each layer's VOICE page (ENV again) */
+    uint8_t glide[NUM_LAYERS];                    /* 0..100: how long a note slides to its pitch */
+    uint8_t legato[NUM_LAYERS];                   /* 1: a note playing slides on to the next, not started again */
+    uint8_t sweep[NUM_LAYERS];                    /* 0..100: the filter opening over each note */
+    uint8_t reso[NUM_LAYERS];                     /* 0..100: the filter's resonance */
 } Piece;
+#define PIECE_SIZE1 __builtin_offsetof(Piece, glide)   /* v0.1's Piece: up to here */
 
 #define NUM_RATES 10
 extern const char *const RATE_NAME[NUM_RATES];
@@ -51,7 +57,7 @@ typedef struct { uint8_t layer, note, vel; int8_t pan; } UiNote;
 #define KEY_POLY 8
 #define EVQ 24
 
-typedef struct { uint8_t sub, voice, rel; int8_t note; float vel, dur, pan; Sound snd; uint32_t seed; } VoiceEv;
+typedef struct { uint8_t sub, voice, rel; int8_t note; float vel, dur, pan, from_hz; Sound snd; uint32_t seed; } VoiceEv;   /* rel: 0 start, 1 release, 2 legato */
 
 typedef struct {
     Seq seq;
@@ -67,6 +73,7 @@ typedef struct {
     uint8_t type_now; uint32_t seed_now;
     VoiceEv q[EVQ]; int nq;
     int next_v;
+    int8_t last_v[5]; float last_hz[5]; int last_n;   /* the last note's (or chord's) voices and pitches: glide, legato */
 } Layer;
 
 typedef struct Engine Engine;
@@ -83,14 +90,16 @@ struct Engine {
     Rng rng;
     uint32_t seed_now;
     float beat, bpm;                     /* the piece's position, in beats */
+    float ext_bpm;                       /* MIDI clock's tempo, followed (0: the piece's own) */
     int bar, root, chord_bars, chord_left, sec_left, mask;
     int want_change;                     /* LINK asked for a new chord at the next bar */
     float duck, gov, fade;
     int playing;
     float gr_ratio[6];
     /* effects */
-    Reverb rv; Echo echo; Grains gr; Tape tape;
+    Reverb rv; Echo echo; Grains gr; Dirt dirt;
     float dc[2];
+    float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */
     void (*midi)(uint32_t pkt);
     uint8_t midi_ch, midi_on, midi_clock, midi_keys_ch;
@@ -106,7 +115,7 @@ struct Engine {
 };
 
 void engine_init(Engine *e, const Piece *p);
-void engine_key(Engine *e, int on, int note, int vel);   /* the keys and MIDI in (main loop or render): a note */
+void engine_key(Engine *e, int on, int note, int vel, int layer);   /* the keys and MIDI in: a note on a layer's sound (-1: the chosen layer's) */
 /* an app block of nsub control steps in three parts, as The Outside Inside's: control (one core: the sequencers, the
  * conductor, MIDI out), the layers (any layer on either core), the mix and the effects (one core, after both) */
 void engine_block_begin(Engine *e, int nsub);

@@ -40,7 +40,10 @@ extern const char *const RATE_NAME[NUM_RATES];
 extern const float RATES[NUM_RATES];
 
 /* REC: a new piece from a seed (the scale, the key and the tempo kept, unless `all`); one layer anew (SEL + REC) */
-void piece_roll(Piece *p, uint32_t seed, int all);
+void piece_roll(Piece *p, uint32_t seed, int all, int fx);   /* fx: the effect it features (FX_*), -1 its seed's choice */
+/* the effect each new piece features (REC deals them from a shuffled deck, none twice in a row) */
+enum { FX_SHIMMER, FX_REVERSE, FX_CLOUD, FX_FREEZE, FX_FOLD, FX_CRUSH, FX_SPACE, NUM_FX };
+extern const char *const FX_NAME[NUM_FX];
 void piece_roll_layer(Piece *p, int layer, uint32_t seed);
 void piece_default(Piece *p);
 int piece_ok(const Piece *p);
@@ -97,7 +100,7 @@ struct Engine {
     int playing;
     float gr_ratio[6];
     /* effects */
-    Reverb rv; Echo echo; Grains gr; Dirt dirt;
+    Reverb rv; Echo echo; Grains gr; Dirt dirt; Shifter shim; float shim_prev[BLK];
     float dc[2];
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */

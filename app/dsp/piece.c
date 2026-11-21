@@ -41,7 +41,9 @@ static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and th
     p->reso[l] = rng_chance(r, 0.25f) ? pick(r, 15, 60) : 0;
 }
 
-void piece_roll(Piece *p, uint32_t seed, int all)
+const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "FOLDED", "CRUSHED", "WIDE SPACE" };
+
+void piece_roll(Piece *p, uint32_t seed, int all, int fx)
 {
     Rng r; rng_seed(&r, seed);
     p->seed = seed;
@@ -62,9 +64,20 @@ void piece_roll(Piece *p, uint32_t seed, int all)
         roll_voice(p, l, &r);
         p->l[l].seq = s[l];
     }
-    p->reverb = pick(&r, 35, 80); p->echo = pick(&r, 10, 55); p->grain = rng_chance(&r, 0.5f) ? pick(&r, 10, 60) : 0;
+    /* the effects: each modest, then one featured (REVERB and ECHO past 50 are the shimmer and the reverse smear) */
+    p->reverb = pick(&r, 25, 48); p->echo = pick(&r, 8, 40); p->grain = rng_chance(&r, 0.4f) ? pick(&r, 10, 35) : 0;
     p->shimmer = 0;
-    p->dirt = rng_chance(&r, 0.35f) ? pick(&r, 5, 45) : 0;
+    p->dirt = 0;
+    if (fx < 0 || fx >= NUM_FX) fx = rng_int(&r, NUM_FX);
+    switch (fx) {
+    case FX_SHIMMER: p->reverb = pick(&r, 66, 96); break;
+    case FX_REVERSE: p->echo = pick(&r, 62, 95); break;
+    case FX_CLOUD:   p->grain = pick(&r, 45, 85); break;
+    case FX_FREEZE:  p->grain = pick(&r, 93, 100); break;
+    case FX_FOLD:    p->dirt = pick(&r, 10, 32); break;
+    case FX_CRUSH:   p->dirt = pick(&r, 40, 64); break;
+    default:         p->reverb = pick(&r, 46, 50); p->echo = pick(&r, 35, 50); break;   /* WIDE SPACE: all reverb, all echo */
+    }
     p->rsv[0] = p->rsv[1] = p->rsv[2] = 0;
     p->link = pick(&r, 15, 60); p->warp = pick(&r, 0, 40); p->drift = pick(&r, 20, 60); p->chaos = pick(&r, 0, 30);
     if (all) {
@@ -92,7 +105,7 @@ void piece_default(Piece *p)
     memset(p, 0, sizeof *p);
     p->key = 9; p->scale = 1; p->chord = CH_SEVENTH; p->tempo = 44;   /* A minor, 84 BPM */
     p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 15;
-    piece_roll(p, 0xAF7E1u, 0);
+    piece_roll(p, 0xAF7E1u, 0, FX_SPACE);
 }
 
 int piece_ok(const Piece *p)

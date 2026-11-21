@@ -62,6 +62,8 @@ void echo_init(Echo *e)
     memset(e, 0, sizeof *e);
     op_set(&e->lp, 3500.0f); op_set(&e->hp, 180.0f);
     e->time_s = 0.4f; e->fb = 0.4f; e->tl = e->tr = 0.4f * SR;
+    static const int AP[SMEAR_AP] = { 347, 563, 797, 1009 };
+    for (int a = 0; a < SMEAR_AP; a++) e->aplen[a] = AP[a];
 }
 
 static inline float tap(const Echo *e, float d)
@@ -72,8 +74,45 @@ static inline float tap(const Echo *e, float d)
     return ((float)e->buf[i] + ((float)e->buf[j] - (float)e->buf[i]) * f) * (1.0f / 16384.0f);
 }
 
+/* the reverse heads: each reads backwards through the last window while the line moves on, so its delay grows from 0
+ * to twice the window; two of them half a window apart, each faded in and out (Hann), sum to a steady reversed sound */
+static inline float rev_head(const Echo *e, float ph, float win)
+{
+    float d = 2.0f * win * ph + 1.0f;
+    return tap(e, d) * (0.5f - 0.5f * sine_c(ph + 0.25f));
+}
+
 void echo_run(Echo *e, const float *inL, const float *inR, float *outL, float *outR, int n)
 {
+    if (e->rev > 0.001f) {                               /* ECHO past 12: the echo turns into a reversed, smeared wash */
+        float win = clampf(e->time_s * SR * 1.5f, 3000.0f, (float)ECHO_MAX * 0.45f), rv = e->rev;
+        float dl = clampf(e->time_s * SR, 200.0f, (float)ECHO_MAX / 1.6f), dr = dl * 1.5f;
+        for (int i = 0; i < n; i++) {
+            e->tl += (dl - e->tl) * 0.0005f; e->tr += (dr - e->tr) * 0.0005f;
+            float fl = tap(e, e->tl), fr = tap(e, e->tr);              /* the forward echo, fading out */
+            e->rph += 1.0f / win; if (e->rph >= 1.0f) e->rph -= 1.0f;
+            float p2 = e->rph + 0.5f; if (p2 >= 1.0f) p2 -= 1.0f;
+            float r = rev_head(e, e->rph, win) + rev_head(e, p2, win);
+            float sm[2] = { r, r };                                    /* the smear: all-passes, the sides apart */
+            for (int a = 0; a < SMEAR_AP; a++) {
+                int p = e->appos[a];
+                for (int c = 0; c < 2; c++) {
+                    float g = 0.45f + 0.25f * rv, dd = e->ap[a][c][(p + c * 37) % e->aplen[a]];
+                    float y = -g * sm[c] + dd;
+                    e->ap[a][c][p] = sm[c] + g * y;
+                    sm[c] = sm[c] * (1.0f - rv) + y * rv;
+                }
+                e->appos[a] = p + 1 >= e->aplen[a] ? 0 : p + 1;
+            }
+            float x = 0.5f * (inL[i] + inR[i]) + e->fb * ((1.0f - rv) * (0.6f * fl + 0.4f * fr) + rv * 0.7f * r);
+            x = op_hp(&e->hp, op_lp(&e->lp, x));
+            e->buf[e->pos] = to16(soft_clip(x));
+            e->pos = e->pos + 1 >= ECHO_MAX ? 0 : e->pos + 1;
+            outL[i] = fl * (1.0f - rv) + sm[0] * rv * 1.2f;
+            outR[i] = fr * (1.0f - rv) + sm[1] * rv * 1.2f;
+        }
+        return;
+    }
     float dl = clampf(e->time_s * SR, 200.0f, (float)ECHO_MAX / 1.6f), dr = dl * 1.5f;
     e->wow_ph += (float)n / SR * 0.37f; if (e->wow_ph >= 1.0f) e->wow_ph -= 1.0f;
     float w = e->wow * 40.0f * fm_sin_turns(e->wow_ph);
@@ -174,5 +213,29 @@ void dirt_run(Dirt *d, float a, float *L, float *R, int n)
             if (ch) R[i] = y; else L[i] = y;
         }
         if (++d->hold_i >= hold) d->hold_i = 0;
+    }
+}
+
+/* ------------------------------------------------------------------ the shimmer's pitch shifter */
+void shifter_run(Shifter *s, const float *in, float *up, float *down, int n)
+{
+    const float W = 2048.0f;                             /* each head's sweep: 46 ms */
+    for (int i = 0; i < n; i++) {
+        s->buf[s->pos] = to16(in[i]);
+        float o[2] = { 0, 0 };
+        for (int k = 0; k < 2; k++) {                    /* k 0: up (rate 2), 1: down (rate 0.5) */
+            s->ph[k] += (k ? 0.5f : -1.0f) / W;          /* the delay shrinks (up) or grows (down) */
+            if (s->ph[k] >= 1.0f) s->ph[k] -= 1.0f;
+            if (s->ph[k] < 0.0f) s->ph[k] += 1.0f;
+            for (int h = 0; h < 2; h++) {
+                float ph = s->ph[k] + 0.5f * (float)h; if (ph >= 1.0f) ph -= 1.0f;
+                float p = (float)s->pos - (8.0f + ph * W); while (p < 0) p += (float)SHIM_LINE;
+                int a = (int)p; float f = p - (float)a; int b = (a + 1) & (SHIM_LINE - 1);
+                float x = ((float)s->buf[a] + ((float)s->buf[b] - (float)s->buf[a]) * f) * (1.0f / 16384.0f);
+                o[k] += x * (0.5f - 0.5f * sine_c(ph + 0.25f));
+            }
+        }
+        up[i] = o[0]; down[i] = o[1];
+        s->pos = (s->pos + 1) & (SHIM_LINE - 1);
     }
 }

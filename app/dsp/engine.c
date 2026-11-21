@@ -170,7 +170,7 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
         pan = clampf(pan, -1.0f, 1.0f);
         float nv = vel / (nn > 1 ? 1.0f + 0.25f * (float)nn : 1.0f);
         /* LEGATO: the voice that played this part of the last note (or chord) slides on to this one, not started again */
-        if (p->legato[l] && i < L->last_n && L->last_v[i] >= 0 && L->v[L->last_v[i]].on && L->v[L->last_v[i]].hold > 0) {
+        if (p->legato[l] && snd.engine != E_PLUCK && i < L->last_n && L->last_v[i] >= 0 && L->v[L->last_v[i]].on && L->v[L->last_v[i]].hold > 0) {
             int vi = L->last_v[i];
             if (L->nq < EVQ) { VoiceEv *q = &L->q[L->nq++]; q->sub = (uint8_t)sub; q->voice = (uint8_t)vi; q->rel = 2; q->note = (int8_t)note; q->vel = nv; q->dur = dur; }
             L->last_hz[i] = mtof((float)note);
@@ -378,11 +378,16 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
 {
     uint32_t t0 = now(e);
     const Piece *p = e->p;
-    float rvk = u(p->reverb), eck = u(p->echo), grk = u(p->grain), shk = 0.0f, dk = u(p->dirt);
-    reverb_set(&e->rv, 2.5f + 14.0f * rvk * rvk, 1800.0f + 4200.0f * u(p->mood));
+    /* REVERB: up to 12 o'clock the reverb; past it the shimmer comes in, an octave up, and by the end down too.
+     * ECHO: up to 12 o'clock the echo; past it, it turns into a reversed smear */
+    float rk = u(p->reverb), rvk = clamp01(rk * 2.0f), shk = clamp01(rk * 2.0f - 1.0f);
+    float ek = u(p->echo), eck = clamp01(ek * 2.0f), rev = clamp01(ek * 2.0f - 1.0f);
+    float grk = u(p->grain), dk = u(p->dirt);
+    reverb_set(&e->rv, 2.5f + 12.0f * rvk * rvk - 3.0f * shk, 1800.0f + 4200.0f * u(p->mood) + 4000.0f * shk);
     e->echo.time_s = clampf(60.0f / e->bpm * 0.75f, 0.12f, 0.7f);   /* a dotted eighth */
     while (e->echo.time_s > 0.7f) e->echo.time_s *= 0.5f;
-    e->echo.fb = 0.2f + 0.65f * eck; e->echo.wow = u(p->warp) + u(p->drift) * 0.5f;
+    e->echo.fb = rev > 0 ? 0.45f + 0.3f * rev : 0.2f + 0.45f * eck; e->echo.wow = u(p->warp) + u(p->drift) * 0.5f;
+    e->echo.rev = rev;
     e->gr.density = grk < 0.9f ? grk : 1.0f; e->gr.frozen = grk >= 0.92f; e->gr.size = 0.3f + 0.7f * grk;
     e->gr.spread = 0.3f + 0.7f * grk; e->gr.shimmer = 0;   /* (SHIMMER gave way to DIRT) */
     {   /* the grains' pitches: octaves, and the fifth only where the scale has one */
@@ -420,12 +425,19 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
         for (int i = 0; i < BLK; i++) {
             float gg = grk * 1.3f;
             dl[i] += ol[i] + gl[i] * gg; dr[i] += orr[i] + grr[i] * gg;
-            rl[i] += ol[i] * 0.3f + gl[i] * gg * 0.5f + sh[i] * shk * 1.6f;
-            rr[i] += orr[i] * 0.3f + grr[i] * gg * 0.5f + sh[i] * shk * 1.6f;
+            rl[i] += ol[i] * 0.3f + gl[i] * gg * 0.5f;
+            rr[i] += orr[i] * 0.3f + grr[i] * gg * 0.5f;
+        }
+        (void)sh;
+        if (shk > 0.001f) {                              /* the shimmer: the reverb's last block, an octave up and down, back in */
+            float up[BLK], dn_[BLK], gu = shk * 0.3f, gd = shk * shk * 0.26f;
+            shifter_run(&e->shim, e->shim_prev, up, dn_, BLK);
+            for (int i = 0; i < BLK; i++) { float x = up[i] * gu + dn_[i] * gd; rl[i] += x; rr[i] += x; }
         }
         dirt_run(&e->dirt, dk, dl, dr, BLK);            /* the dry sound only */
         float vl[BLK], vr[BLK];
         reverb_run(&e->rv, rl, rr, vl, vr, BLK);
+        for (int i = 0; i < BLK; i++) e->shim_prev[i] = (vl[i] + vr[i]) * 0.5f;
         float *L = outL + k * BLK, *R = outR + k * BLK;
         for (int i = 0; i < BLK; i++) { dl[i] += vl[i] * 0.55f; dr[i] += vr[i] * 0.55f; }
         for (int i = 0; i < BLK; i++) {

@@ -37,9 +37,10 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         v->gl = fm_cosf(t); v->gr = fm_sinf(t);
     }
     v->noise = seed | 1u;
-    v->freq_t = v->freq;
+    v->freq_t = v->freq;                         /* the pitch: always at once (no portamento) */
+    v->ff = v->freq;                             /* the filter's: glides (GLIDE), from the last note's */
     v->glide_k = s->glide > 0.001f ? clamp01(BLK_S / s->glide) : 1.0f;
-    if (from_hz > 0 && s->glide > 0.001f && v->engine != E_PLUCK) v->freq = from_hz;   /* (a string can't slide) */
+    if (from_hz > 0 && s->glide > 0.001f) v->ff = from_hz;
     v->sweep = s->sweep; v->sw = 0; v->sw_k = clamp01(BLK_S / (0.15f + 1.2f * s->glide + 0.6f * s->sweep)); v->reso = s->reso;
     v->pan_amt = s->pan_move; v->pan_ph = (float)(seed >> 20 & 255u) / 256.0f;
     v->pan_dp = (0.04f + 0.3f * (float)(seed >> 4 & 255u) / 255.0f) * BLK_S;   /* once every 3 to 25 s */
@@ -158,7 +159,7 @@ void voice_legato(Voice *v, int note, float vel, float dur)
 {
     if (!v->on) return;
     v->note = (int8_t)note; v->freq_t = mtof((float)note);
-    if (v->engine == E_PLUCK) v->freq = v->freq_t;
+    v->freq = v->freq_t;                         /* the pitch at once; the filter slides after it */
     v->vel = vel; v->hold = dur;
     if (v->sweep > 0.001f) v->sw *= 0.5f;                     /* the filter dips and opens again */
 }
@@ -168,7 +169,7 @@ static inline float saw_bl(float ph, float dt) { return 2.0f * ph - 1.0f - blep(
 void voice_render(Voice *v, float *L, float *R, int n)
 {
     if (!v->on) return;
-    v->freq += (v->freq_t - v->freq) * v->glide_k;              /* glide */
+    v->ff += (v->freq - v->ff) * v->glide_k;                     /* the filter glides after the pitch */
     v->sw += (1.0f - v->sw) * v->sw_k;                           /* the filter's sweep opening */
     const float f = v->freq, dt = f / SR;
     const float swf = v->sweep > 0.001f ? fm_exp2f(-4.5f * v->sweep * (1.0f - v->sw)) : 1.0f;
@@ -189,7 +190,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
 
     switch (v->engine) {
     case E_SAW: {
-        float fc = (f * v->p[1] + 200.0f) * swf * (1.0f - v->p[3] + v->p[3] * env) * (1.0f + 0.1f * lfo);
+        float fc = (v->ff * v->p[1] + 200.0f) * swf * (1.0f - v->p[3] + v->p[3] * env) * (1.0f + 0.1f * lfo);
         svf_set(&v->f, fc, v->p[2]);
         float d0 = dt * (1.0f + v->p[0]), d1 = dt * (1.0f - v->p[0]);
         for (int i = 0; i < n; i++) {
@@ -282,7 +283,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
         break;
     }
     case E_STRINGS: {
-        svf_set(&v->f, (f * v->p[1] + 250.0f) * swf, v->p[2]);
+        svf_set(&v->f, (v->ff * v->p[1] + 250.0f) * swf, v->p[2]);
         float sp = v->p[0];
         float d0 = dt * (1.0f + sp * fm_sin_turns(v->lfo)), d1 = dt * (1.0f + sp * fm_sin_turns(v->lfo + 0.33f)),
               d2 = dt * (1.0f + sp * fm_sin_turns(v->lfo + 0.67f));
@@ -297,7 +298,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     case E_PULSE: {
         float w = clampf(v->p[0] + v->p[2] * 0.3f * lfo, 0.08f, 0.92f);
-        svf_set(&v->f, (f * v->p[1] + 300.0f) * swf * (0.4f + 0.6f * env), 0.9f + 4.0f * v->reso);
+        svf_set(&v->f, (v->ff * v->p[1] + 300.0f) * swf * (0.4f + 0.6f * env), 0.9f + 4.0f * v->reso);
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             float p2 = v->ph[0] + w; if (p2 >= 1.0f) p2 -= 1.0f;
@@ -318,7 +319,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     case E_BREATH: {
         float g = 0.35f * fm_sqrtf(v->p[0]), s = v->p[1];
-        if (v->freq != v->freq_t || v->sweep > 0.001f) svf_set(&v->f, f * (0.5f + 0.5f * swf), v->p[0]);
+        if (v->ff != v->freq || v->sweep > 0.001f) svf_set(&v->f, (f + v->ff) * 0.5f * (0.5f + 0.5f * swf), v->p[0]);
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             out[i] *= svf_bp(&v->f, noise(&v->noise)) * g + s * sine_c(v->ph[0]);
@@ -339,7 +340,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     case E_FOLD: {
         float g = v->p[0] * (0.4f + 0.6f * env), off = v->p[1];
-        op_set(&v->lp, (f * v->p[2] + 300.0f) * swf);
+        op_set(&v->lp, (v->ff * v->p[2] + 300.0f) * swf);
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             out[i] *= op_lp(&v->lp, fold(sine_c(v->ph[0]) * g + off));

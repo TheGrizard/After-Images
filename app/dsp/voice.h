@@ -29,7 +29,7 @@ typedef struct {
     float tone, weight, weird;           /* 0..1 each */
     float attack, release;               /* seconds */
     float pan_move;                      /* 0..1: how far the note wanders across the stereo field as it sounds */
-    float glide;                         /* seconds a note takes to slide to its pitch (0: none) */
+    float glide;                         /* seconds the filter takes to follow a new note (the pitch never slides) */
     float sweep, reso;                   /* 0..1: the filter opening up over each note, the filter's resonance */
 } Sound;
 
@@ -51,13 +51,13 @@ typedef struct {
     uint32_t noise;
     float age;
     float pan_amt, pan_ph, pan_dp;       /* the note's wandering in the stereo field */
-    float freq_t, glide_k;               /* the pitch it slides to, a block's share of the way */
+    float freq_t, ff, glide_k;           /* the pitch; ff the filter's own pitch, gliding after it (a block's share) */
     float sweep, sw, sw_k, reso;         /* the filter's sweep: how far, where it is (0 closed .. 1 open), its pace */
 } Voice;
 
 void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float pan, float from_hz, uint32_t seed);   /* from_hz: glide from there (0: no) */
 void voice_release(Voice *v);
-/* legato: the note playing slides to a new pitch, its envelope not started again */
+/* legato: the note playing moves to a new pitch, its envelope not started again (the filter glides after it) */
 void voice_legato(Voice *v, int note, float vel, float dur);
 /* add n samples (n <= BLK) into L and R */
 void voice_render(Voice *v, float *L, float *R, int n);

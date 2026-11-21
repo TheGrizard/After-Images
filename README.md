@@ -47,8 +47,8 @@ stays clear.
 | EDIT | SOUND for the chosen layer: ENGINE, TONE, WEIGHT (soft to heavy), DRIFT (the engine's own strangeness) |
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
-| ENV again | VOICE for the chosen layer: GLIDE (notes slide to their pitch, the filter with them), LEGATO (one note slides on into the next, not started again), SWEEP (the filter opening over each note), RESO |
-| FX | EFFECTS: REVERB, ECHO (tempo-locked, tape wobble), GRAIN (turned right up: freeze), DIRT (a wavefolder up to a third, a bit crusher to two thirds, noise past that) |
+| ENV again | VOICE for the chosen layer: F.GLIDE (the filter glides after each new note; the pitch never slides), LEGATO (notes join, not started again), SWEEP (the filter opening over each note), RESO |
+| FX | EFFECTS: REVERB (to 12 o'clock a reverb; past it the shimmer, an octave up, and by full an octave down too), ECHO (to 12 o'clock a tempo-locked echo with a tape wobble; past it a reversed, smeared wash), GRAIN (turned right up: freeze), DIRT (a wavefolder up to a third, a bit crusher to two thirds, noise past that) |
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
 | GLO again | SCREEN: PALETTE (nine; REC deals a new one each time, none twice until all have come), FRACTAL (JULIA, FERN, DRAGON, POLYGON, ATTRACTOR, TREE), FULL (the fractal fills the whole screen at HOME), GLOW |
@@ -57,7 +57,7 @@ stays clear.
 | ARP a third time | USB AUDIO: RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1), STEMS (the four layers on USB audio channels 3-10, beside the mix on 1-2) |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |
 | PRESET | the chosen layer's engine |
-| REC | a new piece (your key, scale and tempo kept) |
+| REC | a new piece (your key, scale and tempo kept), featuring one effect: shimmer, reverse echo, a grain cloud, frozen grains, folded, crushed or wide space, dealt so none comes twice in a row |
 | REC held | a new world: a new key, scale and tempo too |
 | SEL held + REC | the chosen layer anew: a new sequencer and sound |
 | OCT- / OCT+ | back and forward through the pieces REC replaced |

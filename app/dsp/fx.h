@@ -21,11 +21,15 @@ void reverb_set(Reverb *rv, float rt60, float damp_hz);   /* (cheap: no clearing
 void reverb_run(Reverb *rv, const float *inL, const float *inR, float *outL, float *outR, int n);
 
 #define ECHO_MAX 32768                   /* 0.74 s */
+#define SMEAR_AP 4
 typedef struct {
     int16_t buf[ECHO_MAX]; int pos;
     float time_s, fb, wow_ph, wow;       /* the delay, its feedback, the tape's wobble */
     OnePole lp, hp;
     float tl, tr;                        /* the two taps, glided */
+    float rev;                           /* 0..1: how far it has turned into the reverse smear (ECHO past 12 o'clock) */
+    float rph;                           /* the reverse heads' phase */
+    float ap[SMEAR_AP][2][1024]; int aplen[SMEAR_AP], appos[SMEAR_AP];   /* the smear: all-passes on the reversed sound */
 } Echo;
 void echo_init(Echo *e);
 void echo_run(Echo *e, const float *inL, const float *inR, float *outL, float *outR, int n);
@@ -51,5 +55,11 @@ void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shi
 typedef struct { float held[2]; int hold_n, hold_i; Rng rng; OnePole tone[2]; float env; } Dirt;
 void dirt_init(Dirt *d, uint32_t seed);
 void dirt_run(Dirt *d, float amount, float *L, float *R, int n);
+
+/* SHIMMER (REVERB past 12 o'clock): the reverb's own sound pitched an octave up and an octave down (two heads each over a
+ * short line, crossfaded) and fed back into it, so the shimmer climbs and sinks as it rings */
+#define SHIM_LINE 4096
+typedef struct { int16_t buf[SHIM_LINE]; int pos; float ph[2]; } Shifter;
+void shifter_run(Shifter *s, const float *in, float *up, float *down, int n);
 
 #endif

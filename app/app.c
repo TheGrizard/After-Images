@@ -273,7 +273,7 @@ static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX
  * MIDI IN, USB) */
 static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PALETTE, K_FRACTAL, K_DIRT };
+       K_PALETTE, K_FRACTAL, K_DIRT, K_RVB, K_ECHO };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -284,8 +284,8 @@ static const Knob PAGES[NPAGES][4] = {
     { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_PCT, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "DRIFT", K_PCT, 1, LO(weird) } },
     { { "TYPE", K_SEQ, 1, LO(seq) }, { "DENSITY", K_PCT, 1, LO(density) }, { "RATE", K_RATE, 1, LO(rate) }, { "MUTATE", K_PCT, 1, LO(mutate) } },
     { { "LEVEL", K_PCT, 1, LO(level) }, { "ATTACK", K_PCT, 1, LO(attack) }, { "RELEASE", K_PCT, 1, LO(release) }, { "OCTAVE", K_OCT, 1, LO(octave) } },
-    { { "GLIDE", K_PCT, 3, PO(glide) }, { "LEGATO", K_ONOFF, 3, PO(legato) }, { "SWEEP", K_PCT, 3, PO(sweep) }, { "RESO", K_PCT, 3, PO(reso) } },
-    { { "REVERB", K_PCT, 0, PO(reverb) }, { "ECHO", K_PCT, 0, PO(echo) }, { "GRAIN", K_PCT, 0, PO(grain) }, { "DIRT", K_DIRT, 0, PO(dirt) } },
+    { { "F.GLIDE", K_PCT, 3, PO(glide) }, { "LEGATO", K_ONOFF, 3, PO(legato) }, { "SWEEP", K_PCT, 3, PO(sweep) }, { "RESO", K_PCT, 3, PO(reso) } },
+    { { "REVERB", K_RVB, 0, PO(reverb) }, { "ECHO", K_ECHO, 0, PO(echo) }, { "GRAIN", K_PCT, 0, PO(grain) }, { "DIRT", K_DIRT, 0, PO(dirt) } },
     { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "FLOW", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "PALETTE", K_PALETTE, 2, SO(palette) }, { "FRACTAL", K_FRACTAL, 2, SO(fractal) }, { "FULL", K_ONOFF, 2, SO(full) }, { "GLOW", K_PCT, 2, SO(glow) } },
@@ -354,6 +354,8 @@ static void knob_text(int pg, int k, char *s)
     case K_NONE: break;
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
     case K_REC: text_cat(s, v ? "FULL" : "MASTER"); break;
+    case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
+    case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_DIRT: text_cat(s, v == 0 ? "OFF" : v < 34 ? "FOLD " : v < 67 ? "CRUSH " : "NOISE "); if (v) int_text(v, s + strlen_(s)); break;
     case K_PALETTE: text_cat(s, LPAL_NAME[v % NPAL]); break;
     case K_FRACTAL: text_cat(s, FRACTAL_NAME[v % NFRACTALS]); break;
@@ -442,17 +444,32 @@ static void palette_next(void)
     palette_apply();
 }
 
+/* REC's featured effects: the same kind of deck */
+static uint8_t fxdeck[NUM_FX]; static int fxdeck_n, fx_last = -1;
+static int fx_next(void)
+{
+    if (fxdeck_n == 0) {
+        for (int i = 0; i < NUM_FX; i++) fxdeck[i] = (uint8_t)i;
+        for (int i = NUM_FX - 1; i > 0; i--) { int j = (int)((plat_ticks24() * 2246822519u ^ (uint32_t)i * 2654435761u) % (uint32_t)(i + 1)); uint8_t t = fxdeck[i]; fxdeck[i] = fxdeck[j]; fxdeck[j] = t; }
+        fxdeck_n = NUM_FX;
+        if (fxdeck[fxdeck_n - 1] == fx_last) { uint8_t t = fxdeck[0]; fxdeck[0] = fxdeck[fxdeck_n - 1]; fxdeck[fxdeck_n - 1] = t; }
+    }
+    return fx_last = fxdeck[--fxdeck_n];
+}
+
 static void new_piece(int all)
 {
     char nm[32];
     palette_next();
+    int fx = fx_next();
     hist_push();
     uint32_t seed = (set.cur.seed * 1664525u + 1013904223u) ^ plat_ms() * 2654435761u ^ plat_ticks24();
-    piece_roll(&set.cur, seed, all);
+    piece_roll(&set.cur, seed, all, fx);
     set.slot = 255;
     changed();
     piece_name(seed, nm);
     pop(all ? "A NEW WORLD" : "NEW PIECE", nm, LAYER_C[(seed >> 3) % NUM_LAYERS]);
+    if (!all) { text_cat(ui.pop_3, "+ "); text_cat(ui.pop_3, FX_NAME[fx]); }
     if (all) {
         text_cat(ui.pop_3, NOTE_NAME[set.cur.key]); text_cat(ui.pop_3, " "); text_cat(ui.pop_3, SCALES[set.cur.scale].name);
         char n[8]; text_cat(ui.pop_3, "  "); int_text(40 + set.cur.tempo, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM");
@@ -1073,8 +1090,8 @@ static void draw_panel_rows(int y0)
     } else {
         static const char *const HINT[NPAGES] = {
             "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT: THE LAYER  (ENV AGAIN: VOICE)",
-            "SLIDES AND FILTER SWEEPS",
-            "THE SPACE AROUND IT", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE  (GLO AGAIN: SCREEN)",
+            "THE FILTER GLIDES, THE PITCH NEVER",
+            "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE  (GLO AGAIN: SCREEN)",
             "COLOURS AND FRACTALS", "THE LAYERS ON FOUR CHANNELS  (ARP AGAIN: IN)", "LAYER CHANNELS PLAY THE LAYERS",
             "RECORDING THE FM-1 OVER USB" };
         cv_text(6, y0 + 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));

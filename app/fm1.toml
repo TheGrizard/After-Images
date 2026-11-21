@@ -7,6 +7,7 @@ usb_manufacturer = "After Images"
 usb_product = "After Images FM-1"
 o2 = ["dsp/voice.c", "dsp/seq.c", "dsp/fx.c", "dsp/music.c", "dsp/engine.c", "dsp/piece.c"]   # the sound engine, at -O2
 words = "words.tsv"
+gen = ["tools/gen_font_dejavu.py {gen}/felucca_font.h"]   # the screen's font: DejaVu Sans (app/fonts), over fm1-base's
 ble = false                    # no Bluetooth: its RAM goes to the reverb, the echo and the grains
 cpu2 = true                    # the second core renders some of the layers (app_render)
 cpu2_fallback = true           # if it fails, carry on with one core instead of restarting

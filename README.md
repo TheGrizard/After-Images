@@ -103,5 +103,5 @@ emotional chords under the strangeness. No code from any of them is in here.
 
 ## Licence
 
-MPL-2.0. See fm1-base's LICENSING.md for the parts it is built from. M-VAVE and FM-1 are trademarks of their owners;
+MPL-2.0. The screen's font is DejaVu Sans (`app/fonts`, Bitstream Vera's licence: `app/fonts/LICENSE-DejaVu.txt`). See fm1-base's LICENSING.md for the parts it is built from. M-VAVE and FM-1 are trademarks of their owners;
 After Images is not affiliated with M-VAVE.

@@ -779,7 +779,8 @@ static void draw_levels(int y0)
         int cx = 30 + 60 * l, top = y0 + 26, h = 54, hot = ui.knob_at && plat_ms() - ui.knob_at < 2000u && ui.last_knob == l;
         const char *nm = LAYER_NAME[l];
         if (hot) cv_rect(60 * l + 1, y0 + 1, 58, PANEL_H - 1, RGB(20, 20, 26));
-        cv_text(cx - text_w(&FONT_B, nm) / 2, y0 + 6, &FONT_B, nm, LAYER_C[l]);
+        const felucca_font_t *nf = text_w(&FONT_B, nm) <= 57 ? &FONT_B : &FONT_S;
+        cv_text(cx - text_w(nf, nm) / 2, y0 + 6, nf, nm, LAYER_C[l]);
         cv_rect(cx - 9, top, 18, h, C_WELL);
         int m = (int)(eng.meter[l] * (float)h);
         cv_rect(cx - 7, top + h - m, 14, m, dim(LAYER_C[l], 0.65f));

@@ -2,7 +2,7 @@
 
 A generative synth for the M-VAVE FM-1. Press REC for a new piece of ambient music that keeps evolving: four layers
 (GROUND, BODY, LIGHT, DUST), each its own sequencer and sound in its own part of the spectrum, answering each other.
-Everything is in the scale; WEIRD takes it somewhere strange.
+Everything is in the scale; DRIFT takes it somewhere strange.
 
 ![After Images on the FM-1's screen: the notes as fading shapes over the scale](img/screen.png)
 
@@ -21,7 +21,7 @@ installer: `python3 tools/fm1_install.py {{PKG}}`.
 | Control | What it does |
 |---|---|
 | K1 to K4 | at HOME the four layers' levels (shown while you turn); on the other pages, the page's four macros |
-| HOME held + K1 to K4 | the macros: MOOD, ACTIVITY, EVOLVE, WEIRD |
+| HOME held + K1 to K4 | the macros: MOOD, ACTIVITY, EVOLVE, DRIFT |
 | HOME, EDIT, SEQ, ENV, FX, LFO, GLO, ARP | the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI; FX again: TAPE |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play; PRESET its engine |
 | REC | a new piece; held, a new key, scale and tempo too; SEL held + REC, the chosen layer anew |

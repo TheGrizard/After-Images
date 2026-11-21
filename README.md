@@ -2,7 +2,7 @@
 
 A generative synth for the M-VAVE FM-1. Press REC and it makes a new piece of ambient music that keeps evolving:
 four layers, each its own sequencer driving its own sound in its own part of the spectrum, listening to each other.
-Musical (everything is locked to the scale), but it can go somewhere strange.
+Musical (everything is locked to the scale), but DRIFT takes it somewhere strange.
 
 By [TheGrizard](https://github.com/TheGrizard). Built on [fm1-base](https://github.com/charlesvestal/fm1-base) (MPL-2.0)
 and felucca-bsp. Works on both FM-1 flash chips.
@@ -28,7 +28,7 @@ heavy layer and one soft one. A piece is a seed: the same piece always starts th
 It is patched like a modular. Every sequencer has a second output, a CV, that shapes each note's sound: the
 attractor's position, the Turing register's upper bits, the ball's speed, the automaton's population. Accents open
 the filter and add weight. Each layer's activity is patched into another layer's filter (which into which is the
-piece's own), and a random voltage, stepping every few beats, moves each one (DRIFT).
+piece's own), and a random voltage, stepping every few beats, moves each one (WANDER).
 
 LINK makes the layers answer each other: a note in one nudges another's system (a ball dropped, a bit flipped, the
 attractor kicked) and now and then moves the harmony on. A heavy GROUND note ducks BODY and DUST, so the low end
@@ -39,13 +39,13 @@ stays clear.
 | Control | What it does |
 |---|---|
 | K1 to K4 | at HOME, the four layers' levels: they rise up from the bottom of the screen while you turn; on the other pages, the page's four macros (the one you turn shows big) |
-| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), WEIRD |
-| EDIT | SOUND for the chosen layer: ENGINE, TONE, WEIGHT (soft to heavy), WEIRD |
+| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), DRIFT (how far the sound strays from the harmonics into the strange) |
+| EDIT | SOUND for the chosen layer: ENGINE, TONE, WEIGHT (soft to heavy), DRIFT (the engine's own strangeness) |
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
 | FX | EFFECTS: REVERB, ECHO (tempo-locked, tape wobble), GRAIN (turned right up: freeze), SHIMMER |
 | FX again | TAPE, on everything: TAPE (saturation, the head's bump, lost highs), WOW (wow and flutter), HISS, AGE (dropouts, crackle, a coarser grain) |
-| LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), DRIFT, CHAOS (ratchets, skips) |
+| LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), WANDER (slow random movement), CHAOS (ratchets, skips) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
 | ARP | MIDI: MIDI OUT on or off, CHANNEL (the layers on four in a row), KEYS CH, CLOCK out |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |

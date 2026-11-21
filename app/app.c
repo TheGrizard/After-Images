@@ -5,7 +5,7 @@
  *
  * Controls
  *   K1-K4              at HOME the layers' levels (shown while they turn); HOME held + K1-K4 the macros (MOOD,
- *                      ACTIVITY, EVOLVE, WEIRD); on the other pages, their four macros
+ *                      ACTIVITY, EVOLVE, DRIFT); on the other pages, their four macros
  *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI; FX
  *                      again: TAPE (TAPE, WOW, HISS, AGE)
  *   HOME tapped at HOME   the processor's load, and whether saving works
@@ -188,12 +188,12 @@ typedef struct { const char *name; uint8_t kind, where, off; } Knob;   /* where:
 #define LO(f) (uint8_t)__builtin_offsetof(LayerP, f)
 #define SO(f) (uint8_t)__builtin_offsetof(settings_t, f)
 static const Knob PAGES[NPAGES][4] = {
-    { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "WEIRD", K_PCT, 0, PO(weird) } },
-    { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_PCT, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "WEIRD", K_PCT, 1, LO(weird) } },
+    { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
+    { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_PCT, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "DRIFT", K_PCT, 1, LO(weird) } },
     { { "TYPE", K_SEQ, 1, LO(seq) }, { "DENSITY", K_PCT, 1, LO(density) }, { "RATE", K_RATE, 1, LO(rate) }, { "MUTATE", K_PCT, 1, LO(mutate) } },
     { { "LEVEL", K_PCT, 1, LO(level) }, { "ATTACK", K_PCT, 1, LO(attack) }, { "RELEASE", K_PCT, 1, LO(release) }, { "OCTAVE", K_OCT, 1, LO(octave) } },
     { { "REVERB", K_PCT, 0, PO(reverb) }, { "ECHO", K_PCT, 0, PO(echo) }, { "GRAIN", K_PCT, 0, PO(grain) }, { "SHIMMER", K_PCT, 0, PO(shimmer) } },
-    { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "DRIFT", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
+    { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "WANDER", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "MIDI OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
     { { "TAPE", K_PCT, 0, PO(tape) }, { "WOW", K_PCT, 0, PO(wow) }, { "HISS", K_PCT, 0, PO(hiss) }, { "AGE", K_PCT, 0, PO(age) } },

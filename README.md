@@ -11,12 +11,12 @@ and felucca-bsp. Works on both FM-1 flash chips.
 
 ## The four layers
 
-| Layer | Band | Its part |
-|---|---|---|
-| GROUND | sub and bass, ~30-200 Hz | the root, its fifth and octave: the floor |
-| BODY | low mids, ~150 Hz-1 kHz | the chords (Detroit voicings when MOOD is up) |
-| LIGHT | mids, ~500 Hz-4 kHz | the melody |
-| DUST | highs, ~2-12 kHz | the air: specks, chimes, breath |
+| Layer | Colour | Band | Its part |
+|---|---|---|---|
+| GROUND | red | sub and bass, ~30-200 Hz | the root, its fifth and octave: the floor |
+| BODY | blue | low mids, ~150 Hz-1 kHz | the chords (Detroit voicings when MOOD is up) |
+| LIGHT | green | mids, ~500 Hz-4 kHz | the melody |
+| DUST | white | highs, ~2-12 kHz | the air: specks, chimes, breath |
 
 Each piece gives every layer one of ten **sequencers**, shuffled: EUCLID (Euclidean rings), TURING (a looping shift
 register that flips bits), MARKOV (a table of chances), LORENZ (the attractor: a note at each loop's peak), BOUNCE
@@ -24,6 +24,11 @@ register that flips bits), MARKOV (a table of chances), LORENZ (the attractor: a
 PHASE (one phrase on two players drifting apart, Steve Reich's way) and DRUNK (a Brownian walk). And one of ten
 **engines**: DRIFT SAW, FM, STRING, BELL, BLEEP, GLASS, BREATH, VOICE, FOLD and SUB. Every piece has at least one
 heavy layer and one soft one. A piece is a seed: the same piece always starts the same way.
+
+It is patched like a modular. Every sequencer has a second output, a CV, that shapes each note's sound: the
+attractor's position, the Turing register's upper bits, the ball's speed, the automaton's population. Accents open
+the filter and add weight. Each layer's activity is patched into another layer's filter (which into which is the
+piece's own), and a random voltage, stepping every few beats, moves each one (DRIFT).
 
 LINK makes the layers answer each other: a note in one nudges another's system (a ball dropped, a bit flipped, the
 attractor kicked) and now and then moves the harmony on. A heavy GROUND note ducks BODY and DUST, so the low end
@@ -39,6 +44,7 @@ stays clear.
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
 | FX | EFFECTS: REVERB, ECHO (tempo-locked, tape wobble), GRAIN (turned right up: freeze), SHIMMER |
+| FX again | TAPE, on everything: TAPE (saturation, the head's bump, lost highs), WOW (wow and flutter), HISS, AGE (dropouts, crackle, a coarser grain) |
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), DRIFT, CHAOS (ratchets, skips) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
 | ARP | MIDI: MIDI OUT on or off, CHANNEL (the layers on four in a row), KEYS CH, CLOCK out |
@@ -54,10 +60,15 @@ stays clear.
 | white keys | the scale's notes, up from the key, on the chosen layer's sound: no wrong notes |
 | black keys | the scale's chords: I to VII, then I to IV an octave up (CHORDS sets triads, sevenths, ninths, sus, spread, fifths) |
 
+The home screen is abstract: a Julia set drawn behind everything, its shape wandering with the music (round the
+Mandelbrot set's edge as the beats go by, pulled in and out as BODY swells), coloured by the layers as they sound;
+over it each note leaves a fading afterimage in its layer's colour: GROUND a bar, BODY a branching fractal, LIGHT the
+melody drawn as a line, DUST sparks.
+
 The piece playing is kept by itself a few seconds after your last change, so the FM-1 comes back where you left it.
 
 MIDI out (USB): each layer's notes on its own channel (1-4 by default), the keys on another (5), clock if you want it.
-MIDI in: notes play the chosen layer, put into the scale; CC 20-23 are HOME's macros, 24-27 EFFECTS', 28-31 MOTION's.
+MIDI in: notes play the chosen layer, put into the scale; CC 20-23 are HOME's macros, 24-27 EFFECTS', 28-31 MOTION's, 32-35 TAPE's.
 
 ## Building it
 

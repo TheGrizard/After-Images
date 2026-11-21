@@ -43,6 +43,12 @@ tap FX
 wait 200
 expect page 4
 shot fx.png
+tap FX
+wait 200
+expect page 8
+turn K2 5
+wait 300
+shot tape.png
 tap LFO
 wait 200
 expect page 5

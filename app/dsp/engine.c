@@ -54,6 +54,13 @@ void engine_all_off(Engine *e)
 }
 
 /* ------------------------------------------------------------------ set-up */
+/* the patch: which layer's activity each layer listens to (never its own), from the piece's seed */
+static void patch(Engine *e, uint32_t seed)
+{
+    Rng r; rng_seed(&r, seed ^ 0xCAB1Eu);
+    for (int l = 0; l < NUM_LAYERS; l++) e->L[l].src = (l + 1 + rng_int(&r, NUM_LAYERS - 1)) % NUM_LAYERS;
+}
+
 static void layer_sound(const Engine *e, int l, Sound *s)
 {
     const Piece *p = e->p; const LayerP *lp = &p->l[l];
@@ -89,6 +96,8 @@ void engine_init(Engine *e, const Piece *p)
     reverb_init(&e->rv, 1.3f);
     echo_init(&e->echo);
     grains_init(&e->gr, p->seed);
+    tape_init(&e->tape, p->seed);
+    patch(e, p->seed);
     e->mask = 0xF; e->chord_bars = 4; e->chord_left = 4; e->sec_left = 32;
     rng_seed(&e->rng, p->seed);
     e->seed_now = p->seed;
@@ -139,6 +148,13 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
         notes[nn++] = deg_note(sc, base, sn->deg + e->root % n);
     }
     Sound snd; layer_sound(e, l, &snd);
+    {   /* modular: the sequencer's CV and the note's accent shape this note's sound; the layer patched in pushes it */
+        float link = u(p->link), m = sn->mod - 0.5f, acc = sn->vel - 0.6f, cv = e->L[L->src].cv;
+        snd.tone = clamp01(snd.tone + 0.45f * m + 0.3f * acc + link * 0.35f * cv);
+        snd.weight = clamp01(snd.weight + 0.35f * acc);
+        snd.weird = clamp01(snd.weird + (0.15f + 0.35f * link) * m * (snd.weird + 0.3f));
+        snd.release *= 0.7f + 0.6f * sn->mod;
+    }
     float beat_s = 60.0f / e->bpm, dur = sn->dur * beat_s, vel = sn->vel * (0.75f + 0.25f * u(lp->weight));
     float w = ROLES[l].width;
     for (int i = 0; i < nn; i++) {
@@ -153,6 +169,7 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
         post(e, l, note, vel, pan);
     }
     e->events[l]++;
+    L->cv = fm_maxf(L->cv, sn->vel);
     if (l == L_GROUND) e->duck = fm_maxf(e->duck, vel * u(lp->weight) * 0.45f);
     /* LINK: a note nudges another layer's system; now and then it asks the harmony to move */
     float link = u(p->link);
@@ -238,6 +255,7 @@ static void control(Engine *e, int sub)
         e->seed_now = p->seed; rng_seed(&e->rng, p->seed);
         e->root = 0; e->chord_left = 4; e->sec_left = 24; e->mask = 0xF; e->beat = 0; e->bar = 0;
         grains_init(&e->gr, p->seed);
+        patch(e, p->seed);
         engine_all_off(e);
     }
     keys_in(e, sub);
@@ -257,6 +275,9 @@ static void control(Engine *e, int sub)
         Layer *L = &e->L[l]; const LayerP *lp = &p->l[l];
         layer_seq_check(e, l);
         drift_step(&L->dtone, &e->rng, BLK_S); drift_step(&L->dpan, &e->rng, BLK_S);
+        L->cv -= L->cv * (BLK_S / (0.25f + 0.6f * u(lp->release)));
+        if ((L->rnd_left -= beats) <= 0) { L->rnd_t = rng_bi(&e->rng); L->rnd_left = (float)(1 + rng_int(&e->rng, 4)); }   /* a new voltage every 1-4 beats */
+        L->rnd += (L->rnd_t - L->rnd) * (BLK_S * 3.0f);
         L->present_t = (e->mask >> l & 1) ? 1.0f : 0.0f;
         L->present += (L->present_t - L->present) * (BLK_S / 6.0f);
         Seq *s = &L->seq;
@@ -291,7 +312,10 @@ void engine_block_begin(Engine *e, int nsub)
     }
     /* the bands: each layer's filters, from its role and its TONE */
     for (int l = 0; l < NUM_LAYERS; l++) {
+        Layer *L = &e->L[l];
         float t = u(p->l[l].tone), lp = ROLES[l].lp * (0.35f + 0.65f * t + 0.3f * (u(p->mood) - 0.5f));
+        /* patched: the source layer's activity opens this one's filter, the random voltage moves it (LINK, DRIFT) */
+        lp *= fm_exp2f(u(p->link) * 1.8f * (e->L[L->src].cv - 0.25f) + u(p->drift) * 0.9f * L->rnd);
         for (int c = 0; c < 2; c++) { svf_set(&e->L[l].hp[c], ROLES[l].hp, 0.6f); svf_set(&e->L[l].lp[c], lp, 0.6f); }
     }
     cost_add(e, NBUS, t0);
@@ -343,6 +367,7 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
     e->echo.fb = 0.2f + 0.65f * eck; e->echo.wow = u(p->warp) + u(p->drift) * 0.5f;
     e->gr.density = grk < 0.9f ? grk : 1.0f; e->gr.frozen = grk >= 0.92f; e->gr.size = 0.3f + 0.7f * grk;
     e->gr.spread = 0.3f + 0.7f * grk; e->gr.shimmer = shk;
+    e->tape.amount = u(p->tape); e->tape.wow = u(p->wow); e->tape.hiss = u(p->hiss); e->tape.age = u(p->age);
     {   /* the grains' pitches: octaves, and the fifth only where the scale has one */
         const Scale *sc = &SCALES[p->scale % NUM_SCALES]; int has5 = 0;
         for (int i = 0; i < sc->n; i++) if (sc->st[i] == 7) has5 = 1;
@@ -384,8 +409,10 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
         float vl[BLK], vr[BLK];
         reverb_run(&e->rv, rl, rr, vl, vr, BLK);
         float *L = outL + k * BLK, *R = outR + k * BLK;
+        for (int i = 0; i < BLK; i++) { dl[i] += vl[i] * 0.55f; dr[i] += vr[i] * 0.55f; }
+        tape_run(&e->tape, dl, dr, BLK);
         for (int i = 0; i < BLK; i++) {
-            float l = dl[i] + vl[i] * 0.55f, r = dr[i] + vr[i] * 0.55f;
+            float l = dl[i], r = dr[i];
             e->dc[0] += 0.0035f * (l - e->dc[0]); e->dc[1] += 0.0035f * (r - e->dc[1]);
             L[i] = l - e->dc[0]; R[i] = r - e->dc[1];
         }

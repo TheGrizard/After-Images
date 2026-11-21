@@ -25,6 +25,7 @@ typedef struct {
     uint8_t reverb, echo, grain, shimmer;         /* FX */
     uint8_t link, warp, drift, chaos;             /* MOTION (the LFO button) */
     uint8_t key, scale, chord, tempo;             /* SCALE (the GLO button): tempo is BPM - 40 */
+    uint8_t tape, wow, hiss, age;                 /* TAPE (FX tapped again): the lo-fi tape on everything */
     LayerP l[NUM_LAYERS];
 } Piece;
 
@@ -60,6 +61,9 @@ typedef struct {
     float gain, present, present_t;      /* level glide; the form's fade in and out */
     Drift dtone, dpan;
     float tone_off, dens_off;            /* the section's colour */
+    float cv;                            /* its activity: up with each note, falling after (a modular envelope follower) */
+    float rnd, rnd_t, rnd_left;          /* a random voltage, smoothed, stepping at its own pace (DRIFT) */
+    int src;                             /* the layer patched into this one (LINK: its activity opens this one's filter) */
     uint8_t type_now; uint32_t seed_now;
     VoiceEv q[EVQ]; int nq;
     int next_v;
@@ -85,7 +89,7 @@ struct Engine {
     int playing;
     float gr_ratio[6];
     /* effects */
-    Reverb rv; Echo echo; Grains gr;
+    Reverb rv; Echo echo; Grains gr; Tape tape;
     float dc[2];
     /* MIDI out: the app's; notes on their layers' channels, the clock */
     void (*midi)(uint32_t pkt);

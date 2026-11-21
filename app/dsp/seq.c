@@ -12,7 +12,7 @@ static void emit_raw(Seq *s, int deg, float vel, float dur, float pan)
 {
     if (s->nout >= SEQ_OUT) return;
     SeqNote *o = &s->out[s->nout++];
-    o->deg = deg; o->vel = clamp01(vel); o->dur = dur; o->pan = pan;
+    o->deg = deg; o->vel = clamp01(vel); o->dur = dur; o->pan = pan; o->mod = clamp01(s->mod);
 }
 
 /* a note from the system; CHAOS may drop it, double it into a ratchet, or throw it far */
@@ -27,7 +27,7 @@ static void emit(Seq *s, int deg, float vel, float dur, float pan)
             s->ratchet_left = 1 + rng_int(&s->rng, 3);
             s->ratchet_dt = rng_chance(&s->rng, 0.5f) ? 0.125f : 1.0f / 6.0f;
             s->ratchet_t = s->ratchet_dt;
-            s->ratchet_n = (SeqNote){ deg, vel * 0.8f, s->ratchet_dt * 0.8f, pan };
+            s->ratchet_n = (SeqNote){ deg, vel * 0.8f, s->ratchet_dt * 0.8f, pan, s->mod };
         }
     }
     emit_raw(s, deg, vel, dur, pan);
@@ -112,6 +112,7 @@ static void step_euclid(Seq *s)
     int i = (s->pos + s->rot) % s->n;
     int hit = ((i + 1) * k) / s->n != (i * k) / s->n;
     if (hit) {
+        s->mod = (float)(s->mpos % s->m) / (float)(s->m > 1 ? s->m - 1 : 1);   /* where in its melody */
         emit(s, s->mel[s->mpos % s->m], 0.55f + 0.45f * (i == 0), 1.2f, 9);
         s->mpos++;
     }
@@ -129,6 +130,7 @@ static void step_turing(Seq *s)
     if (rng_chance(&s->rng, s->mutate * s->mutate * 0.5f)) bit ^= 1u;
     s->reg = ((s->reg << 1) | bit) & mask;
     uint32_t v = s->reg & 0xFFu;
+    s->mod = (float)(s->reg >> 4 & 0xFFu) / 255.0f;            /* the register's upper bits */
     if ((float)((v * 151u) & 255u) / 255.0f < s->density * 1.2f)
         emit(s, (int)(v * (uint32_t)s->range / 256u), 0.5f + 0.5f * (float)(s->reg >> 8 & 3u) / 3.0f, 1.0f + (float)(v & 3u), 9);
 }
@@ -146,6 +148,7 @@ static void step_markov(Seq *s)
     if (s->density < 0.5f) d += rng_int(&s->rng, 1 + (int)((0.5f - s->density) * 16.0f));
     else if (d > 1 && rng_chance(&s->rng, (s->density - 0.5f) * 1.6f)) d /= 2;
     s->len = d - 1;
+    s->mod = (float)d / 6.0f;                        /* long notes open up */
     emit(s, b * (s->range - 1) / 7, 0.6f + 0.3f * rng_f(&s->rng), (float)d * 0.25f * 1.5f, 9);
     if (rng_chance(&s->rng, s->mutate * 0.1f)) s->mk[rng_int(&s->rng, 8)][rng_int(&s->rng, 8)] = (uint8_t)rng_int(&s->rng, 8);
 }
@@ -153,6 +156,7 @@ static void step_markov(Seq *s)
 static void step_life(Seq *s)
 {
     int c = s->pos % 16;
+    { int pop = 0; for (int i = 0; i < 16; i++) pop += s->cells >> i & 1; s->mod = (float)pop / 16.0f; }   /* the population */
     if ((s->cells >> c & 1u) && rng_chance(&s->rng, 0.3f + s->density))
         emit(s, (c * 5) % s->range, 0.5f + 0.4f * (c % 4 == 0), 0.9f, (float)c / 7.5f - 1.0f);
     if (++s->pos >= 16) {                            /* a generation */
@@ -171,7 +175,8 @@ static void step_life(Seq *s)
 static void step_phase(Seq *s)
 {
     int i = s->pos % s->m;
-    if (s->cells >> i & 1u) emit(s, s->mel[i], 0.65f, 0.9f, -0.6f);
+    s->mod = fm_fabsf(s->ph2 - 0.5f) * 2.0f;          /* how far apart the two players are */
+    if ((s->cells >> i & 1u) && rng_chance(&s->rng, 0.3f + s->density)) emit(s, s->mel[i], 0.65f, 0.9f, -0.6f);
     s->pos++;
 }
 
@@ -184,6 +189,7 @@ static void step_drunk(Seq *s)
     if (s->idx < 0) s->idx = -s->idx;
     if (s->idx >= s->range) s->idx = 2 * (s->range - 1) - s->idx;
     s->idx = clampi(s->idx, 0, s->range - 1);
+    s->mod = clamp01(s->mod + (float)d * 0.08f + rng_bi(&s->rng) * 0.05f);   /* a second walk */
     emit(s, s->idx, 0.5f + 0.4f * rng_f(&s->rng), 1.0f + (float)rng_int(&s->rng, 3), 9);
 }
 
@@ -196,6 +202,7 @@ static void run_lorenz(Seq *s, float b)
         float dx = 10.0f * (s->y - s->x), dy = s->x * (s->rho - s->z) - s->y, dz = s->x * s->y - 2.6667f * s->z;
         float px = s->x;
         s->x += dx * h; s->y += dy * h; s->z += dz * h;
+        s->mod = clamp01((s->y + 25.0f) / 50.0f);   /* the attractor's y */
         if (s->dz > 0 && dz <= 0)                    /* a loop's peak */
             emit(s, (int)((s->x + 20.0f) / 40.0f * (float)s->range), clamp01(s->z / 45.0f), 1.5f, clampf(s->y / 25.0f, -1, 1));
         if ((px < 0) != (s->x < 0) && rng_chance(&s->rng, 0.5f))   /* it crosses to the other wing: an accent */
@@ -212,6 +219,7 @@ static void run_bounce(Seq *s, float b)
     s->v -= grav * b; s->h += s->v * b;
     if (s->h <= 0) {
         s->h = 0; float sp = -s->v; s->v = sp * s->e;
+        s->mod = clamp01(sp / 2.5f);                 /* the ball's speed: hard hits bright, the settling dull */
         emit(s, s->base + s->k * s->cnt * (1 + (s->mutate > 0.5f)), clamp01(sp / 2.5f), 0.6f, 9);
         s->cnt++;
         if (s->v < 0.12f || s->cnt > 14) s->g = 1.0f + (1.0f - s->density) * 7.0f * rng_f(&s->rng);   /* settled: the next ball */
@@ -226,6 +234,7 @@ static void run_orbits(Seq *s, float b)
         if (s->ph[i] >= 1.0f) {
             s->ph[i] -= 1.0f;
             if (rng_chance(&s->rng, s->mutate * 0.25f)) s->pdeg[i] = (int8_t)clampi(s->pdeg[i] + rng_int(&s->rng, 5) - 2, 0, s->range - 1);
+            s->mod = s->ph[(i + 1) % 4];                /* where the next planet is */
             emit(s, s->pdeg[i], 0.5f + 0.15f * (float)i, s->per[i] * 0.5f, (float)i / 1.5f - 1.0f);
         }
     }
@@ -237,6 +246,7 @@ static void run_chimes(Seq *s, float b)
     s->wind += (s->wtarget - s->wind) * clamp01(b * 0.2f);
     for (int i = 0; i < s->ngust; i++)
         if ((s->gust_t[i] -= b) <= 0) {
+            s->mod = s->wind;                           /* the wind */
             emit(s, s->gust_d[i], 0.3f + 0.6f * s->wind * rng_f(&s->rng), 2.5f, rng_bi(&s->rng));
             s->gust_t[i] = s->gust_t[--s->ngust]; s->gust_d[i] = s->gust_d[s->ngust]; i--;
         }
@@ -252,7 +262,7 @@ void seq_run(Seq *s, float beats)
 {
     s->nout = 0;
     if (s->ratchet_left) {
-        if ((s->ratchet_t -= beats) <= 0) { emit_raw(s, s->ratchet_n.deg, s->ratchet_n.vel, s->ratchet_n.dur, s->ratchet_n.pan); s->ratchet_left--; s->ratchet_t += s->ratchet_dt; }
+        if ((s->ratchet_t -= beats) <= 0) { s->mod = s->ratchet_n.mod * 0.7f; emit_raw(s, s->ratchet_n.deg, s->ratchet_n.vel, s->ratchet_n.dur, s->ratchet_n.pan); s->ratchet_left--; s->ratchet_t += s->ratchet_dt; }
     }
     /* WARP: the time bends. Swing between steps, and a phrase that speeds up and slows down over 8 beats */
     s->bend_ph += beats / 8.0f; if (s->bend_ph >= 1.0f) s->bend_ph -= 1.0f;
@@ -270,7 +280,8 @@ void seq_run(Seq *s, float beats)
         if (s->ph2 >= 1.0f) {
             s->ph2 -= 1.0f;
             int i = s->idx++ % s->m;
-            if (s->cells >> i & 1u) emit(s, s->mel[i], 0.55f, 0.9f, 0.6f);
+            s->mod = 1.0f - fm_fabsf(s->ph2 - 0.5f) * 2.0f;
+            if ((s->cells >> i & 1u) && rng_chance(&s->rng, 0.3f + s->density)) emit(s, s->mel[i], 0.55f, 0.9f, 0.6f);
             if (rng_chance(&s->rng, s->mutate * 0.02f)) s->rate2 = 1.0f + rng_range(&s->rng, 0.004f, 0.03f);
         }
     }

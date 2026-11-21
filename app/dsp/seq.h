@@ -23,7 +23,9 @@ enum {
 };
 extern const char *const SEQ_NAME[NUM_SEQS];
 
-typedef struct { int deg; float vel, dur, pan; } SeqNote;   /* dur in beats; pan -1..1, or 9: the layer's choice */
+/* dur in beats; pan -1..1, or 9: the layer's choice; mod 0..1: the system's second output, a modular CV (the attractor's
+ * y, the register's upper bits, the ball's speed, the automaton's population...): it shapes the note's sound */
+typedef struct { int deg; float vel, dur, pan, mod; } SeqNote;
 #define SEQ_OUT 8
 
 typedef struct {
@@ -45,6 +47,7 @@ typedef struct {
     uint16_t cells; uint8_t rule;        /* LIFE */
     float wind, wtarget, wleft, gust_t[6]; int8_t gust_d[6]; int ngust;   /* CHIMES */
     float ph2, rate2;                    /* PHASE */
+    float mod;                           /* the CV the next note carries (each type sets it) */
     /* the notes this step made */
     SeqNote out[SEQ_OUT]; int nout;
     int ratchet_left; float ratchet_t, ratchet_dt; SeqNote ratchet_n;

@@ -6,7 +6,8 @@
  * Controls
  *   K1-K4              at HOME the layers' levels (shown while they turn); HOME held + K1-K4 the macros (MOOD,
  *                      ACTIVITY, EVOLVE, WEIRD); on the other pages, their four macros
- *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI
+ *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI; FX
+ *                      again: TAPE (TAPE, WOW, HISS, AGE)
  *   HOME tapped at HOME   the processor's load, and whether saving works
  *   SELECT, SEL        the layer the SOUND, SEQUENCE and MIX pages (and the keys) play
  *   PRESET             the chosen layer's engine
@@ -105,9 +106,10 @@ static void midi_in(void)
             int note = deg_note(sc, set.cur.key, note_deg(sc, set.cur.key, (int)d1));
             engine_key(&eng, st == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64));
         } else if (st == 0xB0u) {
-            uint8_t *g[12] = { &set.cur.mood, &set.cur.motion, &set.cur.evolve, &set.cur.weird, &set.cur.reverb, &set.cur.echo,
-                               &set.cur.grain, &set.cur.shimmer, &set.cur.link, &set.cur.warp, &set.cur.drift, &set.cur.chaos };
-            if (d1 >= 20u && d1 < 32u) cc_set(g[d1 - 20u], d2);
+            uint8_t *g[16] = { &set.cur.mood, &set.cur.motion, &set.cur.evolve, &set.cur.weird, &set.cur.reverb, &set.cur.echo,
+                               &set.cur.grain, &set.cur.shimmer, &set.cur.link, &set.cur.warp, &set.cur.drift, &set.cur.chaos,
+                               &set.cur.tape, &set.cur.wow, &set.cur.hiss, &set.cur.age };
+            if (d1 >= 20u && d1 < 36u) cc_set(g[d1 - 20u], d2);
         }
     }
 }
@@ -177,9 +179,9 @@ static void int_text(int32_t v, char *b)
 static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 /* ------------------------------------------------------------------ the pages */
-enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_FX, PG_MOTION, PG_SCALE, PG_MIDI, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "EFFECTS", "MOTION", "SCALE", "MIDI" };
-static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_FX, B_LFO, B_GLO, B_ARP };
+enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_FX, PG_MOTION, PG_SCALE, PG_MIDI, PG_TAPE, NPAGES };
+static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "EFFECTS", "MOTION", "SCALE", "MIDI", "TAPE" };
+static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_FX, B_LFO, B_GLO, B_ARP, B_FX };   /* FX again: TAPE */
 enum { K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH };
 typedef struct { const char *name; uint8_t kind, where, off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings */
 #define PO(f) (uint8_t)__builtin_offsetof(Piece, f)
@@ -194,6 +196,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "DRIFT", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "MIDI OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
+    { { "TAPE", K_PCT, 0, PO(tape) }, { "WOW", K_PCT, 0, PO(wow) }, { "HISS", K_PCT, 0, PO(hiss) }, { "AGE", K_PCT, 0, PO(age) } },
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX; }
 
@@ -202,7 +205,8 @@ static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg 
 #define C_RULE RGB(40, 40, 48)
 #define C_WELL RGB(30, 30, 36)
 #define C_RED RGB(255, 90, 78)
-static const uint16_t LAYER_C[NUM_LAYERS + 1] = { RGB(255, 140, 60), RGB(170, 120, 255), RGB(90, 220, 255), RGB(235, 235, 200), RGB(255, 255, 255) };
+/* each layer its colour, everywhere: on the view and on its pages. GROUND red, BODY blue, LIGHT green, DUST white */
+static const uint16_t LAYER_C[NUM_LAYERS + 1] = { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240), RGB(255, 255, 255) };
 
 static struct {
     uint32_t btn, keys;
@@ -483,7 +487,8 @@ static void input(void)
     int32_t d;
     if (down || (keys & ~ui.keys)) ui.touched = 1;
 
-    for (int pg = 1; pg < NPAGES; pg++) if (down >> PAGE_BTN[pg] & 1u) page_to(pg);
+    for (int pg = 1; pg < NPAGES; pg++) if (pg != PG_FX && pg != PG_TAPE && (down >> PAGE_BTN[pg] & 1u)) page_to(pg);
+    if (down >> B_FX & 1u) page_to(ui.page == PG_FX ? PG_TAPE : PG_FX);   /* FX: the effects, again the tape */
     /* HOME: from another page, home; held, the macros; tapped at home, how the FM-1 is doing */
     if (down >> B_HOME & 1u) { ui.home_used = ui.page != PG_HOME; if (ui.page != PG_HOME) page_to(PG_HOME); }
     if ((up >> B_HOME & 1u) && !ui.home_used) info();
@@ -589,36 +594,74 @@ static void shapes_step(float dt)
     }
 }
 
-static void ring(float cx, float cy, float r, uint16_t c)
-{
-    float px = cx + r, py = cy;
-    int segs = r < 6 ? 8 : 16;
-    for (int i = 1; i <= segs; i++) {
-        float a = (float)i * (FM_TWO_PI / (float)segs), x = cx + r * fm_cosf(a), y = cy + r * 0.8f * fm_sinf(a);
-        cv_line((int32_t)px, (int32_t)py, (int32_t)x, (int32_t)y, c);
-        px = x; py = y;
-    }
-}
+/* Behind everything, a Julia set, drawn as points by inverse iteration (z -> +-sqrt(z - c)), its c wandering with the
+ * music: round the edge of the Mandelbrot set's heart as the beats go by, pulled in and out as BODY swells, turned
+ * by the chord's root. Each point coloured by the layer whose band its height falls in, as bright as that layer
+ * sounds. The last few c's leave fainter copies behind: the set's own afterimages. */
+#define JPTS 1100
+#define JGHOST 3
+static int16_t jx[JGHOST][JPTS], jy[JGHOST][JPTS];
+static uint8_t jc[JGHOST][JPTS];
+static int jcur;
+static uint32_t jrng = 0x2545F491u;
 
-/* the harmony, behind everything: the scale as a slowly turning polygon, the chord's root its lit corner */
-static void draw_harmony(void)
+static void julia_step(float dt)
 {
     const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
     int n = sc->n, root = ((eng.root % n) + n) % n;
-    float cx = 120.0f, cy = (float)VIEW_H * 0.45f, r = 52.0f, rot = ui.t * 0.05f;
-    float px = 0, py = 0, fx = 0, fy = 0;
-    for (int i = 0; i <= n; i++) {
-        float a = rot + (float)(i % n) / (float)n, x = cx + r * 1.5f * fm_sin_turns(a), y = cy - r * 0.9f * fm_sin_turns(a + 0.25f);
-        if (i) cv_line((int32_t)px, (int32_t)py, (int32_t)x, (int32_t)y, RGB(26, 26, 34)); else { fx = x; fy = y; }
-        if (i % n == root && i < n) { cv_rect((int32_t)x - 1, (int32_t)y - 1, 3, 3, RGB(90, 80, 120)); cv_line((int32_t)cx, (int32_t)cy, (int32_t)x, (int32_t)y, RGB(36, 32, 52)); }
-        px = x; py = y;
+    static float th, rad = 0.72f;
+    th += dt * (0.02f + 0.06f * (float)set.cur.motion * 0.01f);
+    float aim = 0.70f + 0.12f * eng.L[L_BODY].cv + 0.04f * eng.L[L_GROUND].cv;
+    rad += (aim - rad) * clampf(dt * 0.8f, 0.0f, 1.0f);
+    float a = th + (float)root / (float)n * 0.35f;
+    float cr = rad * fm_sin_turns(a + 0.25f), ci = rad * fm_sin_turns(a);
+    jcur = (jcur + 1) % JGHOST;
+    float zr = 1.0f, zi = 0.0f;
+    float sx = 64.0f + 30.0f * (float)set.cur.weird * 0.01f, sy = sx * 0.85f, cy = (float)VIEW_H * 0.42f;
+    for (int i = 0; i < JPTS + 12; i++) {
+        float wr = zr - cr, wi = zi - ci;                  /* sqrt(w): r = |w|, then the half angle */
+        float m = fm_sqrtf(wr * wr + wi * wi);
+        float sr = fm_sqrtf((m + wr) * 0.5f), si = fm_sqrtf(fm_maxf((m - wr) * 0.5f, 0.0f));
+        if (wi < 0) si = -si;
+        jrng ^= jrng << 13; jrng ^= jrng >> 17; jrng ^= jrng << 5;
+        if (jrng & 1u) { sr = -sr; si = -si; }
+        zr = sr; zi = si;
+        if (i < 12) continue;
+        int k = i - 12;
+        jx[jcur][k] = (int16_t)(120.0f + zr * sx);
+        jy[jcur][k] = (int16_t)(cy + zi * sy);
+        jc[jcur][k] = (uint8_t)(zi > 0.35f ? L_GROUND : zi > 0.0f ? L_BODY : zi > -0.35f ? L_LIGHT : L_DUST);
     }
-    (void)fx; (void)fy;
+}
+
+static void draw_julia(void)
+{
+    uint16_t col[JGHOST][NUM_LAYERS];
+    for (int g = 0; g < JGHOST; g++)
+        for (int l = 0; l < NUM_LAYERS; l++) {
+            float age = (float)((jcur - g + JGHOST) % JGHOST);   /* 0 the newest */
+            col[g][l] = dim(LAYER_C[l], (0.16f + 0.6f * eng.meter[l]) * (1.0f - 0.3f * age));
+        }
+    for (int g = JGHOST - 1; g >= 0; g--) {
+        int b = (jcur - g + JGHOST) % JGHOST;
+        for (int i = 0; i < JPTS; i++) cv_pset(jx[b][i], jy[b][i], col[g][jc[b][i]]);
+    }
+}
+
+/* a note's fractal: a branch splitting in two, and again, as deep as its loudness (BODY's chords bloom this way) */
+static void branch(float x, float y, float len, float ang, int depth, float spread, uint16_t c)
+{
+    float x2 = x + len * fm_sin_turns(ang), y2 = y - len * fm_sin_turns(ang + 0.25f);
+    cv_line((int32_t)x, (int32_t)y, (int32_t)x2, (int32_t)y2, c);
+    if (depth <= 0) return;
+    uint16_t cc = dim(c, 0.8f);
+    branch(x2, y2, len * 0.68f, ang - spread, depth - 1, spread, cc);
+    branch(x2, y2, len * 0.68f, ang + spread, depth - 1, spread, cc);
 }
 
 static void draw_shapes(void)
 {
-    draw_harmony();
+    draw_julia();
     for (int i = 0; i < NSHAPE; i++) {
         shape_t *s = &shp[i];
         if (!s->on) continue;
@@ -631,10 +674,12 @@ static void draw_shapes(void)
             cv_rect((int32_t)(s->x - w * 0.3f), (int32_t)s->y + 4, (int32_t)(w * 0.6f), 1, dim(c, 0.5f));
             break;
         }
-        case L_BODY:                           /* a ring that opens, a fainter one inside it */
-            ring(s->x, s->y, s->size * (0.3f + 1.4f * q), c);
-            if (q < 0.5f) ring(s->x, s->y, s->size * 0.5f * (0.3f + 1.4f * q), dim(c, 0.5f));
+        case L_BODY: {                         /* a fractal that grows and opens: three branches, splitting */
+            int depth = 2 + (s->vel > 0.6f);
+            float len = s->size * 0.35f * (0.4f + 0.6f * q), spread = 0.05f + 0.07f * q;
+            for (int b = 0; b < 3; b++) branch(s->x, s->y, len, s->vel * 0.3f + (float)b / 3.0f + q * 0.05f, depth, spread, c);
             break;
+        }
         case L_LIGHT:                          /* the melody: a point, a line back to the note before */
             if (s->px >= 0) cv_line((int32_t)s->px, (int32_t)s->py, (int32_t)s->x, (int32_t)s->y, dim(c, 0.6f));
             cv_rect((int32_t)s->x - 1, (int32_t)s->y - 1, 3, 3, c);
@@ -715,8 +760,8 @@ static void draw_header(void)
         int x = 4 + text_w(&FONT_XS, t) + 10;
         for (int l = 0; l < NUM_LAYERS; l++) {   /* the four layers: their sequencers, lit as they sound */
             uint16_t c = dim(LAYER_C[l], 0.3f + 0.7f * eng.meter[l]);
-            cv_rect(x, 21, 3, 3, c);
-            x += 8;
+            cv_rect(x, 19, 6, 6, c);
+            x += 10;
         }
     }
     cv_text(236 - text_w(&FONT_XS, right), 4, &FONT_XS, right, C_SUB);
@@ -750,8 +795,8 @@ static void draw_panel_rows(int y0)
     int pg = ui.page, lay = page_has_layer(pg);
     uint16_t pc = lay ? LAYER_C[ui.sel] : C_TXT;
     if (pg == PG_HOME && ui.panel_kind == 0) { draw_levels(y0); return; }
-    cv_rect(0, y0, 240, 1, C_RULE);
-    cv_text(6, y0 + 4, &FONT_B, pg == PG_HOME ? "MACROS" : PAGE_NAME[pg], C_TXT);
+    cv_rect(0, y0, 240, lay ? 2 : 1, lay ? pc : C_RULE);   /* a layer's page: its colour across the top */
+    cv_text(6, y0 + 4, &FONT_B, pg == PG_HOME ? "MACROS" : PAGE_NAME[pg], lay ? pc : C_TXT);
     if (lay) { const char *n = LAYER_NAME[ui.sel]; cv_text(234 - text_w(&FONT_B, n), y0 + 4, &FONT_B, n, pc); }
     /* the knob turned last, big */
     int focus = ui.knob_at && plat_ms() - ui.knob_at < 2500u;
@@ -763,7 +808,8 @@ static void draw_panel_rows(int y0)
     } else {
         static const char *const HINT[NPAGES] = {
             "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER",
-            "THE SPACE AROUND IT", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE", "OUT OVER USB" };
+            "THE SPACE AROUND IT  (FX AGAIN: TAPE)", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE", "OUT OVER USB",
+            "EVERYTHING THROUGH OLD TAPE" };
         cv_text(6, y0 + 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));
     }
     /* four columns: label, value, bar */
@@ -869,6 +915,7 @@ void app_frame(void)
         if (dt > 0.2f) dt = 0.2f;
         ui.last_view = now; ui.t += dt;
         shapes_step(dt);
+        julia_step(dt);
         draw_view();
     }
     {   /* the load guard: past 85 % of the render's time, fewer notes; back as it eases */

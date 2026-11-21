@@ -139,3 +139,55 @@ void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shi
         }
     }
 }
+
+/* ------------------------------------------------------------------ tape */
+void tape_init(Tape *t, uint32_t seed)
+{
+    memset(t, 0, sizeof *t);
+    rng_seed(&t->rng, seed ^ 0x7A9Eu);
+    op_set(&t->bump[0], 110.0f); op_set(&t->bump[1], 110.0f);
+    t->drop = 1.0f;
+}
+
+void tape_run(Tape *t, float *L, float *R, int n)
+{
+    float a = t->amount, w = t->wow, hs = t->hiss, ag = t->age;
+    if (a < 0.005f && w < 0.005f && hs < 0.005f && ag < 0.005f) {   /* off: the line kept fed, so turning it up is smooth */
+        for (int i = 0; i < n; i++) { t->buf[0][t->pos] = to16(L[i] * 0.5f); t->buf[1][t->pos] = to16(R[i] * 0.5f); t->pos = (t->pos + 1) & (TAPE_LINE - 1); }
+        return;
+    }
+    float dt = (float)n / SR;
+    /* wow: a slow wobble that wanders, flutter: a fast small one; together the read point's distance, in samples */
+    if ((t->wleft -= dt) <= 0) { t->wtarget = rng_bi(&t->rng); t->wleft = rng_range(&t->rng, 0.5f, 3.0f); }
+    t->wdrift += (t->wtarget - t->wdrift) * clamp01(dt * 1.5f);
+    t->wph += dt * (0.45f + 0.3f * t->wdrift); if (t->wph >= 1.0f) t->wph -= 1.0f;
+    t->fph += dt * 6.5f; if (t->fph >= 1.0f) t->fph -= 1.0f;
+    float d0 = 300.0f + w * (140.0f * fm_sin_turns(t->wph) + 60.0f * t->wdrift) + w * 6.0f * fm_sin_turns(t->fph);
+    float hf = 16000.0f * fm_powf(0.22f, 0.5f * a + 0.7f * ag);    /* the highs it loses */
+    op_set(&t->hf[0], hf); op_set(&t->hf[1], hf);
+    float drive = 1.0f + 2.0f * a, norm = (1.0f + 0.2f * a) / drive;   /* (unity for small signals, the peaks rounded) */
+    /* AGE: now and then the tape thins out for a moment */
+    if (t->drop_t > 0) t->drop_t -= dt;
+    else if (rng_chance(&t->rng, ag * ag * dt * 0.6f)) t->drop_t = rng_range(&t->rng, 0.05f, 0.4f);
+    float dtarget = t->drop_t > 0 ? 0.35f + 0.4f * (1.0f - ag) : 1.0f;
+    int hold = ag > 0.55f ? 1 + (int)((ag - 0.55f) * 6.0f) : 1;   /* (old tape's coarser grain) */
+    for (int i = 0; i < n; i++) {
+        float in[2] = { L[i], R[i] };
+        for (int c = 0; c < 2; c++) t->buf[c][t->pos] = to16(in[c] * 0.5f);
+        float rp = (float)t->pos - d0; while (rp < 0) rp += (float)TAPE_LINE;
+        int i0 = (int)rp; float f = rp - (float)i0; int i1 = (i0 + 1) & (TAPE_LINE - 1);
+        t->pos = (t->pos + 1) & (TAPE_LINE - 1);
+        t->drop += (dtarget - t->drop) * 0.002f;
+        float hissv = hs > 0.005f ? hs * 0.02f * rng_bi(&t->rng) : 0.0f;
+        if (ag > 0.01f && rng_chance(&t->rng, ag * 0.0004f)) hissv += rng_bi(&t->rng) * 0.15f * ag;   /* a crackle */
+        for (int c = 0; c < 2; c++) {
+            float x = ((float)t->buf[c][i0] + ((float)t->buf[c][i1] - (float)t->buf[c][i0]) * f) * (2.0f / 16384.0f);
+            x += a * 0.6f * op_lp(&t->bump[c], x);                     /* the head's bump */
+            x = fm_tanhf(x * drive) * norm;
+            x = op_lp(&t->hf[c], x) * t->drop + hissv;
+            if (hold > 1) { if (t->hold_i == 0) t->held[c] = x; x = t->held[c]; }
+            if (c) R[i] = x; else L[i] = x;
+        }
+        if (hold > 1 && ++t->hold_i >= hold) t->hold_i = 0;
+    }
+}

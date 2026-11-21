@@ -22,7 +22,7 @@ installer: `python3 tools/fm1_install.py {{PKG}}`.
 |---|---|
 | K1 to K4 | at HOME the four layers' levels (shown while you turn); on the other pages, the page's four macros |
 | HOME held + K1 to K4 | the macros: MOOD, ACTIVITY, EVOLVE, WEIRD |
-| HOME, EDIT, SEQ, ENV, FX, LFO, GLO, ARP | the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI |
+| HOME, EDIT, SEQ, ENV, FX, LFO, GLO, ARP | the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI; FX again: TAPE |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play; PRESET its engine |
 | REC | a new piece; held, a new key, scale and tempo too; SEL held + REC, the chosen layer anew |
 | OCT- / OCT+ | back and forward through the pieces REC replaced |

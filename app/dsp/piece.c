@@ -49,6 +49,8 @@ void piece_roll(Piece *p, uint32_t seed, int all)
     }
     p->reverb = pick(&r, 35, 80); p->echo = pick(&r, 10, 55); p->grain = rng_chance(&r, 0.5f) ? pick(&r, 10, 60) : 0;
     p->shimmer = rng_chance(&r, 0.4f) ? pick(&r, 10, 50) : 0;
+    if (rng_chance(&r, 0.55f)) { p->tape = pick(&r, 10, 55); p->wow = pick(&r, 5, 45); p->hiss = pick(&r, 0, 25); p->age = pick(&r, 0, 35); }
+    else p->tape = p->wow = p->hiss = p->age = 0;
     p->link = pick(&r, 15, 60); p->warp = pick(&r, 0, 40); p->drift = pick(&r, 20, 60); p->chaos = pick(&r, 0, 30);
     if (all) {
         p->key = (uint8_t)rng_int(&r, 12);
@@ -75,11 +77,13 @@ void piece_default(Piece *p)
     p->key = 9; p->scale = 1; p->chord = CH_SEVENTH; p->tempo = 44;   /* A minor, 84 BPM */
     p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 15;
     piece_roll(p, 0xAF7E1u, 0);
+    p->tape = 25; p->wow = 15; p->hiss = 8; p->age = 10;   /* (a little tape, to start) */
 }
 
 int piece_ok(const Piece *p)
 {
     if (p->scale >= NUM_SCALES || p->key >= 12 || p->chord >= NUM_CHORDS || p->tempo > 140) return 0;
+    if (p->tape > 100 || p->wow > 100 || p->hiss > 100 || p->age > 100) return 0;
     const uint8_t *v = &p->mood;
     for (int i = 0; i < 12; i++) if (v[i] > 100) return 0;
     for (int l = 0; l < NUM_LAYERS; l++) {

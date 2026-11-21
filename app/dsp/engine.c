@@ -138,7 +138,9 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
     const Scale *sc = &SCALES[p->scale % NUM_SCALES];
     int base = ROLES[l].base + p->key % 12 + 12 * lp->octave, n = sc->n;
     int notes[5], nn = 0;
-    if (l == L_GROUND) {                             /* the root, its fifth, its octave: the floor under the chords */
+    if (l == L_GROUND && lp->seq == S_MELODY) {      /* a melody in the bass: the line itself, round the chord's root */
+        notes[nn++] = deg_note(sc, base, e->root % n + sn->deg - ROLES[l].span / 2);
+    } else if (l == L_GROUND) {                      /* the root, its fifth, its octave: the floor under the chords */
         static const int8_t PICK[4] = { 0, 1, 2, 0 };
         int w = PICK[sn->deg % 4], d = e->root + (w == 1 ? fifth_of(sc) : w == 2 ? n : 0);
         notes[nn++] = deg_note(sc, base, d);
@@ -308,6 +310,24 @@ static void control(Engine *e, int sub)
 }
 
 /* ------------------------------------------------------------------ the block */
+/* WARBLE: the pitch wandering as a worn tape's or an old synth's does. One slow random voltage for the whole piece (its
+ * own pace wandering too: an LFO on an LFO), each layer a little apart from it; FLUTTER a faster shiver over it; DETUNE
+ * everything a touch flat, "relaxed". The pitch only: notes stay in their scale, a few cents off at most */
+static void warble(Engine *e)
+{
+    const Piece *p = e->p;
+    float dt = BLK_S * (float)e->nsub, w = u(p->warble), fl = u(p->flutter), dtn = u(p->detune);
+    if ((e->wb_left -= dt) <= 0) { e->wb_t = rng_bi(&e->rng); e->wb_left = 0.6f + 2.5f * rng_f(&e->rng); e->wb_rate = 0.25f + 0.6f * rng_f(&e->rng); }
+    e->wb_v += (e->wb_t - e->wb_v) * clamp01(dt * e->wb_rate);
+    e->fl_ph += dt * 6.3f; if (e->fl_ph >= 1.0f) e->fl_ph -= 1.0f;
+    float cents = -30.0f * dtn;
+    for (int b = 0; b < NBUS; b++) {
+        float own = b < NUM_LAYERS ? e->L[b].rnd : 0.0f;
+        float c = cents + w * 28.0f * (0.8f * e->wb_v + 0.2f * own) + fl * 7.0f * fm_sin_turns(e->fl_ph + 0.13f * (float)b);
+        e->pm[b] = fm_exp2f(c * (1.0f / 1200.0f));
+    }
+}
+
 static uint32_t now(Engine *e) { return e->clock ? e->clock() : 0; }
 static void cost_add(Engine *e, int k, uint32_t t0) { if (e->clock) e->cost[k] += ((float)(now(e) - t0) - e->cost[k]) * 0.05f; }
 
@@ -318,6 +338,7 @@ void engine_block_begin(Engine *e, int nsub)
     e->nsub = nsub > ENGINE_SUB ? ENGINE_SUB : nsub < 1 ? 1 : nsub;
     for (int l = 0; l < NUM_LAYERS; l++) e->L[l].nq = 0;
     e->nkq = 0;
+    warble(e);
     for (int k = 0; k < e->nsub; k++) {
         control(e, k);
         for (int l = 0; l < NUM_LAYERS; l++) {
@@ -365,13 +386,13 @@ void engine_block_layer(Engine *e, int b)
         memset(Lb, 0, sizeof(float) * BLK); memset(Rb, 0, sizeof(float) * BLK);
         if (b == KEYS) {
             apply(e->kq, e->nkq, e->kv, k);
-            for (int i = 0; i < KEY_POLY; i++) { e->kv[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; voice_render(&e->kv[i], Lb, Rb, BLK); }
+            for (int i = 0; i < KEY_POLY; i++) { e->kv[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; e->kv[i].pm = e->pm[KEYS]; voice_render(&e->kv[i], Lb, Rb, BLK); }
             continue;
         }
         Layer *L = &e->L[b];
         apply(L->q, L->nq, L->v, k);
         int any = 0;
-        for (int i = 0; i < L->nv; i++) if (L->v[i].on) { L->v[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; voice_render(&L->v[i], Lb, Rb, BLK); any = 1; }
+        for (int i = 0; i < L->nv; i++) if (L->v[i].on) { L->v[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; L->v[i].pm = e->pm[b]; voice_render(&L->v[i], Lb, Rb, BLK); any = 1; }
         if (!any) continue;
         for (int i = 0; i < BLK; i++) {
             Lb[i] = svf_lp(&L->lp[0], svf_hp(&L->hp[0], Lb[i]));
@@ -444,6 +465,7 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
             shifter_run(&e->shim, e->shim_prev, up, dn_, BLK);
             for (int i = 0; i < BLK; i++) { float x = up[i] * gu + dn_[i] * gd; rl[i] += x; rr[i] += x; }
         }
+        chorus_run(&e->ch, u(p->chorus), dl, dr, BLK);  /* the chorus on the dry sound (the reverb's sends taken before it) */
         float vl[BLK], vr[BLK];
         reverb_run(&e->rv, rl, rr, vl, vr, BLK);
         for (int i = 0; i < BLK; i++) e->shim_prev[i] = (vl[i] + vr[i]) * 0.5f;

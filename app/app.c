@@ -271,12 +271,12 @@ static void int_text(int32_t v, char *b)
 static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 /* ------------------------------------------------------------------ the pages */
-enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "SENDS", "EFFECTS", "MOTION", "SCALE", "SCREEN",
+enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_WARBLE, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB, NPAGES };
+static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "SENDS", "EFFECTS", "MOTION", "WARBLE", "SCALE", "SCREEN",
                                                 "MIDI OUT", "MIDI IN", "USB AUDIO" };
 /* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: SCALE, SCREEN; ARP: MIDI OUT,
  * MIDI IN, USB) */
-static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
+static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
        K_PALETTE, K_FRACTAL, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
@@ -293,6 +293,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "REVERB", K_PCT, 3, PO(s_rv) }, { "ECHO", K_PCT, 3, PO(s_echo) }, { "GRAIN", K_PCT, 3, PO(s_grain) }, { "DIRT", K_PCT, 3, PO(s_dirt) } },
     { { "REVERB", K_RVB, 0, PO(reverb) }, { "ECHO", K_ECHO, 0, PO(echo) }, { "GRAIN", K_GRAIN, 0, PO(grain) }, { "DIRT", K_DIRT, 0, PO(dirt) } },
     { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "FLOW", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
+    { { "WARBLE", K_PCT, 0, PO(warble) }, { "FLUTTER", K_PCT, 0, PO(flutter) }, { "DETUNE", K_PCT, 0, PO(detune) }, { "CHORUS", K_PCT, 0, PO(chorus) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "PALETTE", K_PALETTE, 2, SO(palette) }, { "FRACTAL", K_FRACTAL, 2, SO(fractal) }, { "FULL", K_ONOFF, 2, SO(full) }, { "GLOW", K_PCT, 2, SO(glow) } },
     { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
@@ -1238,7 +1239,7 @@ static void draw_panel_rows(int y0)
         static const char *const HINT[NPAGES] = {
             "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER",
             "THE FILTER GLIDES, THE PITCH NEVER",
-            "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "EVERYTHING IN THE SCALE",
+            "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "COLOURS AND FRACTALS", "THE LAYERS ON FOUR CHANNELS", "LAYER CHANNELS PLAY THE LAYERS",
             "RECORDING THE FM-1 OVER USB" };
         cv_text(6, y0 + 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));

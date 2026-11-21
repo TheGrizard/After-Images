@@ -62,4 +62,9 @@ void dirt_run(Dirt *d, float character, float mix, float *L, float *R, int n);  
 typedef struct { int16_t buf[SHIM_LINE]; int pos; float ph[2]; } Shifter;
 void shifter_run(Shifter *s, const float *in, float *up, float *down, int n);
 
+/* CHORUS (WARBLE's), the Juno's way: one short line read at two points swung by a slow triangle, the sides opposite */
+#define CH_LINE 1024
+typedef struct { int16_t buf[CH_LINE]; int pos; float ph; } Chorus;
+void chorus_run(Chorus *c, float amount, float *L, float *R, int n);
+
 #endif

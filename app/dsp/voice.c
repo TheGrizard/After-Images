@@ -3,7 +3,8 @@
 #include "voice.h"
 
 const char *const ENGINE_NAME[NUM_ENGINES] = {
-    "DRIFT SAW", "FM", "STRING", "DX", "BLEEP", "GLASS", "BREATH", "VOICE", "FOLD", "SUB", "STRINGS", "E.PIANO"
+    "DRIFT SAW", "FM", "STRING", "DX", "BLEEP", "GLASS", "BREATH", "VOICE", "FOLD", "SUB", "STRINGS", "E.PIANO",
+    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "BOARDS"
 };
 
 float g_sine[SINE_SIZE + 1];
@@ -38,6 +39,7 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
     }
     v->noise = seed | 1u;
     v->freq_t = v->freq;                         /* the pitch: always at once (no portamento) */
+    if (v->pm <= 0.0f) v->pm = 1.0f;
     v->ff = v->freq;                             /* the filter's: glides (GLIDE), from the last note's */
     v->glide_k = s->glide > 0.001f ? clamp01(BLK_S / s->glide) : 1.0f;
     if (from_hz > 0 && s->glide > 0.001f) v->ff = from_hz;
@@ -142,6 +144,47 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         v->p[1] = 0.6f * wd;                                     /* asymmetry */
         v->p[2] = 3.0f + 10.0f * tone;
         break;
+    case E_TRI:
+        v->p[0] = 1.0f + 3.0f * wt * wt;                         /* the fold */
+        v->p[1] = 0.5f - 0.45f * wd;                             /* where its peak is: 0.5 a triangle, near 0 a saw */
+        v->p[2] = 3.0f + 14.0f * tone;                           /* its filter, times the pitch */
+        break;
+    case E_SINE:
+        v->p[0] = 0.25f * wt;                                    /* the 2nd */
+        v->p[1] = 0.12f * wt * wt;                               /* the 3rd */
+        v->p[2] = wd;                                            /* the chorus beside it */
+        break;
+    case E_SQUARE:
+        v->p[1] = 1.2f + 8.0f * tone * tone;
+        v->p[2] = 0.6f + 1.5f * wt + 4.0f * s->reso;
+        v->p[3] = 0.3f + 0.5f * wt;                              /* the filter's envelope */
+        break;
+    case E_CZ:
+        v->p[0] = 0.15f + 0.8f * tone;                           /* how far the phase bends (opens with the envelope) */
+        v->p[1] = wd > 0.5f ? 1.0f : 0.0f;                       /* past halfway: the resonant kind */
+        v->p[2] = 1.0f + 6.0f * tone + 4.0f * wt;                /* its resonance's ratio */
+        v->p[3] = 0.4f + 0.6f * wt;                              /* the envelope's depth */
+        break;
+    case E_SYNC:
+        v->p[0] = 1.5f + 5.0f * tone + 3.0f * wt;                /* the slave's ratio at the start */
+        v->p[1] = 1.0f - k_of(0.25f + 1.5f * (1.0f - wt));       /* its sweep down, a block */
+        v->p[2] = 4.0f + 10.0f * tone;
+        v->z1 = 1.0f;
+        break;
+    case E_SHAPES:
+        v->p[0] = wd * 5.0f;                                     /* which shape (DRIFT), between two */
+        v->p[1] = 0.3f + 0.7f * wd;                              /* how far it wanders as it sounds */
+        v->p[2] = 3.0f + 12.0f * tone;
+        v->p[3] = 1.0f + 2.0f * wt;                              /* drive */
+        break;
+    case E_BOARDS:
+        v->p[0] = 0.0069f + 0.006f * wd;                         /* the square a little sharp (+0.12 semitone, more with DRIFT) */
+        v->p[1] = 0.8f + 4.0f * tone;                            /* dark: the filter's top, times the pitch */
+        v->p[2] = 0.8f + 1.5f * wt + 4.0f * s->reso;
+        v->p[3] = 1.0f - k_of(0.15f + 0.35f * (1.0f - wt));      /* the wah: the filter opens over ~150-500 ms */
+        v->z1 = 0.0f;
+        v->lfo_dp = 5.2f * BLK_S;                                /* the vibrato */
+        break;
     case E_SUB:
     default:
         v->p[0] = 0.15f + 0.35f * tone;                          /* the octave */
@@ -171,7 +214,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     if (!v->on) return;
     v->ff += (v->freq - v->ff) * v->glide_k;                     /* the filter glides after the pitch */
     v->sw += (1.0f - v->sw) * v->sw_k;                           /* the filter's sweep opening */
-    const float f = v->freq, dt = f / SR;
+    const float f = v->freq * v->pm, dt = f / SR;              /* (WARBLE: the pitch wandering, all its layer's notes as one) */
     const float swf = v->sweep > 0.001f ? fm_exp2f(-4.5f * v->sweep * (1.0f - v->sw)) : 1.0f;
     float out[BLK];
     v->lfo += v->lfo_dp; if (v->lfo >= 1.0f) v->lfo -= 1.0f;
@@ -344,6 +387,99 @@ void voice_render(Voice *v, float *L, float *R, int n)
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             out[i] *= op_lp(&v->lp, fold(sine_c(v->ph[0]) * g + off));
+        }
+        break;
+    }
+    case E_TRI: {
+        float pk = v->p[1], g = v->p[0];
+        op_set(&v->lp, (v->ff * v->p[2] + 300.0f) * swf);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            float p = v->ph[0], x = p < pk ? p / pk : (1.0f - p) / (1.0f - pk);   /* 0..1..0, its peak at pk */
+            x = 2.0f * x - 1.0f;
+            if (g > 1.05f) x = fold(x * g) * 0.9f;
+            out[i] *= op_lp(&v->lp, x);
+        }
+        break;
+    }
+    case E_SINE: {
+        float h2 = v->p[0], h3 = v->p[1], ch = v->p[2] * 0.5f, d1 = dt * (1.0f + 0.004f * v->p[2]);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            float p = v->ph[0];
+            out[i] *= (sine_c(p) + h2 * sine_c(2.0f * p) + h3 * sine_c(3.0f * p) + ch * sine_c(v->ph[1])) * (1.0f / (1.0f + 0.5f * ch));
+        }
+        break;
+    }
+    case E_SQUARE: {
+        svf_set(&v->f, (v->ff * v->p[1] + 200.0f) * swf * (1.0f - v->p[3] + v->p[3] * env), v->p[2]);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            float p2 = v->ph[0] + 0.5f; if (p2 >= 1.0f) p2 -= 1.0f;
+            out[i] *= svf_lp(&v->f, 0.5f * (saw_bl(v->ph[0], dt) - saw_bl(p2, dt)));
+        }
+        break;
+    }
+    case E_CZ: {
+        float d = 0.5f - 0.48f * clamp01(v->p[0] * (1.0f - v->p[3] + v->p[3] * env)) * swf;   /* 0.5: a sine; small: a saw */
+        float rr = 1.0f + (v->p[2] - 1.0f) * (1.0f - v->p[3] + v->p[3] * env);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            float p = v->ph[0], y;
+            if (v->p[1] > 0.5f) y = (1.0f - p) * sine_c(p * rr + 0.25f);          /* the resonant: a cosine at rr, windowed */
+            else { float q = p < d ? p * 0.5f / d : 0.5f + (p - d) * 0.5f / (1.0f - d); y = -sine_c(q + 0.25f); }   /* the bent saw */
+            out[i] *= y;
+        }
+        break;
+    }
+    case E_SYNC: {
+        float r = 1.0f + (v->p[0] - 1.0f) * v->z1;
+        v->z1 *= v->p[1];
+        svf_set(&v->f, (v->ff * v->p[2] + 400.0f) * swf, 0.7f + 3.0f * v->reso);
+        float ds = dt * r;
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt;
+            if (v->ph[0] >= 1.0f) { v->ph[0] -= 1.0f; v->ph[1] = v->ph[0] * r; }   /* the master wraps: the slave starts again */
+            else { v->ph[1] += ds; if (v->ph[1] >= 1.0f) v->ph[1] -= fm_floorf(v->ph[1]); }
+            out[i] *= svf_lp(&v->f, 2.0f * v->ph[1] - 1.0f);
+        }
+        break;
+    }
+    case E_SHAPES: {
+        float sel = clampf(v->p[0] + v->p[1] * 1.5f * lfo, 0.0f, 4.999f), dr = v->p[3];
+        int a = (int)sel; float t = sel - (float)a;
+        op_set(&v->lp, (v->ff * v->p[2] + 300.0f) * swf);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            float p = v->ph[0], sn = sine_c(p), w[2];
+            for (int k = 0; k < 2; k++) {
+                switch (a + k) {
+                case 0: w[k] = 2.0f * fm_fabsf(sn) - 1.27f; break;                      /* rectified: an octave up, hollow */
+                case 1: w[k] = (sn > 0 ? 2.0f * sn : 0.0f) - 0.64f; break;               /* half-rectified */
+                case 2: w[k] = clampf(sn * 2.5f, -1.0f, 1.0f); break;                    /* trapezoid */
+                case 3: w[k] = sine_c(0.25f * sine_c(p) * 2.2f); break;                  /* sine of a sine */
+                case 4: { float x = 2.0f * p - 1.0f; w[k] = 1.0f - 2.0f * x * x; break; }   /* parabola */
+                default: { float q = p * p * (3.0f - 2.0f * p); w[k] = sine_c(q * 1.5f); break; }   /* bent */
+                }
+            }
+            float x = w[0] + (w[1] - w[0]) * t;
+            out[i] *= op_lp(&v->lp, soft_clip(x * dr) * (1.0f + 0.5f * (dr - 1.0f)) / dr * 1.4f);
+        }
+        break;
+    }
+    case E_BOARDS: {
+        v->z1 = 1.0f - (1.0f - v->z1) * v->p[3];                 /* the filter's slow opening, 0 to 1 */
+        float vib = 1.0f + 0.0025f * lfo;
+        float fc = (v->ff * v->p[1] * (0.25f + 0.75f * v->z1) + 150.0f) * swf;
+        svf_set(&v->f, fc, v->p[2]);
+        float d0 = dt * vib, d1 = dt * vib * (1.0f + v->p[0]);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            float p2 = v->ph[1] + 0.5f; if (p2 >= 1.0f) p2 -= 1.0f;
+            float sq = 0.5f * (saw_bl(v->ph[1], d1) - saw_bl(p2, d1));
+            out[i] *= svf_lp(&v->f, 0.5f * saw_bl(v->ph[0], d0) + sq);   /* the saw 6 dB under the square */
         }
         break;
     }

@@ -241,3 +241,26 @@ void shifter_run(Shifter *s, const float *in, float *up, float *down, int n)
         s->pos = (s->pos + 1) & (SHIM_LINE - 1);
     }
 }
+
+/* ------------------------------------------------------------------ chorus */
+void chorus_run(Chorus *c, float amt, float *L, float *R, int n)
+{
+    if (amt < 0.005f) { for (int i = 0; i < n; i++) { c->buf[c->pos] = to16(0.5f * (L[i] + R[i])); c->pos = (c->pos + 1) & (CH_LINE - 1); } return; }
+    float rate = (0.35f + 0.5f * amt) / SR, depth = 60.0f + 90.0f * amt;   /* (around 7 ms, swinging 1.5 to 3.5 ms) */
+    for (int i = 0; i < n; i++) {
+        c->buf[c->pos] = to16(0.5f * (L[i] + R[i]));
+        c->ph += rate; if (c->ph >= 1.0f) c->ph -= 1.0f;
+        float tri = c->ph < 0.5f ? 4.0f * c->ph - 1.0f : 3.0f - 4.0f * c->ph;
+        float o[2];
+        for (int k = 0; k < 2; k++) {
+            float d = 310.0f + depth * (k ? -tri : tri), p = (float)c->pos - d;
+            while (p < 0) p += (float)CH_LINE;
+            int a = (int)p; float f = p - (float)a; int b = (a + 1) & (CH_LINE - 1);
+            o[k] = ((float)c->buf[a] + ((float)c->buf[b] - (float)c->buf[a]) * f) * (1.0f / 16384.0f);
+        }
+        c->pos = (c->pos + 1) & (CH_LINE - 1);
+        float w = 0.45f * amt + 0.25f;
+        L[i] = L[i] * (1.0f - 0.35f * amt) + o[0] * w;
+        R[i] = R[i] * (1.0f - 0.35f * amt) + o[1] * w;
+    }
+}

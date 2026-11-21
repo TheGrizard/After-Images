@@ -22,10 +22,10 @@ typedef struct {
 typedef struct {
     uint32_t seed;
     uint8_t mood, motion, evolve, weird;          /* HOME */
-    uint8_t reverb, echo, grain, shimmer;         /* FX */
+    uint8_t reverb, echo, grain, chorus;          /* EFFECTS; chorus: WARBLE's (in v0.1 this byte was SHIMMER) */
     uint8_t link, warp, drift, chaos;             /* MOTION (the LFO button) */
     uint8_t key, scale, chord, tempo;             /* SCALE (the GLO button): tempo is BPM - 40 */
-    uint8_t dirt, rsv[3];                         /* EFFECTS' DIRT (in v0.1, the tape's: zeroed at the upgrade) */
+    uint8_t dirt, warble, flutter, detune;        /* EFFECTS' DIRT; WARBLE's (LFO again): in v0.1 the tape's, zeroed at the upgrade */
     LayerP l[NUM_LAYERS];
     /* v0.2: each layer's VOICE page (ENV again) */
     uint8_t glide[NUM_LAYERS];                    /* 0..100: how long a note slides to its pitch */
@@ -46,7 +46,7 @@ extern const float RATES[NUM_RATES];
 /* REC: a new piece from a seed (the scale, the key and the tempo kept, unless `all`); one layer anew (SEL + REC) */
 void piece_roll(Piece *p, uint32_t seed, int all, int fx);   /* fx: the effect it features (FX_*), -1 its seed's choice */
 /* the effect each new piece features (REC deals them from a shuffled deck, none twice in a row) */
-enum { FX_SHIMMER, FX_REVERSE, FX_CLOUD, FX_FREEZE, FX_FOLD, FX_CRUSH, FX_SPACE, NUM_FX };
+enum { FX_SHIMMER, FX_REVERSE, FX_CLOUD, FX_FREEZE, FX_FOLD, FX_CRUSH, FX_SPACE, FX_HAZE, NUM_FX };
 extern const char *const FX_NAME[NUM_FX];
 void piece_roll_layer(Piece *p, int layer, uint32_t seed);
 void piece_default(Piece *p);
@@ -106,7 +106,8 @@ struct Engine {
     int playing;
     float gr_ratio[6];
     /* effects */
-    Reverb rv; Echo echo; Grains gr; Shifter shim; float shim_prev[BLK];
+    Reverb rv; Echo echo; Grains gr; Shifter shim; float shim_prev[BLK]; Chorus ch;
+    float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */

@@ -20,6 +20,13 @@ enum {
     E_SUB,      /* SUB: a sine with its octave, driven */
     E_STRINGS,  /* STRINGS: a string machine, three saws each wandering in pitch (the ensemble), soft and dark */
     E_EPIANO,   /* E.PIANO: an 80s FM electric piano, the tine's knock fading into a warm tone, wobbling a little */
+    E_TRI,      /* TRIANGLE: soft; WEIGHT folds it, DRIFT leans it towards a saw */
+    E_SINE,     /* SINE: pure; WEIGHT warms it (its 2nd and 3rd), DRIFT a slow chorus beside it */
+    E_SQUARE,   /* SQUARE: plain and warm, through its filter */
+    E_CZ,       /* CZ: 80s digital phase distortion, sine to saw or to its resonant sweep as the note goes */
+    E_SYNC,     /* SYNC: a hard-synced saw, its slave sweeping down across the note */
+    E_SHAPES,   /* SHAPES: unusual waves (rectified, half, trapezoid, sine of sine, parabola, bent), DRIFT moves through them */
+    E_BOARDS,   /* BOARDS: a saw and a square a little apart, a dark filter opening slowly on each note (a wah), a slow vibrato */
     NUM_ENGINES
 };
 extern const char *const ENGINE_NAME[NUM_ENGINES];
@@ -51,6 +58,7 @@ typedef struct {
     uint32_t noise;
     float age;
     float pan_amt, pan_ph, pan_dp;       /* the note's wandering in the stereo field */
+    float pm;                            /* the pitch's wandering now (WARBLE): a multiplier, set each block */
     float freq_t, ff, glide_k;           /* the pitch; ff the filter's own pitch, gliding after it (a block's share) */
     float sweep, sw, sw_k, reso;         /* the filter's sweep: how far, where it is (0 closed .. 1 open), its pace */
 } Voice;

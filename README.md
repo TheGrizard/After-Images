@@ -25,8 +25,11 @@ register that flips bits), MARKOV (a table of chances), LORENZ (the attractor: a
 PHASE (one phrase on two players drifting apart, Steve Reich's way), DRUNK (a Brownian walk) and MELODY (a long
 melody the early-90s Warp way: a motif, its answer, a turn, the motif coming home; looped, changing slowly; LIGHT sings
 one in half the pieces). And one of ten
-**engines** (twelve): DRIFT SAW, FM, DX (four-operator FM, four algorithms, each modulator fading at its own pace),
-STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an 80s string machine) and E.PIANO (an 80s FM electric piano). Every piece has at least one
+**engines** (nineteen): DRIFT SAW, FM, DX (four-operator FM, four algorithms, each modulator fading at its own pace),
+STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an 80s string machine), E.PIANO (an 80s FM electric piano),
+TRIANGLE, SINE, SQUARE, CZ (80s phase distortion), SYNC (a hard-synced saw), SHAPES (unusual waves: rectified, trapezoid,
+sine of a sine, parabola, bent; DRIFT moves through them) and BOARDS (a saw and a square a little apart through a dark
+filter that opens slowly on each note). Every piece has at least one
 heavy layer and one soft one. A piece is a seed: the same piece always starts the same way.
 
 It is patched like a modular. Every sequencer has a second output, a CV, that shapes each note's sound: the
@@ -51,6 +54,7 @@ stays clear.
 | FX | SENDS for the chosen layer: how much of it goes to the REVERB, the ECHO, the GRAIN, and how much DIRT it gets (so GROUND can go only to the reverb while LIGHT is folded and echoed) |
 | FX again | EFFECTS, shared by the layers: REVERB (to 12 o'clock the room, small to vast; past it the shimmer, an octave up, and by full an octave down too), ECHO (to 12 o'clock a tempo-locked echo with a tape wobble; past it a reversed, smeared wash), GRAIN (a cloud; right up, FREEZE), DIRT (the character: FOLD, CRUSH, then NOISE) |
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
+| LFO again | WARBLE, Boards of Canada's worn tape in the synth itself: WARBLE (the pitch wandering slowly, the whole piece as one, an LFO on an LFO), FLUTTER (a faster shiver), DETUNE (everything a touch flat), CHORUS (the Juno's) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
 | GLO again | SCREEN: PALETTE (nine), FRACTAL (JULIA, FERN, DRAGON, POLYGON, ATTRACTOR, TREE), FULL (the whole screen at HOME, every pixel a fractal zooming endlessly into itself, steered along the set's edge: JULIA SEA, MANDELBROT, SHIP, TRICORN, CUBIC, SPIRAL), GLOW. REC deals a new palette and a new fractal each time, none twice until all have come |
 | ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK out |
@@ -58,7 +62,7 @@ stays clear.
 | ARP a third time | USB AUDIO: RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1), STEMS (the four layers on USB audio channels 3-10, beside the mix on 1-2) |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |
 | PRESET | the chosen layer's engine |
-| REC | a new piece at a new tempo (65 to 110 BPM; your key and scale kept), featuring one effect: shimmer, reverse echo, a grain cloud, frozen grains, folded, crushed or wide space, dealt so none comes twice in a row |
+| REC | a new piece at a new tempo (65 to 110 BPM; your key and scale kept), featuring one effect: shimmer, reverse echo, a grain cloud, frozen grains, folded, crushed, wide space or HAZE (warble, chorus, flat, dark, BOARDS), dealt so none comes twice in a row |
 | REC held | a new world: a new key and scale too |
 | SEL held + REC | the chosen layer anew: a new sequencer and sound |
 | OCT- / OCT+ | back and forward through the pieces REC replaced |

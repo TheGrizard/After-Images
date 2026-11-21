@@ -3,10 +3,10 @@
 #include "engine.h"
 
 /* the engines that suit each role's band */
-static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB };
-static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW };
-static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM };
-static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS };
+static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB, E_TRI, E_SINE, E_SQUARE, E_CZ, E_SYNC, E_BOARDS };
+static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW, E_TRI, E_SQUARE, E_CZ, E_SHAPES, E_BOARDS, E_BOARDS };
+static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM, E_TRI, E_SINE, E_CZ, E_SYNC, E_SHAPES, E_BOARDS };
+static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS, E_SINE, E_SHAPES };
 static const uint8_t *const POOL[NUM_LAYERS] = { POOL_G, POOL_B, POOL_L, POOL_D };
 static const uint8_t POOL_N[NUM_LAYERS] = { sizeof POOL_G, sizeof POOL_B, sizeof POOL_L, sizeof POOL_D };
 /* each role's rates (RATES' indexes) and envelopes (attack, release ranges, 0..100) */
@@ -63,7 +63,7 @@ static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and th
     p->reso[l] = rng_chance(r, 0.25f) ? pick(r, 15, 60) : 0;
 }
 
-const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "FOLDED", "CRUSHED", "WIDE SPACE" };
+const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "FOLDED", "CRUSHED", "WIDE SPACE", "HAZE" };
 
 void piece_roll(Piece *p, uint32_t seed, int all, int fx)
 {
@@ -75,10 +75,12 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     for (int i = NUM_SEQS - 1; i > 0; i--) { int j = rng_int(&r, i + 1); uint8_t t = s[i]; s[i] = s[j]; s[j] = t; }
     /* contrast: one layer heavy, one soft, always */
     int heavy = rng_chance(&r, 0.5f) ? L_GROUND : rng_int(&r, NUM_LAYERS), soft = (heavy + 1 + rng_int(&r, NUM_LAYERS - 1)) % NUM_LAYERS;
-    /* the long melodies: LIGHT sings one in half the pieces (the early-90s Warp way), gliding now and then */
+    /* the long melodies: LIGHT sings one in half the pieces (the early-90s Warp way); now and then GROUND does instead,
+     * a melody down in the bass */
     if (rng_chance(&r, 0.5f)) {
         int at = 0; while (at < NUM_SEQS && s[at] != S_MELODY) at++;
-        if (at < NUM_SEQS) { uint8_t t = s[L_LIGHT]; s[L_LIGHT] = s[at]; s[at] = t; }
+        int to = rng_chance(&r, 0.2f) ? L_GROUND : L_LIGHT;
+        if (at < NUM_SEQS) { uint8_t t = s[to]; s[to] = s[at]; s[at] = t; }
     }
     for (int l = 0; l < NUM_LAYERS; l++) {
         int w = l == heavy ? pick(&r, 65, 95) : l == soft ? pick(&r, 0, 25) : pick(&r, 20, 65);
@@ -86,10 +88,13 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
         roll_voice(p, l, &r);
         roll_sends(p, l, &r);
         p->l[l].seq = s[l];
+        if (l == L_LIGHT && rng_chance(&r, 0.3f)) p->l[l].octave = -1;   /* (a lower melody, now and then) */
     }
     /* the effects: each modest, then one featured (REVERB and ECHO past 50 are the shimmer and the reverse smear) */
     p->reverb = pick(&r, 25, 48); p->echo = pick(&r, 8, 40); p->grain = rng_chance(&r, 0.4f) ? pick(&r, 10, 35) : 0;
-    p->shimmer = 0;
+    /* WARBLE: a little of the worn-tape wander in most pieces, a lot in HAZE's */
+    p->warble = rng_chance(&r, 0.6f) ? pick(&r, 5, 35) : 0; p->flutter = rng_chance(&r, 0.3f) ? pick(&r, 5, 25) : 0;
+    p->detune = rng_chance(&r, 0.35f) ? pick(&r, 10, 45) : 0; p->chorus = rng_chance(&r, 0.45f) ? pick(&r, 15, 55) : 0;
     p->dirt = 0;
     if (fx < 0 || fx >= NUM_FX) fx = rng_int(&r, NUM_FX);
     switch (fx) {
@@ -99,6 +104,13 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     case FX_FREEZE:  p->grain = pick(&r, 93, 100); break;
     case FX_FOLD:    p->dirt = pick(&r, 5, 32); break;
     case FX_CRUSH:   p->dirt = pick(&r, 40, 64); break;
+    case FX_HAZE:    /* Boards of Canada's: the pitch wandering, the chorus, a touch flat, dark, echoed */
+        p->warble = pick(&r, 45, 85); p->flutter = pick(&r, 10, 35); p->detune = pick(&r, 30, 65); p->chorus = pick(&r, 50, 90);
+        p->echo = pick(&r, 25, 45);
+        for (int l = 0; l < NUM_LAYERS; l++) p->l[l].tone = (uint8_t)clampi_(p->l[l].tone - 8, 0, 100);
+        if (rng_chance(&r, 0.6f)) p->l[L_BODY].engine = E_BOARDS;
+        if (rng_chance(&r, 0.5f)) p->l[L_LIGHT].engine = E_BOARDS;
+        break;
     default:         p->reverb = pick(&r, 46, 50); p->echo = pick(&r, 35, 50); break;   /* WIDE SPACE: all reverb, all echo */
     }
     if (fx == FX_FOLD || fx == FX_CRUSH) {           /* the dirt on one or two layers, never the whole */
@@ -107,7 +119,6 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     }
     if (fx == FX_SHIMMER) p->s_rv[L_LIGHT] = (uint8_t)clampi_(p->s_rv[L_LIGHT] + 25, 0, 100);
     if (fx == FX_REVERSE) p->s_echo[L_LIGHT] = (uint8_t)clampi_(p->s_echo[L_LIGHT] + 30, 0, 100);
-    p->rsv[0] = p->rsv[1] = p->rsv[2] = 0;
     p->link = pick(&r, 15, 60); p->warp = pick(&r, 0, 40); p->drift = pick(&r, 20, 60); p->chaos = pick(&r, 0, 30);
     p->tempo = pick(&r, 25, 70);                     /* every new piece its own tempo: 65 to 110 BPM */
     if (all) {
@@ -138,11 +149,13 @@ void piece_default(Piece *p)
     p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 15;
     piece_roll(p, 0xAF7E1u, 0, FX_SPACE);
     p->tempo = 44;                                   /* (the first piece: 84 BPM) */
+    p->l[L_LIGHT].octave = 0;
 }
 
 int piece_ok(const Piece *p)
 {
     if (p->scale >= NUM_SCALES || p->key >= 12 || p->chord >= NUM_CHORDS || p->tempo > 140 || p->dirt > 100) return 0;
+    if (p->warble > 100 || p->flutter > 100 || p->detune > 100 || p->chorus > 100) return 0;
     const uint8_t *v = &p->mood;
     for (int i = 0; i < 12; i++) if (v[i] > 100) return 0;
     for (int l = 0; l < NUM_LAYERS; l++) {

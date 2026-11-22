@@ -46,7 +46,7 @@ stays clear.
 | Control | What it does |
 |---|---|
 | K1 to K4 | at HOME, the four layers' levels: they rise up from the bottom of the screen while you turn; on the other pages, the page's four macros (the one you turn shows big) |
-| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), DRIFT (an ambient mixer, the way Steve Roach's Immersion Station evolves: the layers' levels wander in and out, sometimes leaving one alone, each walking slowly round the stereo field, the far ones thinning and turning to reverb as if in the distance; at 0 the mix stays as set) |
+| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), DRIFT (an ambient mixer, the way Steve Roach's Immersion Station evolves: the layers' levels wander in and out, sometimes leaving one alone, each walking slowly round the stereo field, the far ones thinning and turning to reverb as if in the distance; and each layer's character morphing over half-minutes, its reverb, echo, grain and dirt sends, TONE, WEIGHT and ENTROPY each wandering at its own pace, so the piece never settles; at 0 everything stays as set) |
 | EDIT | SOUND for the chosen layer: ENGINE, TONE (a DJ's filter: 12 o'clock open, left a low-pass sweeping down, right a high-pass sweeping up), WEIGHT (soft to heavy), ENTROPY (to halfway the engine's own strangeness; past it the sound destroys itself: folded, crushed, noise, holes torn in it) |
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |

@@ -65,14 +65,17 @@ static void patch(Engine *e, uint32_t seed)
     for (int l = 0; l < NUM_LAYERS; l++) e->L[l].src = (l + 1 + rng_int(&r, NUM_LAYERS - 1)) % NUM_LAYERS;
 }
 
+/* a knob as DRIFT has moved it: its own value, plus how far its walk has taken it (at DRIFT 0, none) */
+static float mo(const Engine *e, int l, int k, uint8_t v, float reach) { return clamp01(u(v) + reach * e->L[l].mw[k]); }
+
 static void layer_sound(const Engine *e, int l, Sound *s)
 {
     const Piece *p = e->p; const LayerP *lp = &p->l[l];
     s->engine = lp->engine < NUM_ENGINES ? lp->engine : 0;
-    s->tone = clamp01(0.42f + (u(lp->tone) - 0.5f) * 0.5f + e->L[l].tone_off + (u(p->mood) - 0.6f) * 0.35f
+    s->tone = clamp01(0.42f + (mo(e, l, MW_TONE, lp->tone, 0.25f) - 0.5f) * 0.5f + e->L[l].tone_off + (u(p->mood) - 0.6f) * 0.35f
                       + u(p->drift) * 0.25f * e->L[l].dtone.v);
-    s->weight = u(lp->weight);
-    s->weird = u(lp->weird);
+    s->weight = mo(e, l, MW_WEIGHT, lp->weight, 0.4f);
+    s->weird = mo(e, l, MW_ENT, lp->weird, 0.4f);
     s->attack = attack_s(lp->attack); s->release = release_s(lp->release);
     s->glide = p->glide[l] ? 0.02f + 0.9f * u(p->glide[l]) * u(p->glide[l]) : 0.0f;
     s->sweep = u(p->sweep[l]); s->reso = u(p->reso[l]);
@@ -101,6 +104,7 @@ void engine_init(Engine *e, const Piece *p)
         L->present = L->present_t = 1.0f;
         L->dtone.len = 25.0f + 10.0f * (float)l; L->dpan.len = 13.0f + 5.0f * (float)l;
         L->dwalk.len = 20.0f + 7.0f * (float)l; L->im = L->im_t = L->im_g = 1.0f; L->im_l = L->im_r = 1.0f;
+        for (int k = 0; k < NMORPH; k++) L->mwalk[k].len = 25.0f + 5.0f * (float)k + 3.0f * (float)l;   /* (each its own pace: 25 to 64 s) */
     }
     reverb_init(&e->rv, 1.3f);
     echo_init(&e->echo);
@@ -347,6 +351,7 @@ static void immerse(Engine *e)
         if (L->im <= 0) L->im = 1.0f;
         L->im += (L->im_t - L->im) * clamp01(dt / (6.0f + 6.0f * (float)l * 0.5f));   /* slow: seconds, never steps */
         L->im_pan = drift_step(&L->dwalk, &e->rng, dt);
+        for (int k = 0; k < NMORPH; k++) L->mw[k] = d * drift_step(&L->mwalk[k], &e->rng, dt);   /* the sends, TONE, WEIGHT, ENTROPY morphing */
         float far = 1.0f - L->im;                                /* how far off it has gone */
         L->im_g = 1.0f - d * far;                                /* its level (at DRIFT 0: as set) */
         L->im_far = d * far;
@@ -410,7 +415,7 @@ void engine_block_begin(Engine *e, int nsub)
      * low-pass sweeping down to a thud, to the right a high-pass sweeping up to air, a little resonance towards the ends */
     for (int l = 0; l < NUM_LAYERS; l++) {
         Layer *L = &e->L[l];
-        float t = u(p->l[l].tone), lo = t < 0.5f ? (0.5f - t) * 2.0f : 0.0f, hi = t > 0.5f ? (t - 0.5f) * 2.0f : 0.0f;
+        float t = mo(e, l, MW_TONE, p->l[l].tone, 0.25f), lo = t < 0.5f ? (0.5f - t) * 2.0f : 0.0f, hi = t > 0.5f ? (t - 0.5f) * 2.0f : 0.0f;
         float lp = ROLES[l].lp * (0.85f + 0.3f * (u(p->mood) - 0.5f)) * fm_exp2f(-7.0f * lo);
         float hp = ROLES[l].hp * fm_exp2f(6.5f * hi + 3.5f * L->im_far);   /* (DRIFT: far off, its lows thin) */
         /* patched: the source layer's activity opens this one's filter, the random voltage moves it (LINK, DRIFT) */
@@ -428,6 +433,8 @@ void engine_block_begin(Engine *e, int nsub)
         const LayerP *lp = &p->l[l];
         uint32_t k = (uint32_t)lp->tone | (uint32_t)lp->weight << 7 | (uint32_t)lp->weird << 14 | (uint32_t)lp->release << 21;
         k = k * 2654435761u ^ ((uint32_t)p->sweep[l] | (uint32_t)p->reso[l] << 7 | (uint32_t)p->glide[l] << 14 | (uint32_t)p->mood << 21);
+        k = k * 2654435761u ^ (uint32_t)((int)(e->L[l].mw[MW_TONE] * 16.0f) & 63) ^ (uint32_t)((int)(e->L[l].mw[MW_WEIGHT] * 16.0f) & 63) << 6
+            ^ (uint32_t)((int)(e->L[l].mw[MW_ENT] * 16.0f) & 63) << 12;   /* (DRIFT's morphing: the notes follow it, a step at a time) */
         if (k == e->L[l].knobs) continue;
         e->L[l].knobs = k;
         Sound snd; layer_sound(e, l, &snd);
@@ -471,8 +478,8 @@ void engine_block_layer(Engine *e, int b)
                 Lb[i] = svf_lp(&e->klp[0], svf_hp(&e->khp[0], Lb[i]));
                 Rb[i] = svf_lp(&e->klp[1], svf_hp(&e->khp[1], Rb[i]));
             }
-            dirt_run(&e->kdirt, u(e->p->dirt), u(e->p->s_dirt[kl]), Lb, Rb, BLK);
-            float ken = clamp01((u(e->p->l[kl].weird) - 0.4f) / 0.6f);
+            dirt_run(&e->kdirt, u(e->p->dirt), mo(e, kl, MW_DIRT, e->p->s_dirt[kl], 0.45f), Lb, Rb, BLK);
+            float ken = clamp01((mo(e, kl, MW_ENT, e->p->l[kl].weird, 0.4f) - 0.4f) / 0.6f);
             if (ken > 0.001f) dirt_run(&e->kent, ken, fm_minf(1.0f, ken * 1.6f), Lb, Rb, BLK);
             continue;
         }
@@ -491,10 +498,10 @@ void engine_block_layer(Engine *e, int b)
             Lb[i] = svf_lp(&L->lp[0], svf_hp(&L->hp[0], Lb[i]));
             Rb[i] = svf_lp(&L->lp[1], svf_hp(&L->hp[1], Rb[i]));
         }
-        dirt_run(&L->dirt, u(e->p->dirt), u(e->p->s_dirt[b]), Lb, Rb, BLK);   /* its own DIRT, its send's amount */
+        dirt_run(&L->dirt, u(e->p->dirt), mo(e, b, MW_DIRT, e->p->s_dirt[b], 0.45f), Lb, Rb, BLK);   /* its own DIRT, its send's amount (DRIFT morphing it) */
         /* ENTROPY past 40: the sound starts to destroy itself. Folding first, then crushed, then noise; past 60 holes torn
          * in it, longer and more often towards the end, until it is more broken than whole */
-        float en = clamp01((u(e->p->l[b].weird) - 0.4f) / 0.6f);
+        float en = clamp01((mo(e, b, MW_ENT, e->p->l[b].weird, 0.4f) - 0.4f) / 0.6f);
         if (en > 0.001f) {
             dirt_run(&L->ent, en, fm_minf(1.0f, en * 1.6f), Lb, Rb, BLK);
             float tear = clamp01((en - 0.33f) * 1.5f);
@@ -548,9 +555,10 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
             /* the sends: each layer's own (SENDS), the keys' the chosen layer's */
             int sl = b < NUM_LAYERS ? b : e->key_layer;
             float far = b < NUM_LAYERS ? e->L[b].im_far : 0.0f, pl = b < NUM_LAYERS ? e->L[b].im_l : 1.0f, pr = b < NUM_LAYERS ? e->L[b].im_r : 1.0f;
-            float rs = u(p->s_rv[sl]) * 0.8f * (0.3f + 1.2f * rvk) * g * (1.0f + 1.5f * far);   /* (far off: more reverb than itself) */
-            float es = u(p->s_echo[sl]) * eck * 1.4f * g;
-            float gs = u(p->s_grain[sl]) * 0.9f * g;
+            /* (DRIFT morphing each send: a dry layer may wander into the reverb, a wet one out of it) */
+            float rs = mo(e, sl, MW_RV, p->s_rv[sl], 0.5f) * 0.8f * (0.3f + 1.2f * rvk) * g * (1.0f + 1.5f * far);   /* (far off: more reverb than itself) */
+            float es = mo(e, sl, MW_ECHO, p->s_echo[sl], 0.5f) * eck * 1.4f * g;
+            float gs = mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f) * 0.9f * g;
             float ss = 0;
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];

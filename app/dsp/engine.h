@@ -67,6 +67,9 @@ typedef struct { uint8_t layer, note, vel; int8_t pan; uint8_t dur; } UiNote;   
 
 typedef struct { uint8_t sub, voice, rel; int8_t note; float vel, dur, pan, from_hz; Sound snd; uint32_t seed; } VoiceEv;   /* rel: 0 start, 1 release, 2 legato */
 
+/* DRIFT's morphing: what of each layer wanders, slowly, as far as DRIFT lets it */
+enum { MW_RV, MW_ECHO, MW_GRAIN, MW_DIRT, MW_TONE, MW_WEIGHT, MW_ENT, NMORPH };
+
 typedef struct {
     Seq seq;
     Voice v[MAX_POLY];
@@ -85,6 +88,7 @@ typedef struct {
     float lp_hz, hp_hz;                  /* its band's filters now (TONE, gliding there) */
     float im, im_t, im_g, im_far, im_pan, im_l, im_r;   /* DRIFT's: its wandering level, where it's going, its gain, how far off, its walk's pan and gains */
     Drift dwalk;
+    Drift mwalk[NMORPH]; float mw[NMORPH];   /* DRIFT's morphing: each of its sends, TONE, WEIGHT, ENTROPY wandering (mw: -1..1, DRIFT's share) */
     Dirt ent; float gate, gate_left, gate_hole;   /* ENTROPY's own breaking: its dirt, and the holes torn in it */
     Dirt dirt;                           /* its own DIRT (the character EFFECTS', the amount its send's) */
     uint32_t knobs;                      /* its sound's knobs, last block (changed: the sounding notes follow) */

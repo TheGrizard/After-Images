@@ -47,6 +47,10 @@ static void midi_due(Engine *e)
         }
 }
 
+/* each bus's ghost: a note whose voice a new one took, fading out over ~80 ms, not cut off (in the RAM beside the
+ * engine's, not the pool's: the pool keeps its headroom) */
+static Voice g_ghost[NBUS];
+
 void engine_all_off(Engine *e)
 {
     for (int i = 0; i < e->nmo; i++) if (e->midi) e->midi(0x08u | (0x80u | e->mo[i].ch) << 8 | (uint32_t)e->mo[i].note << 16);
@@ -88,6 +92,7 @@ static void layer_seq_check(Engine *e, int l)
 void engine_init(Engine *e, const Piece *p)
 {
     memset(e, 0, sizeof *e);
+    memset(g_ghost, 0, sizeof g_ghost);
     e->p = p;
     e->gov = 1.0f; e->playing = 1; e->fade = 0.0f;
     for (int l = 0; l < NUM_LAYERS; l++) {
@@ -448,9 +453,9 @@ void engine_block_layer(Engine *e, int b)
         float *Lb = e->bus[k][b][0], *Rb = e->bus[k][b][1];
         memset(Lb, 0, sizeof(float) * BLK); memset(Rb, 0, sizeof(float) * BLK);
         if (b == KEYS) {
-            apply(e->kq, e->nkq, e->kv, &e->kghost, k);
+            apply(e->kq, e->nkq, e->kv, &g_ghost[KEYS], k);
             int any = 0;
-            if (e->kghost.on) { e->kghost.pm = e->pm[KEYS]; voice_render(&e->kghost, Lb, Rb, BLK); any = 1; }
+            if (g_ghost[KEYS].on) { g_ghost[KEYS].pm = e->pm[KEYS]; voice_render(&g_ghost[KEYS], Lb, Rb, BLK); any = 1; }
             for (int i = 0; i < KEY_POLY; i++) if (e->kv[i].on) { e->kv[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; e->kv[i].pm = e->pm[KEYS]; voice_render(&e->kv[i], Lb, Rb, BLK); any = 1; }
             if (!any) continue;
             int kl = e->key_layer;               /* through the chosen layer's chain, as its own notes go */
@@ -464,14 +469,14 @@ void engine_block_layer(Engine *e, int b)
             continue;
         }
         Layer *L = &e->L[b];
-        apply(L->q, L->nq, L->v, &L->ghost, k);
+        apply(L->q, L->nq, L->v, &g_ghost[b], k);
         if (e->gains[k][b] < 1e-4f) {            /* faded right out (DRIFT, LEVEL): its voices go on unheard, no sound made */
             for (int i = 0; i < L->nv; i++) voice_skip(&L->v[i], BLK);
-            L->ghost.on = 0;
+            g_ghost[b].on = 0;
             continue;
         }
         int any = 0;
-        if (L->ghost.on) { L->ghost.pm = e->pm[b]; voice_render(&L->ghost, Lb, Rb, BLK); any = 1; }
+        if (g_ghost[b].on) { g_ghost[b].pm = e->pm[b]; voice_render(&g_ghost[b], Lb, Rb, BLK); any = 1; }
         for (int i = 0; i < L->nv; i++) if (L->v[i].on) { L->v[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; L->v[i].pm = e->pm[b]; voice_render(&L->v[i], Lb, Rb, BLK); any = 1; }
         if (!any) continue;
         for (int i = 0; i < BLK; i++) {

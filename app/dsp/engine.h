@@ -87,7 +87,6 @@ typedef struct {
     Dirt ent; float gate, gate_left, gate_hole;   /* ENTROPY's own breaking: its dirt, and the holes torn in it */
     Dirt dirt;                           /* its own DIRT (the character EFFECTS', the amount its send's) */
     uint32_t knobs;                      /* its sound's knobs, last block (changed: the sounding notes follow) */
-    Voice ghost;                         /* a note whose voice a new one took: fading out over ~80 ms, not cut off */
 } Layer;
 
 typedef struct Engine Engine;
@@ -96,7 +95,6 @@ struct Engine {
     Layer L[NUM_LAYERS];
     Voice kv[KEY_POLY]; VoiceEv kq[EVQ]; int nkq; int key_next;
     int8_t kv_lay[KEY_POLY];             /* each key voice's layer (whose knobs it follows) */
-    Voice kghost;                        /* (the keys' ghost, as a layer's) */
     Svf khp[2], klp[2]; Dirt kdirt, kent; /* the keys through their layer's chain: its TONE, its DIRT, its ENTROPY */
     int key_layer;                       /* the layer whose sound the keys play (SELECT) */
     volatile uint32_t key_in[16]; volatile uint32_t key_w, key_r;   /* keys and MIDI notes in: (on, note, vel) */

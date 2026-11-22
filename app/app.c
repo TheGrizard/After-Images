@@ -918,7 +918,8 @@ static inline void px_blend(int x, int y, uint16_t c, float k)
 static void disc(float cx, float cy, float r, uint16_t c)
 {
     if (r < 0.5f) r = 0.5f;
-    float ro = r + 0.5f, ri = r - 0.5f;
+    const float W = 0.75f;                       /* (half the soft edge's width: 1.5 pixels across) */
+    float ro = r + W, ri = r - W;
     int y0 = (int)fm_floorf(cy - ro), y1 = (int)fm_floorf(cy + ro);
     for (int py = y0; py <= y1; py++) {
         if (py + cv_oy < cv_y0 || py + cv_oy >= cv_y1) continue;
@@ -931,9 +932,10 @@ static void disc(float cx, float cy, float r, uint16_t c)
         if (xi1 >= xi0) cv_rect(xi0, py, xi1 - xi0 + 1, 1, c);
         for (int x = xo0; x <= xo1; x++) {
             if (x >= xi0 && x <= xi1) { x = xi1; continue; }
-            float dx = (float)x + 0.5f - cx, d = fm_sqrtf(dx * dx + dy2), k = r + 0.5f - d;
+            float dx = (float)x + 0.5f - cx, d = fm_sqrtf(dx * dx + dy2), k = (r + W - d) * (1.0f / (2.0f * W));
             if (k <= 0.02f) continue;
-            if (k >= 0.98f) cv_pset(x, py, c); else px_blend(x, py, c, k);
+            if (k >= 0.98f) cv_pset(x, py, c);
+            else px_blend(x, py, c, fm_sqrtf(k));   /* (the screen's gamma: a half-covered pixel looks half as bright) */
         }
     }
 }

@@ -21,7 +21,7 @@ typedef struct {
 
 typedef struct {
     uint32_t seed;
-    uint8_t mood, motion, evolve, weird;          /* HOME */
+    uint8_t mood, motion, evolve, weird;          /* HOME (weird: DRIFT, the layers' wandering levels and pans) */
     uint8_t reverb, echo, grain, chorus;          /* EFFECTS; chorus: WARBLE's (in v0.1 this byte was SHIMMER) */
     uint8_t link, warp, drift, chaos;             /* MOTION (the LFO button) */
     uint8_t key, scale, chord, tempo;             /* SCALE (the GLO button): tempo is BPM - 40 */
@@ -82,6 +82,9 @@ typedef struct {
     int next_v;
     int8_t last_v[5]; float last_hz[5]; int last_n;   /* the last note's (or chord's) voices and pitches: glide, legato */
     float lp_hz, hp_hz;                  /* its band's filters now (TONE, gliding there) */
+    float im, im_t, im_g, im_far, im_pan, im_l, im_r;   /* DRIFT's: its wandering level, where it's going, its gain, how far off, its walk's pan and gains */
+    Drift dwalk;
+    Dirt ent; float gate, gate_left, gate_hole;   /* ENTROPY's own breaking: its dirt, and the holes torn in it */
     Dirt dirt;                           /* its own DIRT (the character EFFECTS', the amount its send's) */
 } Layer;
 
@@ -107,7 +110,8 @@ struct Engine {
     float gr_ratio[6];
     /* effects */
     Reverb rv; Echo echo; Grains gr; Shifter shim; float shim_prev[BLK]; Chorus ch;
-    float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
+    float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];
+    float im_left;                       /* DRIFT: seconds until the levels choose where to wander next */   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */

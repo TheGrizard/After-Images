@@ -68,11 +68,11 @@ static void layer_sound(const Engine *e, int l, Sound *s)
     s->tone = clamp01(0.42f + (u(lp->tone) - 0.5f) * 0.5f + e->L[l].tone_off + (u(p->mood) - 0.6f) * 0.35f
                       + u(p->drift) * 0.25f * e->L[l].dtone.v);
     s->weight = u(lp->weight);
-    s->weird = clamp01(u(lp->weird) + u(p->weird) * 0.6f);
+    s->weird = u(lp->weird);
     s->attack = attack_s(lp->attack); s->release = release_s(lp->release);
     s->glide = p->glide[l] ? 0.02f + 0.9f * u(p->glide[l]) * u(p->glide[l]) : 0.0f;
     s->sweep = u(p->sweep[l]); s->reso = u(p->reso[l]);
-    s->pan_move = clamp01(0.15f * u(p->drift) + 0.55f * u(p->weird) + 0.45f * u(p->chaos)) * ROLES[l].width;   /* DRIFT and CHAOS: more */
+    s->pan_move = clamp01(0.15f * u(p->drift) + 0.45f * u(p->chaos)) * ROLES[l].width;   /* FLOW and CHAOS: more */
 }
 
 static void layer_seq_check(Engine *e, int l)
@@ -95,11 +95,12 @@ void engine_init(Engine *e, const Piece *p)
         L->nv = ROLES[l].poly; L->type_now = 255;
         L->present = L->present_t = 1.0f;
         L->dtone.len = 25.0f + 10.0f * (float)l; L->dpan.len = 13.0f + 5.0f * (float)l;
+        L->dwalk.len = 20.0f + 7.0f * (float)l; L->im = L->im_t = L->im_g = 1.0f; L->im_l = L->im_r = 1.0f;
     }
     reverb_init(&e->rv, 1.3f);
     echo_init(&e->echo);
     grains_init(&e->gr, p->seed);
-    for (int l = 0; l < NUM_LAYERS; l++) dirt_init(&e->L[l].dirt, p->seed + (uint32_t)l);
+    for (int l = 0; l < NUM_LAYERS; l++) { dirt_init(&e->L[l].dirt, p->seed + (uint32_t)l); dirt_init(&e->L[l].ent, p->seed * 3u + (uint32_t)l); e->L[l].gate = 1.0f; }
     patch(e, p->seed);
     e->mask = 0xF; e->chord_bars = 4; e->chord_left = 4; e->sec_left = 32;
     rng_seed(&e->rng, p->seed);
@@ -168,7 +169,7 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
         while (note > 120) note -= 12;
         float pan = sn->pan < 2.0f ? sn->pan * w : (nn > 1 ? ((float)i / (float)(nn - 1) * 2.0f - 1.0f) * w : rng_bi(&e->rng) * w);
         pan += u(p->drift) * 0.3f * L->dpan.v;                       /* FLOW: the layer's slow wandering */
-        pan += rng_bi(&e->rng) * (0.15f + 0.5f * u(p->weird) + 0.6f * u(p->chaos)) * (0.4f + 0.6f * w);   /* each note somewhere new */
+        pan += rng_bi(&e->rng) * (0.15f + 0.6f * u(p->chaos)) * (0.4f + 0.6f * w);   /* each note somewhere new (CHAOS: wider) */
         pan = clampf(pan, -1.0f, 1.0f);
         float nv = vel / (nn > 1 ? 1.0f + 0.25f * (float)nn : 1.0f);
         /* LEGATO: the voice that played this part of the last note (or chord) slides on to this one, not started again */
@@ -310,6 +311,34 @@ static void control(Engine *e, int sub)
 }
 
 /* ------------------------------------------------------------------ the block */
+/* DRIFT (HOME), Steve Roach's Immersion Station's evolve: the four layers' levels wander slowly, sometimes leaving one
+ * alone with the others far off, and each walks slowly round the stereo field. As a layer fades it goes into the
+ * distance: its lows thin out (a high-pass rising) and more of it is reverb than itself. At 0 the mix stays as set. */
+static void immerse(Engine *e)
+{
+    const Piece *p = e->p;
+    float d = u(p->weird), dt = BLK_S * (float)e->nsub;
+    if ((e->im_left -= dt) <= 0) {
+        e->im_left = (14.0f + 30.0f * rng_f(&e->rng)) / (0.4f + 0.8f * d);
+        int solo = rng_chance(&e->rng, 0.35f) ? rng_int(&e->rng, NUM_LAYERS) : -1, top = rng_int(&e->rng, NUM_LAYERS);
+        for (int l = 0; l < NUM_LAYERS; l++) {
+            float t = solo >= 0 ? (l == solo ? 1.0f : 0.05f + 0.25f * rng_f(&e->rng)) : 0.15f + 0.85f * rng_f(&e->rng);
+            e->L[l].im_t = l == top && solo < 0 ? 1.0f : t;   /* (one layer near full, always) */
+        }
+    }
+    for (int l = 0; l < NUM_LAYERS; l++) {
+        Layer *L = &e->L[l];
+        if (L->im <= 0) L->im = 1.0f;
+        L->im += (L->im_t - L->im) * clamp01(dt / (6.0f + 6.0f * (float)l * 0.5f));   /* slow: seconds, never steps */
+        L->im_pan = drift_step(&L->dwalk, &e->rng, dt);
+        float far = 1.0f - L->im;                                /* how far off it has gone */
+        L->im_g = 1.0f - d * far;                                /* its level (at DRIFT 0: as set) */
+        L->im_far = d * far;
+        float pn = d * 0.85f * L->im_pan, a = (pn + 1.0f) * 0.25f * PI_F;   /* its walk round the stereo field */
+        L->im_l = fm_cosf(a) * 1.4142f; L->im_r = fm_sinf(a) * 1.4142f;
+    }
+}
+
 /* WARBLE: the pitch wandering as a worn tape's or an old synth's does. One slow random voltage for the whole piece (its
  * own pace wandering too: an LFO on an LFO), each layer a little apart from it; FLUTTER a faster shiver over it; DETUNE
  * everything a touch flat, "relaxed". The pitch only: notes stay in their scale, a few cents off at most */
@@ -339,10 +368,11 @@ void engine_block_begin(Engine *e, int nsub)
     for (int l = 0; l < NUM_LAYERS; l++) e->L[l].nq = 0;
     e->nkq = 0;
     warble(e);
+    immerse(e);
     for (int k = 0; k < e->nsub; k++) {
         control(e, k);
         for (int l = 0; l < NUM_LAYERS; l++) {
-            float lv = u(p->l[l].level), g = lv * lv * e->L[l].present * e->fade * 1.6f;
+            float lv = u(p->l[l].level), g = lv * lv * e->L[l].present * e->fade * 1.6f * e->L[l].im_g;   /* (DRIFT's fading) */
             if (l == L_BODY || l == L_DUST) g *= 1.0f - e->duck;
             e->gains[k][l] = g;
         }
@@ -354,7 +384,7 @@ void engine_block_begin(Engine *e, int nsub)
         Layer *L = &e->L[l];
         float t = u(p->l[l].tone), lo = t < 0.5f ? (0.5f - t) * 2.0f : 0.0f, hi = t > 0.5f ? (t - 0.5f) * 2.0f : 0.0f;
         float lp = ROLES[l].lp * (0.85f + 0.3f * (u(p->mood) - 0.5f)) * fm_exp2f(-7.0f * lo);
-        float hp = ROLES[l].hp * fm_exp2f(6.5f * hi);
+        float hp = ROLES[l].hp * fm_exp2f(6.5f * hi + 3.5f * L->im_far);   /* (DRIFT: far off, its lows thin) */
         /* patched: the source layer's activity opens this one's filter, the random voltage moves it (LINK, DRIFT) */
         lp *= fm_exp2f(u(p->link) * 1.8f * (e->L[L->src].cv - 0.25f) + u(p->drift) * 0.9f * L->rnd);
         lp = clampf(lp, 40.0f, 18000.0f); hp = clampf(hp, 15.0f, 12000.0f);
@@ -380,7 +410,7 @@ static void apply(VoiceEv *q, int nq, Voice *v, int sub)
 void engine_block_layer(Engine *e, int b)
 {
     uint32_t t0 = now(e);
-    float wg = u(e->p->weird);
+    float wg = 0.0f;                     /* (the piece's ring modulator: gone; each layer's EXTREME has its own strangeness) */
     for (int k = 0; k < e->nsub; k++) {
         float *Lb = e->bus[k][b][0], *Rb = e->bus[k][b][1];
         memset(Lb, 0, sizeof(float) * BLK); memset(Rb, 0, sizeof(float) * BLK);
@@ -399,6 +429,19 @@ void engine_block_layer(Engine *e, int b)
             Rb[i] = svf_lp(&L->lp[1], svf_hp(&L->hp[1], Rb[i]));
         }
         dirt_run(&L->dirt, u(e->p->dirt), u(e->p->s_dirt[b]), Lb, Rb, BLK);   /* its own DIRT, its send's amount */
+        /* ENTROPY past 40: the sound starts to destroy itself. Folding first, then crushed, then noise; past 60 holes torn
+         * in it, longer and more often towards the end, until it is more broken than whole */
+        float en = clamp01((u(e->p->l[b].weird) - 0.4f) / 0.6f);
+        if (en > 0.001f) {
+            dirt_run(&L->ent, en, fm_minf(1.0f, en * 1.6f), Lb, Rb, BLK);
+            float tear = clamp01((en - 0.33f) * 1.5f);
+            if ((L->gate_left -= BLK_S) <= 0) {
+                L->gate_hole = tear > 0 && (float)(L->ent.rng.s & 1023u) / 1023.0f < tear * 0.55f ? 0.0f : 1.0f;
+                rng_u32(&L->ent.rng);
+                L->gate_left = 0.02f + 0.2f * (float)(L->ent.rng.s & 255u) / 255.0f * (0.3f + tear);
+            }
+            for (int i = 0; i < BLK; i++) { L->gate += (L->gate_hole - L->gate) * 0.08f; Lb[i] *= L->gate; Rb[i] *= L->gate; }
+        }
     }
     cost_add(e, b, t0);
 }
@@ -432,13 +475,14 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
             float g = e->gains[k][b], *Lb = e->bus[k][b][0], *Rb = e->bus[k][b][1];
             /* the sends: each layer's own (SENDS), the keys' the chosen layer's */
             int sl = b < NUM_LAYERS ? b : e->key_layer;
-            float rs = u(p->s_rv[sl]) * 0.8f * (0.3f + 1.2f * rvk) * g;
+            float far = b < NUM_LAYERS ? e->L[b].im_far : 0.0f, pl = b < NUM_LAYERS ? e->L[b].im_l : 1.0f, pr = b < NUM_LAYERS ? e->L[b].im_r : 1.0f;
+            float rs = u(p->s_rv[sl]) * 0.8f * (0.3f + 1.2f * rvk) * g * (1.0f + 1.5f * far);   /* (far off: more reverb than itself) */
             float es = u(p->s_echo[sl]) * eck * 1.4f * g;
             float gs = u(p->s_grain[sl]) * 0.9f * g;
             float ss = 0;
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];
-                dl[i] += l * g; dr[i] += r * g;
+                dl[i] += l * g * pl; dr[i] += r * g * pr;
                 rl[i] += l * rs; rr[i] += r * rs;
                 el[i] += l * es; er[i] += r * es;
                 gm[i] += (l + r) * 0.5f * gs;

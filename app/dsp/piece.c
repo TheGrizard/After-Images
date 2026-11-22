@@ -126,7 +126,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
         static const uint8_t FAV[10] = { 1, 2, 0, 4, 13, 14, 15, 16, 8, 5 };   /* the gentler scales come up more */
         p->scale = rng_chance(&r, 0.7f) ? FAV[rng_int(&r, 10)] : (uint8_t)rng_int(&r, NUM_SCALES);
         p->mood = pick(&r, 20, 85); p->motion = pick(&r, 30, 70); p->evolve = pick(&r, 25, 70);
-        p->weird = rng_chance(&r, 0.3f) ? pick(&r, 40, 80) : pick(&r, 0, 30);
+        p->weird = pick(&r, 20, 70);                 /* DRIFT: the layers wandering in and out */
     }
 }
 
@@ -146,7 +146,7 @@ void piece_default(Piece *p)
 {
     memset(p, 0, sizeof *p);
     p->key = 9; p->scale = 1; p->chord = CH_SEVENTH; p->tempo = 44;   /* A minor, 84 BPM */
-    p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 15;
+    p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 35;
     piece_roll(p, 0xAF7E1u, 0, FX_SPACE);
     p->tempo = 44;                                   /* (the first piece: 84 BPM) */
     p->l[L_LIGHT].octave = 0;

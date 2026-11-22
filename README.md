@@ -2,7 +2,7 @@
 
 A generative synth for the M-VAVE FM-1. Press REC and it makes a new piece of ambient music that keeps evolving:
 four layers, each its own sequencer driving its own sound in its own part of the spectrum, listening to each other.
-Musical (everything is locked to the scale), but DRIFT takes it somewhere strange. A slow leveller keeps every piece
+Musical (everything is locked to the scale), but ENTROPY can break it apart. A slow leveller keeps every piece
 at about the same loudness.
 
 By [TheGrizard](https://github.com/TheGrizard). Built on [fm1-base](https://github.com/charlesvestal/fm1-base) (MPL-2.0)
@@ -46,8 +46,8 @@ stays clear.
 | Control | What it does |
 |---|---|
 | K1 to K4 | at HOME, the four layers' levels: they rise up from the bottom of the screen while you turn; on the other pages, the page's four macros (the one you turn shows big) |
-| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), DRIFT (how far the sound strays from the harmonics into the strange) |
-| EDIT | SOUND for the chosen layer: ENGINE, TONE (a DJ's filter: 12 o'clock open, left a low-pass sweeping down, right a high-pass sweeping up), WEIGHT (soft to heavy), DRIFT (the engine's own strangeness) |
+| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (dark to bright, triads to ninths), ACTIVITY, EVOLVE (how much the form changes), DRIFT (an ambient mixer, the way Steve Roach's Immersion Station evolves: the layers' levels wander in and out, sometimes leaving one alone, each walking slowly round the stereo field, the far ones thinning and turning to reverb as if in the distance; at 0 the mix stays as set) |
+| EDIT | SOUND for the chosen layer: ENGINE, TONE (a DJ's filter: 12 o'clock open, left a low-pass sweeping down, right a high-pass sweeping up), WEIGHT (soft to heavy), ENTROPY (to halfway the engine's own strangeness; past it the sound destroys itself: folded, crushed, noise, holes torn in it) |
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
 | ENV again | VOICE for the chosen layer: F.GLIDE (the filter glides after each new note; the pitch never slides), LEGATO (notes join, not started again), SWEEP (the filter opening over each note), RESO |

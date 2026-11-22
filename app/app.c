@@ -295,7 +295,7 @@ static const Knob PAGES[NPAGES][4];
 static const Knob *knob_of(int pg, int k);
 static const Knob PAGES[NPAGES][4] = {
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
-    { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_TONE, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "DRIFT", K_PCT, 1, LO(weird) } },
+    { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_TONE, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "ENTROPY", K_PCT, 1, LO(weird) } },
     { { "TYPE", K_SEQ, 1, LO(seq) }, { "DENSITY", K_PCT, 1, LO(density) }, { "RATE", K_RATE, 1, LO(rate) }, { "MUTATE", K_PCT, 1, LO(mutate) } },
     { { "LEVEL", K_PCT, 1, LO(level) }, { "ATTACK", K_PCT, 1, LO(attack) }, { "RELEASE", K_PCT, 1, LO(release) }, { "OCTAVE", K_OCT, 1, LO(octave) } },
     { { "F.GLIDE", K_PCT, 3, PO(glide) }, { "LEGATO", K_ONOFF, 3, PO(legato) }, { "SWEEP", K_PCT, 3, PO(sweep) }, { "RESO", K_PCT, 3, PO(reso) } },

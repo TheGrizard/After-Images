@@ -2,7 +2,7 @@
 
 A generative synth for the M-VAVE FM-1. Press REC for a new piece of ambient music that keeps evolving: four layers
 (GROUND, BODY, LIGHT, DUST), each its own sequencer and sound in its own part of the spectrum, answering each other.
-Everything is in the scale; DRIFT takes it somewhere strange.
+Everything is in the scale; DRIFT mixes the layers in and out like an ambient mixer, ENTROPY breaks them apart.
 
 ![After Images on the FM-1's screen: the notes as fading shapes over the scale](img/screen.png)
 

@@ -3,10 +3,10 @@
 #include "engine.h"
 
 /* the engines that suit each role's band */
-static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB, E_TRI, E_SINE, E_SQUARE, E_CZ, E_SYNC, E_BOARDS, E_REESE, E_REESE };
-static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW, E_TRI, E_SQUARE, E_CZ, E_SHAPES, E_BOARDS, E_BOARDS, E_REESE };
-static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM, E_TRI, E_SINE, E_CZ, E_SYNC, E_SHAPES, E_BOARDS };
-static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS, E_SINE, E_SHAPES };
+static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB, E_TRI, E_SINE, E_SQUARE, E_CZ, E_SYNC, E_BOARDS, E_REESE, E_REESE, E_ORGAN, E_WAVES };
+static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW, E_TRI, E_SQUARE, E_CZ, E_SHAPES, E_BOARDS, E_BOARDS, E_REESE, E_ORGAN, E_ORGAN, E_CHOIR, E_CHOIR, E_WAVES, E_BOWL };
+static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM, E_TRI, E_SINE, E_CZ, E_SYNC, E_SHAPES, E_BOARDS, E_MALLET, E_MALLET, E_BOWL, E_WAVES, E_CHOIR };
+static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS, E_SINE, E_SHAPES, E_BOWL, E_BOWL, E_MALLET, E_CHOIR, E_WAVES };
 static const uint8_t *const POOL[NUM_LAYERS] = { POOL_G, POOL_B, POOL_L, POOL_D };
 static const uint8_t POOL_N[NUM_LAYERS] = { sizeof POOL_G, sizeof POOL_B, sizeof POOL_L, sizeof POOL_D };
 /* each role's rates (RATES' indexes) and envelopes (attack, release ranges, 0..100) */

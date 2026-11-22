@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* After Images: the sound engines. Ten small synthesis engines, each a few operations a sample, so twenty voices and
+/* After Images: the sound engines. Twenty-five small synthesis engines, each a few operations a sample, so twenty voices and
  * the effects fit the FM-1's two cores. Every engine has three colours: TONE (dark to bright), WEIGHT (soft to heavy:
  * drive, attack, index, fold) and WEIRD (what it does past halfway is its own: inharmonic, folded, ring-modulated). */
 #ifndef AI_VOICE_H

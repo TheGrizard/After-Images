@@ -48,7 +48,7 @@ static settings_t set;
 #define NPAL 9
 #define NPEG_NS 6
 static const uint8_t PEG_NS[NPEG_NS] = { 8, 10, 12, 15, 20, 24 };   /* COUNT: pegs across (each divides 240) */
-#define PEG_N_DEF 4
+#define PEG_N_DEF 0                      /* (8 across: big balls) */
 static uint8_t set_dirty;
 static int store_ok = 1;
 static uint32_t autosave_at;
@@ -63,7 +63,7 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
     set.usb_full = 0; set.usb_play = 100; set.visual = 0;
     set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.rsv3 = 0;
-    set.breed = 50; set.fade = 50; set.pegs_set = 2; set.peg_n = PEG_N_DEF; set.peg_size = 50;
+    set.breed = 100; set.fade = 100; set.pegs_set = 4; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
 }
 
 static void settings_defaults(void)
@@ -81,7 +81,7 @@ static int settings_ok(void)
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.midi_clock > 1 || set.sync >= NSYNC) return 0;
     if (set.in_ch > 16 || set.layers_in > 1 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
-        || (set.pegs_set == 3 && (set.visual > 1 || set.ink_gaps > 100 || set.ink_mix > 100))) return 0;
+        || (set.pegs_set >= 3 && (set.visual > 1 || set.ink_gaps > 100 || set.ink_mix > 100))) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -109,9 +109,10 @@ static void settings_load(void)
         set.magic = SET_MAGIC;
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
-    if (set.pegs_set != 1 && set.pegs_set != 2) { set.breed = 50; set.fade = 50; }   /* (a store from before PEGS) */
-    if (set.pegs_set < 2 || set.pegs_set > 3) { set.peg_n = PEG_N_DEF; set.peg_size = 50; }   /* (before COUNT, SIZE) */
-    if (set.pegs_set != 3) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; set.rsv3 = 0; set.pegs_set = 3; }   /* (before RORSCHACH) */
+    if (set.pegs_set < 3 || set.pegs_set > 4) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; set.rsv3 = 0; }   /* (before RORSCHACH) */
+    if (set.pegs_set != 4) {                     /* (before v0.21: MATRIX's new defaults, once) */
+        set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; set.pegs_set = 4;
+    }
     if (set.clock_in || set.midi_clock) {    /* (v0.2-0.12's two CLOCK switches: one setting now, IN first if both were on) */
         set.sync = set.clock_in ? SYNC_IN : SYNC_OUT; set.clock_in = set.midi_clock = 0;
     }
@@ -997,11 +998,13 @@ static void draw_pegs(void)
  * through, carving black. Everything moves by the beat (the piece's tempo, or the clock it follows), each ink swelling a
  * little on the beat. SCREEN: SIZE, GAPS (the black through it), MIX (how far the colours bleed), FADE.
  * The ink is worked out every 4 pixels, a strip at a time, and smoothed between, so its edges stay round */
-#define INK_MAX 24
+#define INK_MAX 18
 #define INK_VOIDS 5
 #define INK_G 4                                  /* the grid's step, pixels */
 #define INK_GC (120 / INK_G + 1)                 /* its columns over the left half (31) */
 #define INK_GR (60 / INK_G + 2)                  /* its rows over a 60-row strip, with the next strip's first */
+#define INK_WD (INK_GC + 240 / INK_G + 2)
+static float ink_wx[INK_GC], ink_wy[240 / INK_G + 2], ink_wd[INK_WD];   /* the edge's wobble, by column, row, diagonal */
 static struct { float x, y, r, born, life, ph; uint8_t layer, on; } ink[INK_MAX];
 static int ink_next = NUM_LAYERS;
 static float ink_rgb[NUM_LAYERS][3], ink_beat, ink_lv[NUM_LAYERS];
@@ -1054,7 +1057,9 @@ static void ink_step(void)
     while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; ink_note(&n); }
     float t = ink_beat = eng.beat;
     ink_colours();
-    float size = 0.6f + (float)set.peg_size * 0.008f, pulse = 1.0f - (t - fm_floorf(t)); pulse = pulse * pulse * pulse;
+    float size = 0.6f + (float)set.peg_size * 0.008f;
+    float pulse = 0.5f + 0.5f * fm_sin_turns(t - fm_floorf(t) + 0.25f);   /* (a breath across each beat, not a twitch on it) */
+    t *= 0.5f;                                   /* (the drift at half the beat's pace: smaller steps from frame to frame) */
     for (int l = 0; l < NUM_LAYERS; l++) {       /* the four inks, one a layer: larger as it sounds */
         float want = 0.45f + 0.55f * clamp01(eng.meter[l] * 1.4f);
         ink_lv[l] += (want - ink_lv[l]) * 0.04f;
@@ -1068,7 +1073,7 @@ static void ink_step(void)
         if (!ink[i].on) continue;
         float k = i < NUM_LAYERS ? 1.0f : ink_strength(i, t);
         if (!ink[i].on || k < 0.002f) continue;
-        float sw = 0.9f + 0.08f * fm_sin_turns(t * 0.13f + ink[i].ph) + 0.07f * pulse;   /* (a swell on the beat) */
+        float sw = 0.9f + 0.08f * fm_sin_turns(t * 0.13f + ink[i].ph) + 0.04f * pulse;   /* (swelling with the beat) */
         float x = ink[i].x, y = ink[i].y;
         if (i >= NUM_LAYERS) { x += 6.0f * fm_sin_turns(t * 0.07f + ink[i].ph); y += 6.0f * fm_sin_turns(t * 0.055f + ink[i].ph * 1.3f); }
         float r = ink[i].r * size * sw;
@@ -1076,6 +1081,9 @@ static void ink_step(void)
         n++;
     }
     ink_n = n;
+    for (int i = 0; i < INK_GC; i++) ink_wx[i] = 0.9f * fm_sin_turns((float)(i * INK_G) * 0.0143f + t * 0.08f);
+    for (int i = 0; i < 240 / INK_G + 2; i++) ink_wy[i] = 0.8f * fm_sin_turns((float)(i * INK_G) * 0.0111f - t * 0.064f);
+    for (int i = 0; i < INK_WD; i++) ink_wd[i] = 0.5f * fm_sin_turns((float)(i * INK_G) * 0.027f + t * 0.048f);
     float gap = (float)set.ink_gaps / 50.0f;     /* GAPS: 0 .. 2 */
     for (int v = 0; v < INK_VOIDS; v++) {
         float ph = 0.37f * (float)v, sp = 0.6f + 0.2f * (float)v;
@@ -1088,7 +1096,7 @@ static void ink_step(void)
 
 /* the ink at one point of the grid: how deep (less the voids), and its colour */
 static uint8_t ink_near[INK_MAX]; static int ink_nn;   /* the inks near the strip being drawn (the rest too far to count) */
-static void ink_sample(float x, float y, float t, float mix, float *f_out, uint8_t *c)
+static void ink_sample(float x, float y, float t, float mix, int gxi, int gyi, float *f_out, uint8_t *c)
 {
     float f = 0, w = 0, cr = 0, cg = 0, cb = 0;
     for (int j = 0; j < ink_nn; j++) {
@@ -1100,9 +1108,10 @@ static void ink_sample(float x, float y, float t, float mix, float *f_out, uint8
     }
     float hole = 0;
     for (int v = 0; v < INK_VOIDS; v++) { float dx = x - void_now[v].x, dy = y - void_now[v].y; hole += void_now[v].r2 / (dx * dx + dy * dy + 12.0f); }
-    float wob = (0.9f * fm_sin_turns(x * 0.0143f + t * 0.08f) + 0.8f * fm_sin_turns(y * 0.0111f - t * 0.064f)
-                 + 0.5f * fm_sin_turns((x + y) * 0.027f + t * 0.048f)) * 0.035f * fm_maxf(0.0f, 1.0f - fm_maxf(0.0f, f - 1.0f) * 2.0f);
+    (void)t;
+    float wob = (ink_wx[gxi] + ink_wy[gyi] + ink_wd[(gxi + gyi) % INK_WD]) * 0.035f * fm_maxf(0.0f, 1.0f - fm_maxf(0.0f, f - 1.0f) * 2.0f);
     *f_out = f + wob - hole;
+    if (*f_out < 0.8f) { c[0] = c[1] = c[2] = 0; return; }   /* (well outside the ink: no colour to work out) */
     if (w > 1e-6f) {                             /* the mix pushed back to full colour, as the pegs' are */
         float r = cr / w, g = cg / w, b = cb / w, m = (r + g + b) / 3.0f;
         r = fm_maxf(0.0f, m + (r - m) * 1.8f); g = fm_maxf(0.0f, m + (g - m) * 1.8f); b = fm_maxf(0.0f, m + (b - m) * 1.8f);
@@ -1120,35 +1129,42 @@ static void draw_ink(void)
     int g0 = v0 / INK_G, g1 = (v1 - 1) / INK_G + 1;
     if (g1 - g0 + 1 > INK_GR) g1 = g0 + INK_GR - 1;
     float t = ink_beat, mix = (float)set.ink_mix / 100.0f;
-    {   /* (an ink farther than 6 radii from the strip adds under 3 %: left out) */
+    {   /* (an ink farther than 4.5 radii from the strip adds under 5 %: left out) */
         float ya = (float)(g0 * INK_G) * 240.0f / (float)VIEW_H, yb = (float)(g1 * INK_G) * 240.0f / (float)VIEW_H;
         ink_nn = 0;
         for (int i = 0; i < ink_n; i++) {
-            float reach = 6.0f * fm_sqrtf(ink_now[i].r2);
+            float reach = 4.5f * fm_sqrtf(ink_now[i].r2);
             if (ink_now[i].y + reach >= ya && ink_now[i].y - reach <= yb) ink_near[ink_nn++] = (uint8_t)i;
         }
     }
     for (int gy = g0; gy <= g1; gy++)
         for (int gx = 0; gx < INK_GC; gx++)
-            ink_sample((float)(gx * INK_G), (float)(gy * INK_G) * 240.0f / (float)VIEW_H, t, mix, &ink_f[gy - g0][gx], ink_c[gy - g0][gx]);
+            ink_sample((float)(gx * INK_G), (float)(gy * INK_G) * 240.0f / (float)VIEW_H, t, mix, gx, gy, &ink_f[gy - g0][gx], ink_c[gy - g0][gx]);
     for (int v = v0; v < v1; v++) {
         int gy = v / INK_G - g0; float fy = (float)(v % INK_G) * (1.0f / INK_G);
-        for (int x = 0; x < 120; x++) {
-            int gx = x / INK_G; float fx = (float)(x % INK_G) * (1.0f / INK_G);
-            float a = ink_f[gy][gx] + (ink_f[gy][gx + 1] - ink_f[gy][gx]) * fx;
-            float b = ink_f[gy + 1][gx] + (ink_f[gy + 1][gx + 1] - ink_f[gy + 1][gx]) * fx;
-            float f = a + (b - a) * fy, edge = (f - 1.1f) * (1.0f / 0.18f);
-            if (edge <= 0.0f) continue;
-            if (edge > 1.0f) edge = 1.0f;
-            float sh = edge * 0.88f * (0.88f + 0.12f * clamp01((f - 1.1f) * 2.0f));   /* (a slightly deeper rim, as pooled ink) */
-            int col[3];
-            for (int k = 0; k < 3; k++) {
-                float p = (float)ink_c[gy][gx][k] + ((float)ink_c[gy][gx + 1][k] - (float)ink_c[gy][gx][k]) * fx;
-                float q = (float)ink_c[gy + 1][gx][k] + ((float)ink_c[gy + 1][gx + 1][k] - (float)ink_c[gy + 1][gx][k]) * fx;
-                col[k] = (int)((p + (q - p) * fy) * sh);
+        int row = v + cv_oy;
+        if (row < cv_y0 || row >= cv_y1) continue;
+        uint16_t *px = &cv_px[(uint32_t)row * cv_w];
+        float fr[INK_GC], cr[INK_GC][3];          /* this row's values at each grid column, once */
+        for (int gx = 0; gx < INK_GC; gx++) {
+            fr[gx] = ink_f[gy][gx] + (ink_f[gy + 1][gx] - ink_f[gy][gx]) * fy;
+            for (int k = 0; k < 3; k++) cr[gx][k] = (float)ink_c[gy][gx][k] + ((float)ink_c[gy + 1][gx][k] - (float)ink_c[gy][gx][k]) * fy;
+        }
+        for (int gx = 0; gx < INK_GC - 1; gx++) {
+            float fa = fr[gx], fb = fr[gx + 1];
+            if (fa < 1.1f && fb < 1.1f) continue; /* (a stretch of black: nothing to draw) */
+            for (int i = 0; i < INK_G; i++) {
+                int x = gx * INK_G + i;
+                float fx = (float)i * (1.0f / INK_G), f = fa + (fb - fa) * fx, edge = (f - 1.1f) * (1.0f / 0.18f);
+                if (edge <= 0.0f) continue;
+                if (edge > 1.0f) edge = 1.0f;
+                float sh = edge * 0.88f * (0.88f + 0.12f * clamp01((f - 1.1f) * 2.0f));   /* (a slightly deeper rim, as pooled ink) */
+                int c0 = (int)((cr[gx][0] + (cr[gx + 1][0] - cr[gx][0]) * fx) * sh);
+                int c1 = (int)((cr[gx][1] + (cr[gx + 1][1] - cr[gx][1]) * fx) * sh);
+                int c2 = (int)((cr[gx][2] + (cr[gx + 1][2] - cr[gx][2]) * fx) * sh);
+                uint16_t c = swap16(RGB(c0, c1, c2));
+                px[x] = c; px[239 - x] = c;   /* (folded: the right half the left's mirror) */
             }
-            uint16_t c = RGB(col[0], col[1], col[2]);
-            cv_pset(x, v, c); cv_pset(239 - x, v, c);   /* (folded: the right half the left's mirror) */
         }
     }
 }

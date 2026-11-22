@@ -1183,8 +1183,8 @@ static void draw_ink(void)
  * All in beats (the tempo, or the clock followed). SCREEN: SIZE (the zoom), BREED, MOULD, FADE. Edges smoothed.
  * Its cost is bounded whatever SIZE: blocks no bigger than the screen, at most MOSH_BUDGET screens' worth of
  * pixels drawn a frame (the oldest left out past it), and a run over the same colour mixed once */
-#define MOSH_MAX 40
-#define MOSH_BUDGET 2.5f                         /* screens of block drawn a frame, at most */
+#define MOSH_MAX 64
+#define MOSH_BUDGET 3.5f                         /* screens of block drawn a frame, at most */
 typedef struct {
     float cx, cy, w, h, born, life, dw, dh;      /* centre; half width and height (at 240 lines); their moulding */
     uint8_t on, ph; float col[3];
@@ -1218,16 +1218,17 @@ static void mosh_add(float cx, float cy, float size, const float *col)
     if (jr() & 1u) { float t = w; w = h; h = t; }
     p->on = 1; p->cx = clampf(cx, 8.0f, 232.0f); p->cy = clampf(cy, 8.0f, 232.0f);
     p->w = fm_minf(w, 120.0f); p->h = fm_minf(h, 120.0f); p->born = msh_t;
-    p->life = (6.0f + 10.0f * mosh_rf()) * (0.4f + (float)set.fade * 0.012f);
+    p->life = (8.0f + 16.0f * mosh_rf()) * (0.4f + (float)set.fade * 0.016f);   /* FADE: 3 .. 48 beats lit */
     p->ph = (uint8_t)jr();
     p->dw = -0.2f + 0.5f * mosh_rf(); p->dh = -0.2f + 0.5f * mosh_rf();
     for (int k = 0; k < 3; k++) p->col[k] = col[k];
 }
 
-static float mosh_level(const Shard *p)          /* in over 1.5 beats, out over 3, breathing */
+static float mosh_out(void) { return 3.0f + (float)set.fade * 0.09f; }   /* the fade out, beats: 3 .. 12 by FADE */
+static float mosh_level(const Shard *p)          /* in over 1.5 beats, out over mosh_out's, breathing */
 {
     float a = msh_t - p->born, k = fm_minf(1.0f, a / 1.5f);
-    if (a > p->life) k *= fm_maxf(0.0f, 1.0f - (a - p->life) / 3.0f);
+    if (a > p->life) { float o = 1.0f - (a - p->life) / mosh_out(); k *= o > 0.0f ? o * o * (3.0f - 2.0f * o) : 0.0f; }
     return k * (0.78f + 0.22f * fm_sin_turns(msh_t * 0.143f + (float)p->ph / 256.0f));
 }
 
@@ -1274,7 +1275,7 @@ static void mosh_step(void)
     int guard = 0;
     while (msh_breed_at < msh_t && guard++ < 8) { msh_breed_at += every; mosh_breed(); }
     for (int i = 0; i < MOSH_MAX; i++)
-        if (msh[i].on && (msh_t - msh[i].born > msh[i].life + 3.0f || msh_t < msh[i].born - 1.0f)) msh[i].on = 0;
+        if (msh[i].on && (msh_t - msh[i].born > msh[i].life + mosh_out() || msh_t < msh[i].born - 1.0f)) msh[i].on = 0;
 }
 
 typedef struct { float x0, x1, y0, y1; } MoshBox;
@@ -1328,7 +1329,7 @@ static void mosh_fill(const MoshBox *b, const float *col, float k)
 
 static void draw_mosh(void)
 {
-    MoshBox bx[MOSH_MAX]; float kk[MOSH_MAX]; int ok[MOSH_MAX];
+    static MoshBox bx[MOSH_MAX]; static float kk[MOSH_MAX]; static uint8_t ok[MOSH_MAX];
     float budget = MOSH_BUDGET * msh_scale * 240.0f * (float)VIEW_H, used = 0.0f;
     for (int j = MOSH_MAX - 1; j >= 0; j--) {    /* newest first, until the budget's spent: the oldest left out */
         int i = (msh_next + j) % MOSH_MAX; const Shard *p = &msh[i];

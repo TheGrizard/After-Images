@@ -28,34 +28,18 @@ static inline float noise(uint32_t *s)
 /* the vowels a VOICE morphs through: two formants each */
 static const float VOWEL[5][2] = { { 800, 1150 }, { 400, 1600 }, { 350, 2300 }, { 450, 800 }, { 325, 700 } };
 
-void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float pan, float from_hz, uint32_t seed)
+/* the note's settings from its layer's knobs: at its start (start 1, its state set up too), or again while it sounds
+ * (start 0: only what the knobs decide, its phases, filters and envelope left as they are, so nothing clicks) */
+static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
 {
     float tone = clamp01(s->tone), wt = clamp01(s->weight), wd = clamp01(s->weird);
-    v->on = 1; v->rel = 0; v->engine = s->engine; v->note = (int8_t)note;
-    v->freq = mtof((float)note); v->vel = vel; v->pan = clampf(pan, -1.0f, 1.0f); v->age = 0;
-    {
-        float t = (v->pan + 1.0f) * 0.25f * PI_F;
-        v->gl = fm_cosf(t); v->gr = fm_sinf(t);
-    }
-    v->noise = seed | 1u;
-    v->freq_t = v->freq;                         /* the pitch: always at once (no portamento) */
-    if (v->pm <= 0.0f) v->pm = 1.0f;
-    v->ff = v->freq;                             /* the filter's: glides (GLIDE), from the last note's */
     v->glide_k = s->glide > 0.001f ? clamp01(BLK_S / s->glide) : 1.0f;
-    if (from_hz > 0 && s->glide > 0.001f) v->ff = from_hz;
-    v->sweep = s->sweep; v->sw = 0; v->sw_k = clamp01(BLK_S / (0.15f + 1.2f * s->glide + 0.6f * s->sweep)); v->reso = s->reso;
-    v->pan_amt = s->pan_move; v->pan_ph = (float)(seed >> 20 & 255u) / 256.0f;
-    v->pan_dp = (0.04f + 0.3f * (float)(seed >> 4 & 255u) / 255.0f) * BLK_S;   /* once every 3 to 25 s */
-    v->env = 0; v->hold = dur;
-    float att = s->attack * (1.15f - 0.9f * wt);                 /* heavy: sharper */
-    v->a_k = k_of(att * 0.33f + 0.0008f);
-    v->r_k = k_of(s->release * 0.33f + 0.004f);
+    v->sweep = s->sweep; v->sw_k = clamp01(BLK_S / (0.2f + 1.2f * s->glide + 2.5f * s->sweep)); v->reso = s->reso;   /* (SWEEP: up to 3 s to open) */
+    v->pan_amt = s->pan_move;
+    if (start || v->hold > 0) v->r_k = k_of(s->release * 0.33f + 0.004f);   /* (a tail let go under load keeps its pace) */
     v->sus = 1.0f; v->d_k = k_of(1.0f);
-    for (int i = 0; i < 4; i++) v->ph[i] = (float)((seed >> (i * 8)) & 255u) * (1.0f / 256.0f);
-    v->fb = 0; v->z1 = v->z2 = 0; v->lfo = 0; v->lp.z = 0;
     v->lfo_dp = (0.1f + 0.4f * wd) * BLK_S;
     v->drive = 1.0f + 5.0f * wt * wt;
-    memset(&v->f, 0, sizeof v->f); memset(&v->f2, 0, sizeof v->f2);
     float f = v->freq;
     switch (v->engine) {
     case E_SAW:
@@ -74,12 +58,14 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         break;
     }
     case E_PLUCK: {
-        float len = SR / f;
-        while (len >= (float)(KS_MAX - 2)) len *= 0.5f;          /* too low for the line: an octave up */
-        v->ks_len = (int)len; v->ks_frac = len - (float)v->ks_len; v->ks_pos = 0; v->ks_lp = 0;
         v->ks_damp = 0.990f + 0.0095f * (0.3f + 0.7f * tone) - 0.004f * (1.0f - wt);
-        float c = 0.2f + 0.8f * tone, z = 0;                     /* the pluck: noise, darker when soft */
-        for (int i = 0; i < v->ks_len + 1; i++) { z += c * (noise(&v->noise) - z); v->ks[i] = (int16_t)(z * 12000.0f); }
+        if (start) {
+            float len = SR / f;
+            while (len >= (float)(KS_MAX - 2)) len *= 0.5f;      /* too low for the line: an octave up */
+            v->ks_len = (int)len; v->ks_frac = len - (float)v->ks_len; v->ks_pos = 0; v->ks_lp = 0;
+            float c = 0.2f + 0.8f * tone, z = 0;                 /* the pluck: noise, darker when soft */
+            for (int i = 0; i < v->ks_len + 1; i++) { z += c * (noise(&v->noise) - z); v->ks[i] = (int16_t)(z * 12000.0f); }
+        }
         v->p[0] = wd;                                            /* weird: the string's pitch bends a little at the start */
         v->sus = 1.0f;
         break;
@@ -91,7 +77,7 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         v->p[3] = 1.0f - k_of(0.25f + 0.6f * (1.0f - wt));       /* the body's index fades, a sample */
         v->p[4] = 1.0f - k_of(0.012f);                           /* the knock, fast */
         v->p[5] = 0.002f + 0.006f * wd;                          /* the tape-ish wobble */
-        v->z1 = 1.0f; v->z2 = 1.0f;
+        if (start) { v->z1 = 1.0f; v->z2 = 1.0f; }
         v->sus = 0.0f; v->d_k = k_of(1.8f + 2.5f * (1.0f - wt));
         v->lfo_dp = (4.5f + 1.5f * wd) * BLK_S;
         break;
@@ -106,9 +92,11 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         for (int k = 0; k < 4; k++) v->r[k] = RAT[set][k] + (k ? OFF[k] * wd * 2.0f * (wd > 0.25f) : 0.0f);
         float ix = 0.5f + 2.6f * wt + 1.4f * tone;               /* the index (WEIGHT, TONE) */
         for (int k = 1; k < 4; k++) {                            /* each modulator its own fade: the spectrum moves */
-            v->oe[k] = ix * (k == 3 ? 0.8f : 1.0f);
+            if (start) v->oe[k] = ix * (k == 3 ? 0.8f : 1.0f);
+            else if (v->ix > 0.01f) v->oe[k] *= ix / v->ix;      /* (sounding: its fades go on, rescaled) */
             v->ok[k] = 1.0f - k_of((0.08f + 1.8f * (float)((seed >> (12 + 3 * k)) & 7u) / 7.0f) * (0.4f + 0.8f * (1.0f - wt)));
         }
+        v->ix = ix;
         v->p[5] = 0.1f + 0.5f * wd;                              /* the last operator's feedback */
         v->sus = 0.15f + 0.35f * (1.0f - tone); v->d_k = k_of(1.2f + 3.0f * (1.0f - wt));
         break;
@@ -117,7 +105,7 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         v->p[0] = 0.004f + 0.01f * wd;                           /* the ensemble's spread */
         v->p[1] = 1.5f + 5.0f * tone;                            /* dark: a string machine's filter (times the pitch) */
         v->p[2] = 0.6f + 0.6f * wt + 4.0f * s->reso;
-        v->a_k = k_of((s->attack > 0.15f ? s->attack : 0.15f) * 0.33f);   /* (strings never snap in) */
+        if (start) v->a_k = k_of((s->attack > 0.15f ? s->attack : 0.15f) * 0.33f);   /* (strings never snap in) */
         v->lfo_dp = 0.7f * BLK_S;
         break;
     case E_PULSE:
@@ -169,7 +157,7 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         v->p[0] = 1.5f + 5.0f * tone + 3.0f * wt;                /* the slave's ratio at the start */
         v->p[1] = 1.0f - k_of(0.25f + 1.5f * (1.0f - wt));       /* its sweep down, a block */
         v->p[2] = 4.0f + 10.0f * tone;
-        v->z1 = 1.0f;
+        if (start) v->z1 = 1.0f;
         break;
     case E_SHAPES:
         v->p[0] = wd * 5.0f;                                     /* which shape (DRIFT), between two */
@@ -182,7 +170,7 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         v->p[1] = 0.8f + 4.0f * tone;                            /* dark: the filter's top, times the pitch */
         v->p[2] = 0.8f + 1.5f * wt + 4.0f * s->reso;
         v->p[3] = 1.0f - k_of(0.15f + 0.35f * (1.0f - wt));      /* the wah: the filter opens over ~150-500 ms */
-        v->z1 = 0.0f;
+        if (start) v->z1 = 0.0f;
         v->lfo_dp = 5.2f * BLK_S;                                /* the vibrato */
         break;
     case E_SUB:
@@ -191,9 +179,41 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
         v->drive = 1.0f + 6.0f * wt;
         break;
     }
+}
+
+void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float pan, float from_hz, uint32_t seed)
+{
+    float wt = clamp01(s->weight);
+    v->on = 1; v->rel = 0; v->engine = s->engine; v->note = (int8_t)note; v->seed = seed;
+    v->freq = mtof((float)note); v->vel = vel; v->pan = clampf(pan, -1.0f, 1.0f); v->age = 0;
+    {
+        float t = (v->pan + 1.0f) * 0.25f * PI_F;
+        v->gl = fm_cosf(t); v->gr = fm_sinf(t);
+    }
+    v->noise = seed | 1u;
+    v->freq_t = v->freq;                         /* the pitch: always at once (no portamento) */
+    if (v->pm <= 0.0f) v->pm = 1.0f;
+    v->ff = v->freq;                             /* the filter's: glides (GLIDE), from the last note's */
+    if (from_hz > 0 && s->glide > 0.001f) v->ff = from_hz;
+    v->sw = 0;
+    v->pan_ph = (float)(seed >> 20 & 255u) / 256.0f;
+    v->pan_dp = (0.04f + 0.3f * (float)(seed >> 4 & 255u) / 255.0f) * BLK_S;   /* once every 3 to 25 s */
+    v->env = 0; v->hold = dur;
+    float att = s->attack * (1.15f - 0.9f * wt);                 /* heavy: sharper */
+    v->a_k = k_of(att * 0.33f + 0.0008f);
+    for (int i = 0; i < 4; i++) v->ph[i] = (float)((seed >> (i * 8)) & 255u) * (1.0f / 256.0f);
+    v->fb = 0; v->z1 = v->z2 = 0; v->lfo = 0; v->lp.z = 0; v->sl[0].z = v->sl[1].z = 0; v->ix = 0;
+    memset(&v->f, 0, sizeof v->f); memset(&v->f2, 0, sizeof v->f2);
+    voice_params(v, s, seed, 1);
     v->ws = 0;                                   /* (the piece's DRIFT ring modulator: set by the engine each block) */
     v->ph[3] = 0;
     v->id = (uint8_t)(seed >> 24);
+}
+
+void voice_retune(Voice *v, const Sound *s)
+{
+    if (!v->on || v->engine != s->engine) return;
+    voice_params(v, s, v->seed, 0);
 }
 
 void voice_release(Voice *v) { if (v->on) v->hold = 0; }
@@ -208,6 +228,26 @@ void voice_legato(Voice *v, int note, float vel, float dur)
 }
 
 static inline float saw_bl(float ph, float dt) { return 2.0f * ph - 1.0f - blep(ph, dt); }
+
+float g_voice_floor = 0.001f;
+static const uint8_t HAS_FILTER[NUM_ENGINES] = {   /* (their own filter follows SWEEP and F.GLIDE) */
+    [E_SAW] = 1, [E_PULSE] = 1, [E_BREATH] = 1, [E_FOLD] = 1, [E_SUB] = 1, [E_STRINGS] = 1, [E_TRI] = 1, [E_SQUARE] = 1,
+    [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1 };
+
+/* a voice nobody can hear (its layer faded right out): its envelope goes on, so it ends when it would, no sound made */
+void voice_skip(Voice *v, int n)
+{
+    if (!v->on) return;
+    float env = v->env;
+    for (int i = 0; i < n; i++) {
+        if (v->hold <= 0) env -= env * v->r_k;
+        else if (v->rel == 0) { env += (1.02f - env) * v->a_k; if (env >= 1.0f) { env = 1.0f; v->rel = 2; } }
+        else env += (v->sus - env) * v->d_k;
+    }
+    v->hold -= (float)n / SR; v->age += (float)n / SR;
+    if (v->hold <= 0 && env < g_voice_floor) { v->on = 0; env = 0; }
+    v->env = env;
+}
 
 void voice_render(Voice *v, float *L, float *R, int n)
 {
@@ -228,7 +268,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
         out[i] = env;
     }
     v->hold -= (float)n / SR; v->age += (float)n / SR;
-    if (v->hold <= 0 && env < 0.0002f) { v->on = 0; v->env = 0; return; }
+    if (v->hold <= 0 && env < g_voice_floor) { v->on = 0; v->env = 0; return; }
     v->env = env;
 
     switch (v->engine) {
@@ -494,6 +534,15 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     }
 
+    /* SWEEP on the engines without a filter of their own (FM, DX, E.PIANO, GLASS, SINE, STRING, VOICE): a gentle
+     * 12 dB low-pass, there only while it opens */
+    if (v->sweep > 0.001f && !HAS_FILTER[v->engine % NUM_ENGINES]) {
+        float o = 1.0f - v->sweep * (1.0f - v->sw);
+        if (o < 0.995f) {
+            op_set(&v->sl[0], (v->ff * 1.5f + 200.0f) * fm_exp2f(6.5f * o)); v->sl[1].a = v->sl[0].a;
+            for (int i = 0; i < n; i++) out[i] = op_lp(&v->sl[1], op_lp(&v->sl[0], out[i]));
+        }
+    }
     if (v->pan_amt > 0.001f) {                   /* the note wanders across the stereo field */
         v->pan_ph += v->pan_dp; if (v->pan_ph >= 1.0f) v->pan_ph -= 1.0f;
         float pn = clampf(v->pan + v->pan_amt * fm_sin_turns(v->pan_ph), -1.0f, 1.0f), t = (pn + 1.0f) * 0.25f * PI_F;

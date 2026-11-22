@@ -44,10 +44,11 @@ static inline float mtof(float m) { return 440.0f * fm_exp2f((m - 69.0f) * (1.0f
 #define SINE_SIZE (1 << SINE_BITS)
 extern float g_sine[SINE_SIZE + 1];      /* filled by dsp_init() */
 void dsp_init(void);
-static inline float sine_c(float ph)     /* phase in cycles, any value */
+static inline float sine_c(float ph)     /* phase in cycles, any value within +-2048 */
 {
-    ph -= fm_floorf(ph);
-    float x = ph * SINE_SIZE; int i = (int)x; float f = x - (float)i;
+    /* one conversion to 12.20 fixed point; the wrap is the integer's own (two's complement), no floor */
+    uint32_t q = (uint32_t)(int32_t)(ph * 1048576.0f), i = (q >> (20 - SINE_BITS)) & (SINE_SIZE - 1);
+    float f = (float)(q & ((1u << (20 - SINE_BITS)) - 1u)) * (1.0f / (float)(1u << (20 - SINE_BITS)));
     return g_sine[i] + (g_sine[i + 1] - g_sine[i]) * f;
 }
 

@@ -101,6 +101,7 @@ void engine_init(Engine *e, const Piece *p)
     echo_init(&e->echo);
     grains_init(&e->gr, p->seed);
     for (int l = 0; l < NUM_LAYERS; l++) { dirt_init(&e->L[l].dirt, p->seed + (uint32_t)l); dirt_init(&e->L[l].ent, p->seed * 3u + (uint32_t)l); e->L[l].gate = 1.0f; }
+    dirt_init(&e->kdirt, p->seed + 11u); dirt_init(&e->kent, p->seed * 3u + 11u);
     patch(e, p->seed);
     e->mask = 0xF; e->chord_bars = 4; e->chord_left = 4; e->sec_left = 32;
     rng_seed(&e->rng, p->seed);
@@ -178,7 +179,8 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
             if (L->nq < EVQ) { VoiceEv *q = &L->q[L->nq++]; q->sub = (uint8_t)sub; q->voice = (uint8_t)vi; q->rel = 2; q->note = (int8_t)note; q->vel = nv; q->dur = dur; }
             L->last_hz[i] = mtof((float)note);
         } else {
-            int vi = pick_voice(L->v, L->nv, &L->next_v);
+            int cap = (int)((float)L->nv * (0.4f + 0.6f * e->gov) + 0.5f);   /* (under load, fewer voices) */
+            int vi = pick_voice(L->v, cap < 1 ? 1 : cap > L->nv ? L->nv : cap, &L->next_v);
             queue(L->q, &L->nq, sub, vi, note, nv, dur, pan, &snd, rng_u32(&e->rng));
             if (p->glide[l] && i < L->last_n) L->q[L->nq - 1].from_hz = L->last_hz[i];   /* GLIDE: from the last note */
             L->last_v[i] = (int8_t)vi; L->last_hz[i] = mtof((float)note);
@@ -208,6 +210,7 @@ static void keys_in(Engine *e, int sub)
         if (on) {
             Sound snd; layer_sound(e, lay, &snd);
             int vi = pick_voice(e->kv, KEY_POLY, &e->key_next);
+            e->kv_lay[vi] = (int8_t)lay;
             queue(e->kq, &e->nkq, sub, vi, note, vel, 600.0f, rng_bi(&e->rng) * 0.3f, &snd, rng_u32(&e->rng));
             post(e, lay, note, vel, 0, 1.5f);
             if (e->midi && e->midi_on) e->midi(0x09u | (0x90u | e->midi_keys_ch) << 8 | (uint32_t)note << 16 | (uint32_t)(vel * 127.0f) << 24);
@@ -360,6 +363,8 @@ static void warble(Engine *e)
 static uint32_t now(Engine *e) { return e->clock ? e->clock() : 0; }
 static void cost_add(Engine *e, int k, uint32_t t0) { if (e->clock) e->cost[k] += ((float)(now(e) - t0) - e->cost[k]) * 0.05f; }
 
+static void svf_coef(Svf *d, const Svf *s) { d->a1 = s->a1; d->a2 = s->a2; d->a3 = s->a3; d->k = s->k; }   /* (its state its own) */
+
 void engine_block_begin(Engine *e, int nsub)
 {
     uint32_t t0 = now(e);
@@ -369,6 +374,16 @@ void engine_block_begin(Engine *e, int nsub)
     e->nkq = 0;
     warble(e);
     immerse(e);
+    if (e->shed != e->shed_seen) {               /* a block nearly overran: fewer notes, and the quiet tails let go */
+        e->shed_seen = e->shed;
+        e->gov = fm_maxf(0.3f, e->gov - 0.15f);
+        for (int b = 0; b < NBUS; b++) {
+            Voice *v = b == KEYS ? e->kv : e->L[b].v; int n = b == KEYS ? KEY_POLY : e->L[b].nv;
+            for (int i = 0; i < n; i++)
+                if (v[i].on && v[i].hold <= 0 && v[i].env < 0.08f && v[i].r_k < 0.004f) v[i].r_k = 0.004f;   /* (gone in 20 ms, no click) */
+        }
+    }
+    g_voice_floor = 0.001f + 0.014f * (1.0f - e->gov);   /* -60 dB; under load up to -37 */
     for (int k = 0; k < e->nsub; k++) {
         control(e, k);
         for (int l = 0; l < NUM_LAYERS; l++) {
@@ -392,6 +407,19 @@ void engine_block_begin(Engine *e, int nsub)
         L->lp_hz += (lp - L->lp_hz) * 0.35f; L->hp_hz += (hp - L->hp_hz) * 0.35f;   /* (turned smoothly, no steps) */
         float q = 0.6f + 1.4f * (lo > hi ? lo : hi) * (lo > hi ? lo : hi);
         for (int c = 0; c < 2; c++) { svf_set(&L->hp[c], L->hp_hz, hi > 0 ? q : 0.6f); svf_set(&L->lp[c], L->lp_hz, lo > 0 ? q : 0.6f); }
+        if (l == e->key_layer)                   /* the keys: the chosen layer's band and TONE (their own filters' states) */
+            for (int c = 0; c < 2; c++) { svf_coef(&e->khp[c], &L->hp[c]); svf_coef(&e->klp[c], &L->lp[c]); }
+    }
+    /* the sounding notes follow their layer's knobs: TONE, WEIGHT, ENTROPY, RELEASE, SWEEP, RESO, F.GLIDE, MOOD */
+    for (int l = 0; l < NUM_LAYERS; l++) {
+        const LayerP *lp = &p->l[l];
+        uint32_t k = (uint32_t)lp->tone | (uint32_t)lp->weight << 7 | (uint32_t)lp->weird << 14 | (uint32_t)lp->release << 21;
+        k = k * 2654435761u ^ ((uint32_t)p->sweep[l] | (uint32_t)p->reso[l] << 7 | (uint32_t)p->glide[l] << 14 | (uint32_t)p->mood << 21);
+        if (k == e->L[l].knobs) continue;
+        e->L[l].knobs = k;
+        Sound snd; layer_sound(e, l, &snd);
+        for (int i = 0; i < e->L[l].nv; i++) voice_retune(&e->L[l].v[i], &snd);
+        for (int i = 0; i < KEY_POLY; i++) if (e->kv_lay[i] == l) voice_retune(&e->kv[i], &snd);
     }
     cost_add(e, NBUS, t0);
 }
@@ -416,11 +444,25 @@ void engine_block_layer(Engine *e, int b)
         memset(Lb, 0, sizeof(float) * BLK); memset(Rb, 0, sizeof(float) * BLK);
         if (b == KEYS) {
             apply(e->kq, e->nkq, e->kv, k);
-            for (int i = 0; i < KEY_POLY; i++) { e->kv[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; e->kv[i].pm = e->pm[KEYS]; voice_render(&e->kv[i], Lb, Rb, BLK); }
+            int any = 0;
+            for (int i = 0; i < KEY_POLY; i++) if (e->kv[i].on) { e->kv[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; e->kv[i].pm = e->pm[KEYS]; voice_render(&e->kv[i], Lb, Rb, BLK); any = 1; }
+            if (!any) continue;
+            int kl = e->key_layer;               /* through the chosen layer's chain, as its own notes go */
+            for (int i = 0; i < BLK; i++) {
+                Lb[i] = svf_lp(&e->klp[0], svf_hp(&e->khp[0], Lb[i]));
+                Rb[i] = svf_lp(&e->klp[1], svf_hp(&e->khp[1], Rb[i]));
+            }
+            dirt_run(&e->kdirt, u(e->p->dirt), u(e->p->s_dirt[kl]), Lb, Rb, BLK);
+            float ken = clamp01((u(e->p->l[kl].weird) - 0.4f) / 0.6f);
+            if (ken > 0.001f) dirt_run(&e->kent, ken, fm_minf(1.0f, ken * 1.6f), Lb, Rb, BLK);
             continue;
         }
         Layer *L = &e->L[b];
         apply(L->q, L->nq, L->v, k);
+        if (e->gains[k][b] < 1e-4f) {            /* faded right out (DRIFT, LEVEL): its voices go on unheard, no sound made */
+            for (int i = 0; i < L->nv; i++) voice_skip(&L->v[i], BLK);
+            continue;
+        }
         int any = 0;
         for (int i = 0; i < L->nv; i++) if (L->v[i].on) { L->v[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; L->v[i].pm = e->pm[b]; voice_render(&L->v[i], Lb, Rb, BLK); any = 1; }
         if (!any) continue;
@@ -445,6 +487,15 @@ void engine_block_layer(Engine *e, int b)
     }
     cost_add(e, b, t0);
 }
+
+void engine_overload(Engine *e) { e->shed++; }
+
+/* an effect with nothing coming in, and nothing coming out for longer than its memory, rests (its output silence)
+ * until something comes: an effect turned down, or a send at nothing, costs nothing */
+#define FX_QUIET 1e-7f                           /* a block's energy: about -88 dB */
+static float energy(const float *a, const float *b) { float s = 0; for (int i = 0; i < BLK; i++) s += a[i] * a[i] + b[i] * b[i]; return s; }
+static int fx_wake(int *q, float in, int mem) { if (in > FX_QUIET) { *q = 0; return 1; } return *q < mem; }
+static void fx_rest(int *q, float out) { if (out > FX_QUIET) *q = 0; else if (*q < 1 << 30) *q += BLK; }
 
 void engine_block_mix(Engine *e, float *outL, float *outR)
 {
@@ -494,9 +545,9 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
                 e->meter[b] += (lvl - e->meter[b]) * (lvl > e->meter[b] ? 0.3f : 0.02f);
             }
         }
-        float ol[BLK], orr[BLK], gl[BLK], grr[BLK], sh[BLK];
-        echo_run(&e->echo, el, er, ol, orr, BLK);
-        grains_run(&e->gr, gm, gl, grr, sh, BLK);
+        float ol[BLK] = { 0 }, orr[BLK] = { 0 }, gl[BLK] = { 0 }, grr[BLK] = { 0 }, sh[BLK];
+        if (fx_wake(&e->q_echo, energy(el, er), 34000)) { echo_run(&e->echo, el, er, ol, orr, BLK); fx_rest(&e->q_echo, energy(ol, orr)); }
+        if (fx_wake(&e->q_gr, energy(gm, gm), 26000) || e->gr.frozen) { grains_run(&e->gr, gm, gl, grr, sh, BLK); fx_rest(&e->q_gr, energy(gl, grr)); }
         for (int i = 0; i < BLK; i++) {
             float gg = grk * 1.3f;
             dl[i] += ol[i] + gl[i] * gg; dr[i] += orr[i] + grr[i] * gg;
@@ -504,14 +555,15 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
             rr[i] += orr[i] * 0.3f + grr[i] * gg * 0.5f;
         }
         (void)sh;
-        if (shk > 0.001f) {                              /* the shimmer: the reverb's last block, an octave up and down, back in */
+        if (shk > 0.001f && fx_wake(&e->q_sh, energy(e->shim_prev, e->shim_prev), 4400)) {   /* the shimmer: the reverb's last block, an octave up and down, back in */
             float up[BLK], dn_[BLK], gu = shk * 0.3f, gd = shk * shk * 0.26f;
             shifter_run(&e->shim, e->shim_prev, up, dn_, BLK);
+            fx_rest(&e->q_sh, energy(up, dn_));
             for (int i = 0; i < BLK; i++) { float x = up[i] * gu + dn_[i] * gd; rl[i] += x; rr[i] += x; }
         }
         chorus_run(&e->ch, u(p->chorus), dl, dr, BLK);  /* the chorus on the dry sound (the reverb's sends taken before it) */
-        float vl[BLK], vr[BLK];
-        reverb_run(&e->rv, rl, rr, vl, vr, BLK);
+        float vl[BLK] = { 0 }, vr[BLK] = { 0 };
+        if (fx_wake(&e->q_rv, energy(rl, rr), 9000)) { reverb_run(&e->rv, rl, rr, vl, vr, BLK); fx_rest(&e->q_rv, energy(vl, vr)); }
         for (int i = 0; i < BLK; i++) e->shim_prev[i] = (vl[i] + vr[i]) * 0.5f;
         float *L = outL + k * BLK, *R = outR + k * BLK;
         for (int i = 0; i < BLK; i++) { dl[i] += vl[i] * 0.55f; dr[i] += vr[i] * 0.55f; }

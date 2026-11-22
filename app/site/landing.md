@@ -4,7 +4,7 @@ A generative synth for the M-VAVE FM-1. Press REC for a new piece of ambient mus
 (GROUND, BODY, LIGHT, DUST), each its own sequencer and sound in its own part of the spectrum, answering each other.
 Everything is in the scale; DRIFT mixes the layers in and out like an ambient mixer, ENTROPY breaks them apart.
 
-![After Images on the FM-1's screen: the notes as fading shapes over the scale](img/screen.png)
+![After Images on the FM-1's screen: the notes as pegs of light, their colours mixing](img/screen.png)
 
 **Version {{VERSION}}** (a test release) · **[Install it](install/)** · [Play it in your browser](emu/) ·
 [Source](https://github.com/TheGrizard/After-Images)
@@ -31,7 +31,7 @@ installer: `python3 tools/fm1_install.py {{PKG}}`.
 | white keys | the scale's notes; black keys its chords |
 
 MIDI out over USB: each layer on its own channel, the keys on another, clock if you want it. MIDI in plays the layers on
-the same channels and can follow a clock. Over USB audio, the four layers can go out as stems beside the mix.
+the same channels and can follow a clock. Over USB audio the mix goes out as one stereo pair.
 
 Made by [TheGrizard](https://github.com/TheGrizard) on [fm1-base](https://github.com/charlesvestal/fm1-base) and
 felucca-bsp. Free software under the MPL-2.0.

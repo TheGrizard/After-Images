@@ -86,6 +86,7 @@ typedef struct {
     Drift dwalk;
     Dirt ent; float gate, gate_left, gate_hole;   /* ENTROPY's own breaking: its dirt, and the holes torn in it */
     Dirt dirt;                           /* its own DIRT (the character EFFECTS', the amount its send's) */
+    uint32_t knobs;                      /* its sound's knobs, last block (changed: the sounding notes follow) */
 } Layer;
 
 typedef struct Engine Engine;
@@ -93,6 +94,8 @@ struct Engine {
     const Piece *p;                      /* the settings it follows (the app's) */
     Layer L[NUM_LAYERS];
     Voice kv[KEY_POLY]; VoiceEv kq[EVQ]; int nkq; int key_next;
+    int8_t kv_lay[KEY_POLY];             /* each key voice's layer (whose knobs it follows) */
+    Svf khp[2], klp[2]; Dirt kdirt, kent; /* the keys through their layer's chain: its TONE, its DIRT, its ENTROPY */
     int key_layer;                       /* the layer whose sound the keys play (SELECT) */
     volatile uint32_t key_in[16]; volatile uint32_t key_w, key_r;   /* keys and MIDI notes in: (on, note, vel) */
     float bus[ENGINE_SUB][NBUS][2][BLK];
@@ -126,6 +129,10 @@ struct Engine {
     UiNote uiq[UI_Q]; volatile uint32_t uiq_head;
     float meter[NUM_LAYERS];
     int events[NUM_LAYERS];
+    /* the load guard: overruns the platform saw (from its interrupt), the ones dealt with; each effect's quiet time
+     * (samples with nothing in and nothing out: past its memory's length it rests until something comes) */
+    volatile uint32_t shed; uint32_t shed_seen;
+    int q_echo, q_gr, q_rv, q_sh;
 };
 
 void engine_init(Engine *e, const Piece *p);
@@ -135,6 +142,7 @@ void engine_key(Engine *e, int on, int note, int vel, int layer);   /* the keys 
 void engine_block_begin(Engine *e, int nsub);
 void engine_block_layer(Engine *e, int bus);
 void engine_block_mix(Engine *e, float *outL, float *outR);
-void engine_all_off(Engine *e);          /* MIDI notes off (stop, a new piece) */
+void engine_all_off(Engine *e);
+void engine_overload(Engine *e);         /* from the audio interrupt: that block nearly overran; shed at the next */          /* MIDI notes off (stop, a new piece) */
 
 #endif

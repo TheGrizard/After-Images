@@ -56,10 +56,10 @@ stays clear.
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
 | LFO again | WARBLE, Boards of Canada's worn tape in the synth itself: WARBLE (the pitch wandering slowly, the whole piece as one, an LFO on an LFO), FLUTTER (a faster shiver), DETUNE (everything a touch flat), CHORUS (the Juno's) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
-| GLO again | SCREEN: PALETTE (nine), VISUAL (the fractals, then PEGS), and for a fractal FULL (the whole screen at HOME, every pixel a fractal zooming endlessly into itself: JULIA SEA, MANDELBROT, SHIP, TRICORN, CUBIC, SPIRAL) and GLOW; for PEGS, BREED and FADE. REC deals a new palette and a new visual each time, none twice until all have come |
+| GLO again | SCREEN, the pegboard: COUNT (8 to 24 pegs across), SIZE (a speck to touching), BREED (how fast mixes come), FADE (how long things linger). REC deals a new colour palette each time, none twice until all nine have come |
 | ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK out |
 | ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (follow MIDI clock's tempo, start and stop), CC |
-| ARP a third time | USB AUDIO: RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1), STEMS (the four layers on USB audio channels 3-10, beside the mix on 1-2) |
+| ARP a third time | USB AUDIO (one stereo pair, the mix): RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1) |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |
 | PRESET | the chosen layer's engine |
 | REC | a new piece at a new tempo (65 to 110 BPM; your key and scale kept), featuring one effect: shimmer, reverse echo, a grain cloud, frozen grains, folded, crushed, wide space or HAZE (warble, chorus, flat, dark, BOARDS), dealt so none comes twice in a row |
@@ -68,19 +68,20 @@ stays clear.
 | OCT- / OCT+ | back and forward through the pieces REC replaced |
 | SAVE | keep the piece (up to 16); ALGORITHM steps through them |
 | PLAY | stop and start (it fades) |
-| HOME | back home from any page; tapped at home, the processor's load and whether saving works |
-| white keys | the scale's notes, up from the key, on the chosen layer's sound: no wrong notes |
+| HOME | back home from any page; tapped at home, the processor's load, the audio drops since power-on, and whether saving works |
+| white keys | the scale's notes, up from the key, on the chosen layer's sound and through its TONE, DIRT and ENTROPY: no wrong notes |
 | black keys | the scale's chords: I to VII, then I to IV an octave up (CHORDS sets triads, sevenths, ninths, sus, spread, fifths) |
 
-PEGS is a pegboard of light filling the screen: each note lights the peg at its pitch (low at the bottom) and its place in
-the stereo field, in its layer's colour, fading as it ends; whenever two colours are lit, a peg in their mix appears
-about halfway between them (red and blue: purple), mixes mix with each other, the board fills, and then the oldest
-fade out as new ones come, each breathing at its own pace. BREED sets how fast mixes come, FADE how long things linger.
+The home screen is a pegboard of light filling the whole screen: each note lights the peg at its pitch (low at the
+bottom) and its place in the stereo field, in its layer's colour, fading as it ends; whenever two colours are lit, a peg
+in their mix appears about halfway between them (red and blue: purple), mixes mix with each other, the board fills,
+and then the oldest fade out as new ones come, each breathing at its own pace. Only lit pegs show; the rest is black.
 
-The home screen is abstract: a fractal behind everything (SCREEN chooses which, and FULL lets it fill the screen),
-always moving by itself and moved by the music, coloured by the layers as they sound;
-over it each note leaves a fading afterimage in its layer's colour: GROUND a bar, BODY a branching fractal, LIGHT the
-melody drawn as a line, DUST sparks.
+The knobs reach the notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWEEP or RESO and a held note
+changes with them. SWEEP opens a filter over each note (up to about three seconds), on every engine.
+
+When the FM-1 is working hard it eases off by itself: fewer notes, fewer voices, quiet tails let go sooner; an
+effect turned down, or with nothing sent to it, costs nothing.
 
 Each piece gets a name from its seed: two words, one, a made-up one, or one chopped up and numbered (FLS 74,
 QURIDIAN, ZHEIGRO 17).

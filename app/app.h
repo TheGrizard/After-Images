@@ -8,6 +8,8 @@
 #define APP_SPLASH_RGB RGB(150, 190, 255)
 #define APP_SPLASH                       /* our own first screen (app_splash): black, the name, its afterimages */
 void app_splash(void);
+#define APP_OVERLOAD                     /* a block near its limit: the engine sheds at once (app_overload) */
+void app_overload(void);
 #define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms at 44.1 kHz */
 #define APP_TOUCH                        /* velocity from the keys (lib/touch.h) */
 #define APP_CANVAS_PX (240u * 60u)       /* the screen drawn in bands of 60 rows: the pool's RAM goes to the sound */

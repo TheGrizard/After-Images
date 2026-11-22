@@ -252,10 +252,9 @@ void chorus_run(Chorus *c, float amt, float *L, float *R, int n)
         c->ph += rate; if (c->ph >= 1.0f) c->ph -= 1.0f;
         float tri = c->ph < 0.5f ? 4.0f * c->ph - 1.0f : 3.0f - 4.0f * c->ph;
         float o[2];
-        for (int k = 0; k < 2; k++) {
-            float d = 310.0f + depth * (k ? -tri : tri), p = (float)c->pos - d;
-            while (p < 0) p += (float)CH_LINE;
-            int a = (int)p; float f = p - (float)a; int b = (a + 1) & (CH_LINE - 1);
+        for (int k = 0; k < 2; k++) {               /* (the delay's whole samples back from here, then between two) */
+            float d = 310.0f + depth * (k ? -tri : tri); int di = (int)d; float f = d - (float)di;
+            int a = (c->pos - di) & (CH_LINE - 1), b = (a - 1) & (CH_LINE - 1);
             o[k] = ((float)c->buf[a] + ((float)c->buf[b] - (float)c->buf[a]) * f) * (1.0f / 16384.0f);
         }
         c->pos = (c->pos + 1) & (CH_LINE - 1);

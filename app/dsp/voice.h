@@ -61,6 +61,8 @@ typedef struct {
     float pm;                            /* the pitch's wandering now (WARBLE): a multiplier, set each block */
     float freq_t, ff, glide_k;           /* the pitch; ff the filter's own pitch, gliding after it (a block's share) */
     float sweep, sw, sw_k, reso;         /* the filter's sweep: how far, where it is (0 closed .. 1 open), its pace */
+    OnePole sl[2];                       /* SWEEP's own filter, for the engines without one */
+    uint32_t seed; float ix;             /* the note's seed (its settings again, the same: voice_retune); DX's index */
 } Voice;
 
 void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float pan, float from_hz, uint32_t seed);   /* from_hz: glide from there (0: no) */
@@ -68,6 +70,9 @@ void voice_release(Voice *v);
 /* legato: the note playing moves to a new pitch, its envelope not started again (the filter glides after it) */
 void voice_legato(Voice *v, int note, float vel, float dur);
 /* add n samples (n <= BLK) into L and R */
+extern float g_voice_floor;              /* a released voice ends below this (raised under load: tails cut sooner) */
+void voice_skip(Voice *v, int n);
+void voice_retune(Voice *v, const Sound *s);   /* a sounding note follows its layer's knobs (not its engine: that's the next note's) */        /* an unheard voice: its envelope only */
 void voice_render(Voice *v, float *L, float *R, int n);
 
 #endif

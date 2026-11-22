@@ -28,6 +28,11 @@ int main(int argc, char **argv)
     dsp_init();
     piece_default(&pc);
     if (strcmp(argv[1], "default")) piece_roll(&pc, (uint32_t)strtoul(argv[1], 0, 0), argc > 4 && !strcmp(argv[4], "all"), argc > 5 ? atoi(argv[5]) : -1);
+    if (getenv("SOLO")) {                        /* SOLO=0..3: that layer alone */
+        int k = atoi(getenv("SOLO"));
+        for (int l = 0; l < NUM_LAYERS; l++) if (l != k) pc.l[l].level = 0;
+        pc.weird = 0;
+    }
     engine_init(&eng, &pc);
     char name[40]; piece_name(pc.seed, name);
     fprintf(stderr, "%s: %s %s, %d BPM; seqs %s %s %s %s; engines %s %s %s %s\n", argv[1], name, SCALES[pc.scale].name,

@@ -4,7 +4,7 @@
 
 const char *const ENGINE_NAME[NUM_ENGINES] = {
     "DRIFT SAW", "FM", "STRING", "DX", "BLEEP", "GLASS", "BREATH", "VOICE", "FOLD", "SUB", "STRINGS", "E.PIANO",
-    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "BOARDS"
+    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "BOARDS", "REESE"
 };
 
 float g_sine[SINE_SIZE + 1];
@@ -175,6 +175,16 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         if (start) v->z1 = 0.0f;
         v->lfo_dp = 5.2f * BLK_S;                                /* the vibrato */
         break;
+    case E_REESE:
+        v->p[0] = 0.0045f + 0.016f * wd;                         /* the saws apart: ~8 cents, ~35 with ENTROPY */
+        v->p[1] = 1.2f + 7.0f * tone * tone;                     /* the low-pass's top, times the pitch */
+        v->p[2] = 0.7f + 1.2f * wt + 4.0f * s->reso;
+        v->p[3] = 1.0f + 3.0f * wt;                              /* the drive into it */
+        v->p[4] = (0.2f + 0.45f * wt) * clamp01((f - 45.0f) / 45.0f);   /* the sub, an octave down (none under ~23 Hz) */
+        v->p[5] = 1.0f / fm_sqrtf(v->p[3]);
+        v->lfo_dp = (0.07f + 0.25f * wd) * BLK_S;                /* the beating's slow sweep: every 3 to 14 s */
+        if (start || v->hold > 0) v->r_k = k_of(fm_maxf(0.6f, s->release * 0.8f + 0.004f));   /* a long tail, closing as it goes */
+        break;
     case E_SUB:
     default:
         v->p[0] = 0.15f + 0.35f * tone;                          /* the octave */
@@ -237,7 +247,7 @@ static inline float saw_bl(float ph, float dt) { return 2.0f * ph - 1.0f - blep(
 float g_voice_floor = 0.001f;
 static const uint8_t HAS_FILTER[NUM_ENGINES] = {   /* (their own filter follows SWEEP and F.GLIDE) */
     [E_SAW] = 1, [E_PULSE] = 1, [E_BREATH] = 1, [E_FOLD] = 1, [E_SUB] = 1, [E_STRINGS] = 1, [E_TRI] = 1, [E_SQUARE] = 1,
-    [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1 };
+    [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1, [E_REESE] = 1 };
 
 /* a voice nobody can hear (its layer faded right out): its envelope goes on, so it ends when it would, no sound made */
 void voice_skip(Voice *v, int n)
@@ -538,6 +548,20 @@ void voice_render(Voice *v, float *L, float *R, int n)
             float p2 = v->ph[1] + 0.5f; if (p2 >= 1.0f) p2 -= 1.0f;
             float sq = 0.5f * (saw_bl(v->ph[1], d1) - saw_bl(p2, d1));
             out[i] *= svf_lp(&v->f, 0.5f * saw_bl(v->ph[0], d0) + sq);   /* the saw 6 dB under the square */
+        }
+        break;
+    }
+    case E_REESE: {                                              /* the jungle and drum'n'bass bass: phase cancelling, moving */
+        float det = v->p[0] * (1.0f + 0.7f * lfo), dr = v->p[3], g = v->p[5], sub = v->p[4];
+        float fc = (v->ff * v->p[1] + 120.0f) * swf * (0.6f + 0.4f * env);
+        svf_set(&v->f, fc, v->p[2]); svf_set(&v->f2, fc, 0.6f);
+        float d0 = dt * (1.0f + det), d1 = dt * (1.0f - det), d2 = dt * 0.5f;
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            v->ph[2] += d2; if (v->ph[2] >= 1.0f) v->ph[2] -= 1.0f;
+            float x = soft_clip(0.5f * (saw_bl(v->ph[0], d0) + saw_bl(v->ph[1], d1)) * dr) * g;
+            out[i] *= svf_lp(&v->f2, svf_lp(&v->f, x)) + sub * sine_c(v->ph[2]);
         }
         break;
     }

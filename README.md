@@ -111,9 +111,10 @@ The knobs reach notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWE
 
 ## The sounds
 
-Nineteen engines: DRIFT SAW, FM, DX (four-operator FM), STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an
+Twenty engines: DRIFT SAW, FM, DX (four-operator FM), STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an
 80s string machine), E.PIANO (80s FM), TRIANGLE, SINE, SQUARE, CZ (phase distortion), SYNC, SHAPES (unusual
-waveforms) and BOARDS (a saw and square drifting apart through a slowly opening dark filter).
+waveforms) and BOARDS (a saw and square drifting apart through a slowly opening dark filter) and REESE (two saws beating
+slowly against each other, driven into a deep low-pass with a sub under it, legato with a long tail).
 
 Each REC also features one effect: shimmer, reverse echo, a grain cloud, frozen grains, tape saturation, tape fuzz,
 wide space or HAZE (warble, chorus, flat and dark), never the same twice in a row. A slow leveller keeps every piece

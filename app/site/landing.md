@@ -16,8 +16,8 @@ always in key and always evolving. Press REC again and the next piece follows on
   Hold REC to stay in key.
 - **Systems, not dice:** eleven sequencers, from Euclidean rings and Markov chains to the Lorenz attractor and
   Conway's Life, patched so one layer's notes nudge another's.
-- **Nineteen engines:** FM, DX, phase distortion, plucked strings, glass, breath, voices, an 80s string machine and
-  more, with ENTROPY turning their synthesis in on itself.
+- **Twenty engines:** FM, DX, phase distortion, plucked strings, glass, breath, voices, an 80s string machine, a
+  Reese bass and more, with ENTROPY turning their synthesis in on itself.
 - **An ambient mixer:** DRIFT fades the layers in and out, walks them round the stereo field and slowly morphs their
   effects and character.
 - **Shimmer, reverse echo, grain clouds and tape:** shared effects with a send for each layer.

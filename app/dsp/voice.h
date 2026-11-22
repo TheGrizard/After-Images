@@ -27,6 +27,7 @@ enum {
     E_SYNC,     /* SYNC: a hard-synced saw, its slave sweeping down across the note */
     E_SHAPES,   /* SHAPES: unusual waves (rectified, half, trapezoid, sine of sine, parabola, bent), DRIFT moves through them */
     E_BOARDS,   /* BOARDS: a saw and a square a little apart, a dark filter opening slowly on each note (a wah), a slow vibrato */
+    E_REESE,    /* REESE: two saws a little apart, their beating sweeping slowly, driven into a 24 dB low-pass, a sub under */
     NUM_ENGINES
 };
 extern const char *const ENGINE_NAME[NUM_ENGINES];

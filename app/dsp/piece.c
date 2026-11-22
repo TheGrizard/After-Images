@@ -3,8 +3,8 @@
 #include "engine.h"
 
 /* the engines that suit each role's band */
-static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB, E_TRI, E_SINE, E_SQUARE, E_CZ, E_SYNC, E_BOARDS };
-static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW, E_TRI, E_SQUARE, E_CZ, E_SHAPES, E_BOARDS, E_BOARDS };
+static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB, E_TRI, E_SINE, E_SQUARE, E_CZ, E_SYNC, E_BOARDS, E_REESE, E_REESE };
+static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW, E_TRI, E_SQUARE, E_CZ, E_SHAPES, E_BOARDS, E_BOARDS, E_REESE };
 static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM, E_TRI, E_SINE, E_CZ, E_SYNC, E_SHAPES, E_BOARDS };
 static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS, E_SINE, E_SHAPES };
 static const uint8_t *const POOL[NUM_LAYERS] = { POOL_G, POOL_B, POOL_L, POOL_D };
@@ -61,6 +61,10 @@ static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and th
     p->legato[l] = (uint8_t)(p->glide[l] && l != L_BODY && rng_chance(r, 0.55f));
     p->sweep[l] = rng_chance(r, 0.3f) ? pick(r, 20, 70) : 0;
     p->reso[l] = rng_chance(r, 0.25f) ? pick(r, 15, 60) : 0;
+    if (p->l[l].engine == E_REESE) {             /* a REESE: legato, its filter gliding after each note */
+        p->legato[l] = 1;
+        if (!p->glide[l]) p->glide[l] = pick(r, 25, 60);
+    }
 }
 
 const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "SATURATED", "TAPE FUZZ", "WIDE SPACE", "HAZE" };

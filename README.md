@@ -57,8 +57,8 @@ stays clear.
 | LFO again | WARBLE, Boards of Canada's worn tape in the synth itself: WARBLE (the pitch wandering slowly, the whole piece as one, an LFO on an LFO), FLUTTER (a faster shiver), DETUNE (everything a touch flat), CHORUS (the Juno's) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
 | GLO again | SCREEN, the pegboard: COUNT (8 to 24 pegs across), SIZE (a speck to touching), BREED (how fast mixes come), FADE (how long things linger). REC deals a new colour palette each time, none twice until all nine have come |
-| ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK out |
-| ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (follow MIDI clock: its tempo, its beats and bars, start and stop), CC |
+| ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK (INT: its own tempo; IN: following MIDI clock; OUT: sending it) |
+| ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (the same setting as MIDI OUT's: IN follows MIDI clock, its tempo, its beats and bars, start and stop), CC |
 | ARP a third time | USB AUDIO (one stereo pair, the mix): RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1) |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |
 | PRESET | the chosen layer's engine |
@@ -92,12 +92,12 @@ SAVE keeps a piece at once, whenever you press it.
 
 MIDI out (USB): each layer's notes on its own channel (1-4 by default), the keys on another (5), clock if you want it.
 MIDI in (USB or the TRS jack): notes on the layers' channels play those layers, others the chosen layer, all put into
-the scale; CC 20-23 are HOME's macros, 24-27 EFFECTS', 28-31 MOTION's; clock, start and stop followed with CLOCK on.
+the scale; CC 20-23 are HOME's macros, 24-27 EFFECTS', 28-31 MOTION's; clock, start and stop followed with CLOCK at IN.
 
 Following a clock, After Images locks to the leader's beats and bars, not only its tempo: Start puts it at the top of
 the bar with every sequencer's steps on the 16ths, and it stays there through a new piece (REC) or a change of tempo.
 To play along with an Ableton Move: a USB cable from Move's USB-A port to the FM-1, Move's MIDI Sync set to Out, and
-CLOCK on in MIDI IN (ARP pressed twice). The FM-1's TRS jack takes clock too, from anything with a MIDI out.
+CLOCK at IN (on either MIDI page). The FM-1's TRS jack takes clock too, from anything with a MIDI out.
 
 Every note lands somewhere new in the stereo field and wanders as it sounds: DRIFT and CHAOS throw them wider.
 

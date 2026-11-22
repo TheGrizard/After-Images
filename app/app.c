@@ -28,7 +28,8 @@ static Engine eng PLAT_POOL;
 typedef struct {
     uint32_t magic;
     uint8_t slot;                        /* the saved piece being played (255: none) */
-    uint8_t nsaved, midi_on, midi_ch, midi_keys, midi_clock, playing, rsv;
+    uint8_t nsaved, midi_on, midi_ch, midi_keys, midi_clock, playing, sync;   /* sync: CLOCK, INT / IN / OUT (midi_clock and
+                                                                         * clock_in: v0.2-0.12's two switches, moved into it) */
     Piece cur;
     Piece saved[NSAVED];
     /* v0.2 */
@@ -52,6 +53,10 @@ static uint8_t set_dirty;
 static int store_ok = 1;
 static uint32_t autosave_at;
 #define AUTOSAVE_MS 8000u
+enum { SYNC_INT, SYNC_IN, SYNC_OUT, NSYNC };   /* CLOCK: our own tempo; following MIDI clock; sending it */
+static const char *const SYNC_NAME[NSYNC] = { "INT", "IN", "OUT" };
+#define CLK_IN (set.sync == SYNC_IN)
+#define CLK_OUT (set.sync == SYNC_OUT)
 
 static void settings_v2(void)             /* what v0.2 added, as it starts */
 {
@@ -65,7 +70,7 @@ static void settings_defaults(void)
 {
     memset(&set, 0, sizeof set);
     set.magic = SET_MAGIC; set.slot = 255;
-    set.midi_on = 1; set.midi_ch = 0; set.midi_keys = 4; set.midi_clock = 0;
+    set.midi_on = 1; set.midi_ch = 0; set.midi_keys = 4; set.midi_clock = 0; set.sync = SYNC_INT;
     piece_default(&set.cur);
     settings_v2();
 }
@@ -73,7 +78,7 @@ static void settings_defaults(void)
 static int settings_ok(void)
 {
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
-    if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.midi_clock > 1) return 0;
+    if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.midi_clock > 1 || set.sync >= NSYNC) return 0;
     if (set.in_ch > 16 || set.layers_in > 1 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100) return 0;
     if (!piece_ok(&set.cur)) return 0;
@@ -105,6 +110,9 @@ static void settings_load(void)
     } else memcpy(&set, raw, sizeof set);
     if (set.pegs_set != 1 && set.pegs_set != 2) { set.breed = 50; set.fade = 50; }   /* (a store from before PEGS) */
     if (set.pegs_set != 2) { set.peg_n = PEG_N_DEF; set.peg_size = 50; set.pegs_set = 2; memset(set.rsv3, 0, sizeof set.rsv3); }   /* (before COUNT, SIZE) */
+    if (set.clock_in || set.midi_clock) {    /* (v0.2-0.12's two CLOCK switches: one setting now, IN first if both were on) */
+        set.sync = set.clock_in ? SYNC_IN : SYNC_OUT; set.clock_in = set.midi_clock = 0;
+    }
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -163,27 +171,27 @@ static void midi_in(void)
             if (++count >= 24u) {
                 uint32_t ms = now - beat_at;
                 count = 0; beat_at = now;
-                if (set.clock_in && ms >= 200u && ms <= 3000u) {   /* (20 to 300 BPM) */
+                if (CLK_IN && ms >= 200u && ms <= 3000u) {   /* (20 to 300 BPM) */
                     float b = 60000.0f / (float)ms;
                     ext_bpm = ext_bpm > 0 ? ext_bpm + (b - ext_bpm) * 0.5f : b;
                 }
             }
             /* locked to the leader's beat, not only its tempo: at each of its beats (24 clocks from its Start) our beat
              * should be whole; how far off it is the engine takes up over the next moments (no notes skipped) */
-            if (set.clock_in && set.playing && ++clk_n % 24u == 0) {
+            if (CLK_IN && set.playing && ++clk_n % 24u == 0) {
                 /* within a bar: a new piece (REC) starts our count again, a missed Start leaves it anywhere; the bars stay
                  * the leader's either way (at most two beats to take up) */
                 float err = (float)(clk_n / 24u) - eng.beat;
                 err -= 4.0f * fm_floorf(err * 0.25f + 0.5f);
                 eng.beat_adj = err;
             }
-            if (set.clock_in) ext_at = now;
-        } else if ((st == 0xFAu || st == 0xFBu) && set.clock_in) {
+            if (CLK_IN) ext_at = now;
+        } else if ((st == 0xFAu || st == 0xFBu) && CLK_IN) {
             eng.playing = set.playing = 1;
             if (st == 0xFAu) { eng.sync_req = 1; clk_n = 0; }   /* Start: the top of the bar, with the leader */
             else clk_n = (uint32_t)(eng.beat + 0.5f) * 24u;                  /* Continue: from where we are */
         }
-        else if (st == 0xFCu && set.clock_in) { eng.playing = set.playing = 0; engine_all_off(&eng); }
+        else if (st == 0xFCu && CLK_IN) { eng.playing = set.playing = 0; engine_all_off(&eng); }
         else if (ty == 0x90u || ty == 0x80u) {
             int note = deg_note(sc, set.cur.key, note_deg(sc, set.cur.key, (int)d1)), layer = -1;
             if (set.layers_in && ch >= set.midi_ch && ch < set.midi_ch + 4u) layer = (int)(ch - set.midi_ch);
@@ -196,7 +204,7 @@ static void midi_in(void)
         }
     }
     if (ext_bpm > 0 && plat_ms() - ext_at > 1000u) ext_bpm = 0;   /* the clock stopped: our own tempo again */
-    eng.ext_bpm = set.clock_in ? ext_bpm : 0.0f;
+    eng.ext_bpm = CLK_IN ? ext_bpm : 0.0f;
 }
 
 
@@ -223,7 +231,15 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     int nsub = (int)(n / BLK);
     if (nsub > ENGINE_SUB) nsub = ENGINE_SUB;
     midi_in();
-    eng.midi_on = set.midi_on; eng.midi_ch = set.midi_ch; eng.midi_keys_ch = set.midi_keys; eng.midi_clock = set.midi_clock;
+    eng.midi_on = set.midi_on; eng.midi_ch = set.midi_ch; eng.midi_keys_ch = set.midi_keys; eng.midi_clock = CLK_OUT;
+    {   /* CLOCK turned to OUT while playing: a Start now, from the top of the bar; turned from it: a Stop */
+        static int was_out = -1; int out = CLK_OUT && set.midi_on;
+        if (was_out >= 0 && out != was_out && set.playing) {
+            if (out) eng.sync_req = 1;
+            plat_midi_send(0x0Fu | (out ? 0xFAu : 0xFCu) << 8, TO_USB);
+        }
+        was_out = out;
+    }
     engine_block_begin(&eng, nsub);
     uint8_t mask = two_cores && plat_cpu2_on() ? on2_mask : 0;
     int sent = mask && plat_cpu2_run(layers_job, mask);
@@ -273,7 +289,7 @@ static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX
  * MIDI IN, USB) */
 static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
+       K_PEGN, K_SYNC, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -293,8 +309,8 @@ static const Knob PAGES[NPAGES][4] = {
     { { "WARBLE", K_PCT, 0, PO(warble) }, { "FLUTTER", K_PCT, 0, PO(flutter) }, { "DETUNE", K_PCT, 0, PO(detune) }, { "CHORUS", K_PCT, 0, PO(chorus) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
-    { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
-    { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_ONOFF, 2, SO(clock_in) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
+    { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_SYNC, 2, SO(sync) } },
+    { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_SYNC, 2, SO(sync) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
     { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
@@ -366,6 +382,7 @@ static void knob_text(int pg, int k, char *s)
     case K_GRAIN: if (v < 92) int_text(v, s); else text_cat(s, "FREEZE"); break;
     case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PEGN: int_text(PEG_NS[v % NPEG_NS], s); break;
+    case K_SYNC: text_cat(s, SYNC_NAME[v % NSYNC]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
     case K_RATE: text_cat(s, RATE_NAME[v % NUM_RATES]); break;
@@ -390,6 +407,7 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_INCH: return (float)v / 16.0f;
     case K_REC: return v ? 1.0f : 0.0f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
+    case K_SYNC: return (float)v / (NSYNC - 1);
     case K_ENGINE: return (float)v / (NUM_ENGINES - 1);
     case K_SEQ: return (float)v / (NUM_SEQS - 1);
     case K_RATE: return (float)v / (NUM_RATES - 1);
@@ -540,7 +558,7 @@ static void play_toggle(void)
     set.playing = (uint8_t)!set.playing;
     if (!set.playing) stopped_at = plat_ms();
     eng.playing = set.playing;
-    if (set.midi_on && set.midi_clock) {     /* leading: Start from the top of the bar, so the follower's 1 is ours */
+    if (set.midi_on && CLK_OUT) {            /* leading: Start from the top of the bar, so the follower's 1 is ours */
         if (set.playing) eng.sync_req = 1;
         midi_send(0x0Fu | (set.playing ? 0xFAu : 0xFCu) << 8);
     }
@@ -577,6 +595,7 @@ static void knob_turn(int k, int d)
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
+    case K_SYNC: hi = NSYNC - 1; step = 1; break;
     case K_ENGINE: hi = NUM_ENGINES - 1; step = 1; wrap = 1; break;
     case K_SEQ: hi = NUM_SEQS - 1; step = 1; wrap = 1; break;
     case K_RATE: hi = NUM_RATES - 1; step = 1; break;
@@ -1173,6 +1192,7 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "lastnote")) *got = ui.last_note;
     else if (!strncmp(what, "sweep", 5)) *got = set.cur.sweep[atoi(what + 5) & 3];
     else if (!strcmp(what, "layers_in")) *got = set.layers_in;
+    else if (!strcmp(what, "sync")) *got = set.sync;
     else if (!strcmp(what, "clockbpm")) *got = (int)(eng.bpm + 0.5f);
     else if (!strcmp(what, "beatlag")) {        /* following a clock: our beat off the leader's, in 1/100 beat (within a bar) */
         float err = ((float)clk_n / 24.0f) - eng.beat; err -= 4.0f * fm_floorf(err * 0.25f + 0.5f);

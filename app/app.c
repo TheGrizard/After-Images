@@ -903,11 +903,18 @@ static void pegs_step(float dt)
     if (pg_acc > 1.0f) pg_acc = 0;
 }
 
-static void disc(int cx, int cy, int r, uint16_t c)
+/* a ball centred anywhere, to the sub-pixel: a pixel's centre is half a pixel in, so a ball on an even cell's middle
+ * is symmetric, and at its full size fills the cell exactly, edge to edge */
+static void disc(float cx, float cy, float r, uint16_t c)
 {
-    for (int dy = -r; dy <= r; dy++) {
-        int w = 0; while ((w + 1) * (w + 1) + dy * dy <= r * r + r) w++;
-        cv_rect(cx - w, cy + dy, 2 * w + 1, 1, c);
+    if (r < 0.5f) r = 0.5f;
+    int y0 = (int)fm_floorf(cy - r), y1 = (int)fm_floorf(cy + r);
+    for (int py = y0; py <= y1; py++) {
+        float dy = (float)py + 0.5f - cy;
+        if (dy * dy > r * r) continue;
+        float half = fm_sqrtf(r * r - dy * dy);
+        int x0 = -(int)fm_floorf(-(cx - half - 0.5f)), x1 = (int)fm_floorf(cx + half - 0.5f);
+        if (x1 >= x0) cv_rect(x0, py, x1 - x0 + 1, 1, c);
     }
 }
 
@@ -915,8 +922,7 @@ static void draw_pegs(void)
 {
     static uint8_t acc[PG_MAX][PG_MAX][3];
     int rows = peg_rows(), cols = peg_cols(), cell = peg_cell(), y0 = (VIEW_H - rows * cell) / 2;
-    int rad = (int)((float)cell * (0.12f + 0.0038f * (float)(splash_pegs ? 100 : set.peg_size)) + 0.5f);   /* SIZE: a speck .. touching */
-    if (rad < 1) rad = 1;
+    float rad = (float)cell * (0.12f + 0.0038f * (float)(splash_pegs ? 100 : set.peg_size));   /* SIZE: a speck .. touching (half the cell) */
     memset(acc, 0, sizeof acc);
     for (int i = 0; i < PG_NOTES; i++) {           /* the notes' light, added */
         float lv = pn_level(i); if (lv <= 0.01f) continue;
@@ -926,8 +932,8 @@ static void draw_pegs(void)
         a[0] = (uint8_t)clamp(a[0] + r, 0, 255); a[1] = (uint8_t)clamp(a[1] + g, 0, 255); a[2] = (uint8_t)clamp(a[2] + b, 0, 255);
     }
     for (int y = 0; y < rows; y++) {
-        int py = y0 + y * cell + cell / 2;
-        if (py + cell < -cv_oy || py - cell > -cv_oy + (int)cv_h) continue;
+        float py = (float)(y0 + y * cell) + (float)cell * 0.5f;   /* (the cell's exact middle: the board centred to the pixel) */
+        if (py + (float)cell < (float)-cv_oy || py - (float)cell > (float)(-cv_oy + (int)cv_h)) continue;
         for (int x = 0; x < cols; x++) {
             float ml = mp_level(&mp[y][x], x, y);
             uint16_t mc = mp[y][x].col;
@@ -935,7 +941,7 @@ static void draw_pegs(void)
             if (ml > 0.01f && mc) { r += (int)((float)((mc >> 11) * 255 / 31) * ml); g += (int)((float)(((mc >> 5) & 63) * 255 / 63) * ml); b += (int)((float)((mc & 31) * 255 / 31) * ml); }
             if (r + g + b <= 45) continue;           /* unlit (or nearly out): nothing there */
             if (pegs_gain < 1.0f) { r = (int)((float)r * pegs_gain); g = (int)((float)g * pegs_gain); b = (int)((float)b * pegs_gain); }
-            disc(x * cell + cell / 2, py, rad, RGB(clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)));
+            disc((float)(x * cell) + (float)cell * 0.5f, py, rad, RGB(clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)));
         }
     }
 }
@@ -1169,7 +1175,7 @@ static void splash_frame(uint32_t ms)
             if (cy + 18 < top || cy - 18 >= top + 60) continue;
             float s = a < 90 ? (float)a / 90.0f * 1.08f : a < 170 ? 1.08f - (float)(a - 90) / 80.0f * 0.08f : 1.0f;
             uint16_t c = sp_let[i].col, col = a < 120 ? mix565(c, C_WHITE, 0.8f * (1.0f - (float)a / 120.0f)) : c;
-            disc(cx, cy, (int)(15.0f * s + 0.5f), dim(col, pegs_gain));
+            disc((float)cx, (float)cy, 15.0f * fm_minf(s, 1.0f), dim(col, pegs_gain));
             if (s > 0.6f) {
                 int r = c >> 11, g = (c >> 5) & 63, b = c & 31;
                 float lum = 0.3f * (float)r / 31.0f + 0.59f * (float)g / 63.0f + 0.11f * (float)b / 31.0f;

@@ -72,7 +72,7 @@ static void layer_sound(const Engine *e, int l, Sound *s)
 {
     const Piece *p = e->p; const LayerP *lp = &p->l[l];
     s->engine = lp->engine < NUM_ENGINES ? lp->engine : 0;
-    s->tone = clamp01(0.42f + (mo(e, l, MW_TONE, lp->tone, 0.25f) - 0.5f) * 0.5f + e->L[l].tone_off + (u(p->mood) - 0.6f) * 0.35f
+    s->tone = clamp01(0.42f + (mo(e, l, MW_TONE, lp->tone, 0.25f) - 0.5f) * 0.5f + e->L[l].tone_off + (u(p->mood) - 0.5f) * 0.35f
                       + u(p->drift) * 0.25f * e->L[l].dtone.v);
     s->weight = mo(e, l, MW_WEIGHT, lp->weight, 0.4f);
     s->weird = mo(e, l, MW_ENT, lp->weird, 0.4f);
@@ -407,6 +407,7 @@ void engine_block_begin(Engine *e, int nsub)
         for (int l = 0; l < NUM_LAYERS; l++) {
             float lv = u(p->l[l].level), g = lv * lv * e->L[l].present * e->fade * 1.6f * e->L[l].im_g;   /* (DRIFT's fading) */
             if (l == L_BODY || l == L_DUST) g *= 1.0f - e->duck;
+            if (l == L_GROUND) g *= 1.0f + 0.4f * clamp01((0.5f - u(p->mood)) * 2.0f);   /* (MOOD dark: the bass up) */
             e->gains[k][l] = g;
         }
         e->gains[k][KEYS] = e->fade * 1.2f + 0.3f;
@@ -416,8 +417,11 @@ void engine_block_begin(Engine *e, int nsub)
     for (int l = 0; l < NUM_LAYERS; l++) {
         Layer *L = &e->L[l];
         float t = mo(e, l, MW_TONE, p->l[l].tone, 0.25f), lo = t < 0.5f ? (0.5f - t) * 2.0f : 0.0f, hi = t > 0.5f ? (t - 0.5f) * 2.0f : 0.0f;
-        float lp = ROLES[l].lp * (0.85f + 0.3f * (u(p->mood) - 0.5f)) * fm_exp2f(-7.0f * lo);
-        float hp = ROLES[l].hp * fm_exp2f(6.5f * hi + 3.5f * L->im_far);   /* (DRIFT: far off, its lows thin) */
+        /* MOOD: a tilt, 12 o'clock as set. Darker, the upper layers a shade duller (and the bass up: the gains, the
+         * shelf); brighter, they open and lose their lows, so at full GROUND alone carries the bass */
+        float m = u(p->mood), dark = clamp01((0.5f - m) * 2.0f), bright = clamp01((m - 0.5f) * 2.0f);
+        float lp = ROLES[l].lp * fm_exp2f(l == L_GROUND ? 0.0f : 0.5f * bright - 1.0f * dark) * fm_exp2f(-7.0f * lo);
+        float hp = ROLES[l].hp * fm_exp2f(6.5f * hi + 3.5f * L->im_far + (l == L_GROUND ? 0.0f : 2.0f * bright));   /* (DRIFT: far off, its lows thin) */
         /* patched: the source layer's activity opens this one's filter, the random voltage moves it (LINK, DRIFT) */
         lp *= fm_exp2f(u(p->link) * 1.8f * (e->L[L->src].cv - 0.25f) + u(p->drift) * 0.9f * L->rnd);
         lp = clampf(lp, 40.0f, 18000.0f); hp = clampf(hp, 15.0f, 12000.0f);
@@ -601,6 +605,13 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
             e->dc[0] += 0.0035f * (l - e->dc[0]); e->dc[1] += 0.0035f * (r - e->dc[1]);
             L[i] = l - e->dc[0]; R[i] = r - e->dc[1];
         }
+        float shelf = 1.8f * clamp01((0.5f - u(p->mood)) * 2.0f);   /* MOOD dark: the sub, up to +9 dB below ~110 Hz */
+        if (shelf > 0.001f)
+            for (int i = 0; i < BLK; i++) {
+                e->sub[0] += 0.0156f * (L[i] - e->sub[0]); e->sub[1] += 0.0156f * (R[i] - e->sub[1]);
+                L[i] += shelf * e->sub[0]; R[i] += shelf * e->sub[1];
+            }
+        else e->sub[0] = e->sub[1] = 0;
         /* the leveller: pieces come out at about the same loudness (+-8 dB at most), over seconds, never pumping */
         float ss = 0;
         for (int i = 0; i < BLK; i++) ss += L[i] * L[i] + R[i] * R[i];

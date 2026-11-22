@@ -121,6 +121,7 @@ struct Engine {
     float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];
     float im_left;                       /* DRIFT: seconds until the levels choose where to wander next */   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];
+    float sub[2];                        /* MOOD's low shelf: the mix's lows (below ~110 Hz), added back darker it goes */
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */
     void (*midi)(uint32_t pkt);

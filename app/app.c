@@ -1142,6 +1142,8 @@ static uint16_t rgb_mix(uint16_t a, uint16_t b)  /* two colours' mix, as light: 
 {
     int ar = a >> 11, ag = (a >> 5) & 63, ab = a & 31, br = b >> 11, bg = (b >> 5) & 63, bb = b & 31;
     float r = (float)(ar + br) * 0.5f / 31.0f, g = (float)(ag + bg) * 0.5f / 63.0f, bl = (float)(ab + bb) * 0.5f / 31.0f;
+    float mean = (r + g + bl) * (1.0f / 3.0f);   /* pushed away from grey, so mixes of mixes stay coloured */
+    r = fm_maxf(0.0f, mean + (r - mean) * 1.5f); g = fm_maxf(0.0f, mean + (g - mean) * 1.5f); bl = fm_maxf(0.0f, mean + (bl - mean) * 1.5f);
     float mx = fm_maxf(r, fm_maxf(g, bl)), k = mx > 0.01f ? fm_minf(1.6f, 0.92f / mx) : 1.0f;
     uint16_t c = RGB((int)(fm_minf(1.0f, r * k) * 255.0f), (int)(fm_minf(1.0f, g * k) * 255.0f), (int)(fm_minf(1.0f, bl * k) * 255.0f));
     return c ? c : 1;

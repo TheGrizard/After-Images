@@ -40,6 +40,7 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
     v->sus = 1.0f; v->d_k = k_of(1.0f);
     v->lfo_dp = (0.1f + 0.4f * wd) * BLK_S;
     v->drive = 1.0f + 5.0f * wt * wt;
+    v->ent = clamp01((wd - 0.5f) * 2.0f);        /* ENTROPY past halfway: the chaos oscillator comes in */
     float f = v->freq;
     switch (v->engine) {
     case E_SAW:
@@ -62,7 +63,8 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         if (start) {
             float len = SR / f;
             while (len >= (float)(KS_MAX - 2)) len *= 0.5f;      /* too low for the line: an octave up */
-            v->ks_len = (int)len; v->ks_frac = len - (float)v->ks_len; v->ks_pos = 0; v->ks_lp = 0;
+            v->ks_len = (int)len; v->ks_frac = len - (float)v->ks_len; v->ks_pos = v->ks_len + 1; v->ks_lp = 0; v->ks_e = 0.2f;
+            memset(v->ks, 0, sizeof v->ks);
             float c = 0.2f + 0.8f * tone, z = 0;                 /* the pluck: noise, darker when soft */
             for (int i = 0; i < v->ks_len + 1; i++) { z += c * (noise(&v->noise) - z); v->ks[i] = (int16_t)(z * 12000.0f); }
         }
@@ -208,6 +210,9 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
     v->ws = 0;                                   /* (the piece's DRIFT ring modulator: set by the engine each block) */
     v->ph[3] = 0;
     v->id = (uint8_t)(seed >> 24);
+    v->cph = (float)(seed >> 12 & 255u) / 256.0f; v->cz = v->cz2 = 0; v->clfo = (float)(seed >> 4 & 255u) / 256.0f;
+    v->cmode = (uint8_t)((seed >> 27) % 3u);
+    v->bab = 0;
 }
 
 void voice_retune(Voice *v, const Sound *s)
@@ -270,6 +275,8 @@ void voice_render(Voice *v, float *L, float *R, int n)
     v->hold -= (float)n / SR; v->age += (float)n / SR;
     if (v->hold <= 0 && env < g_voice_floor) { v->on = 0; v->env = 0; return; }
     v->env = env;
+    float envs[BLK];                             /* (the envelope, kept for ENTROPY's chaos oscillator) */
+    if (v->ent > 0.001f) for (int i = 0; i < n; i++) envs[i] = out[i];
 
     switch (v->engine) {
     case E_SAW: {
@@ -295,25 +302,31 @@ void voice_render(Voice *v, float *L, float *R, int n)
         }
         break;
     }
-    case E_PLUCK: {
-        int len = v->ks_len; float fr = v->ks_frac, damp = v->ks_damp;
-        if (v->p[0] > 0.3f && v->age < 0.3f) fr += (v->p[0] - 0.3f) * (0.3f - v->age) * 3.0f;   /* weird: a bend */
+    case E_PLUCK: {                                              /* Karplus-Strong: a line the length of a period */
+        float leff = (float)(v->ks_len + 1) - v->ks_frac, damp = v->ks_damp, e = v->ent;
+        if (v->p[0] > 0.3f && v->age < 0.3f) leff -= (v->p[0] - 0.3f) * (0.3f - v->age) * 3.0f;   /* weird: a bend */
+        if (e > 0.001f) {   /* ENTROPY: a slack string, sharp as it's struck and sagging flat as it rings, wobbling */
+            float a = clamp01(v->ks_e * 6.0f);
+            leff *= 1.0f - 0.08f * e * a + 0.045f * e * (1.0f - a) + 0.015f * e * lfo;
+        }
+        leff = clampf(leff, 2.0f, (float)(KS_MAX - 3));
+        int li = (int)leff; float fr = leff - (float)li;
         for (int i = 0; i < n; i++) {
-            int p0 = v->ks_pos, p1 = p0 + 1 >= len + 1 ? 0 : p0 + 1;
-            float a = v->ks[p0] * (1.0f / 12000.0f), b = v->ks[p1] * (1.0f / 12000.0f);
-            float y = a + (b - a) * (fr > 1.0f ? 1.0f : fr);
+            int w = v->ks_pos, r0 = (w - li) & (KS_MAX - 1), r1 = (r0 - 1) & (KS_MAX - 1);
+            float a = v->ks[r0] * (1.0f / 12000.0f), b = v->ks[r1] * (1.0f / 12000.0f);
+            float y = a + (b - a) * fr;
             v->ks_lp += 0.5f * (y - v->ks_lp) + dn();        /* (never into the denormals) */
-            float w = (v->ks_lp * 0.5f + y * 0.5f) * damp;
-            v->ks[p0] = (int16_t)clampf(w * 12000.0f, -32000.0f, 32000.0f);
-            v->ks_pos = p1;
+            float wv = (v->ks_lp * 0.5f + y * 0.5f) * damp;
+            v->ks[w] = (int16_t)clampf(wv * 12000.0f, -32000.0f, 32000.0f);
+            v->ks_pos = (w + 1) & (KS_MAX - 1);
+            v->ks_e += (fm_fabsf(y) - v->ks_e) * 0.0005f;
             out[i] *= y * 1.6f;
         }
-        (void)len;
         break;
     }
     case E_EPIANO: {
         float i1 = v->z1, i2 = v->z2, k1 = v->p[3], k2 = v->p[4], r2 = v->p[2];
-        float wob = 1.0f + v->p[5] * lfo, d0 = dt * wob;
+        float wob = 1.0f + v->p[5] * lfo + 0.05f * v->ent * i1, d0 = dt * wob;   /* (ENTROPY: the tines bent, sharp as struck) */
         for (int i = 0; i < n; i++) {
             v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             v->ph[1] += d0; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
@@ -391,12 +404,13 @@ void voice_render(Voice *v, float *L, float *R, int n)
         break;
     }
     case E_GLASS: {
-        float u = v->p[4];
+        float u = v->p[4], dr = 1.0f + 0.045f * v->ent * lfo;   /* (ENTROPY: the partials drifting apart and back) */
+        float q1 = v->p[1] * dr, q2 = v->p[2] * (2.0f - dr), q3 = v->p[3] * (1.0f + 0.03f * v->ent * (1.0f - lfo));
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             float p = v->ph[0];
-            out[i] *= 0.6f * sine_c(p) + u * (0.35f * sine_c(p * v->p[1] + v->ph[1]) + 0.22f * sine_c(p * v->p[2] + v->ph[2])
-                                             + 0.14f * sine_c(p * v->p[3]));
+            out[i] *= 0.6f * sine_c(p) + u * (0.35f * sine_c(p * q1 + v->ph[1]) + 0.22f * sine_c(p * q2 + v->ph[2])
+                                             + 0.14f * sine_c(p * q3));
         }
         break;
     }
@@ -410,7 +424,11 @@ void voice_render(Voice *v, float *L, float *R, int n)
         break;
     }
     case E_VOX: {
-        float pos = v->p[0] + v->p[1] * 2.0f * (0.5f + 0.5f * lfo);
+        if (v->ent > 0.001f) {                                   /* (ENTROPY: babble, the vowels wandering, stuttering) */
+            v->bab += (noise(&v->noise) * 2.5f - v->bab) * 0.08f * v->ent;
+            if (v->bab < 0) v->bab = -v->bab;
+        }
+        float pos = v->p[0] + v->p[1] * 2.0f * (0.5f + 0.5f * lfo) + v->ent * v->bab;
         int a = (int)pos % 5, b = (a + 1) % 5; float t = pos - fm_floorf(pos);
         svf_set(&v->f, lerpf(VOWEL[a][0], VOWEL[b][0], t), v->p[2]);
         svf_set(&v->f2, lerpf(VOWEL[a][1], VOWEL[b][1], t), v->p[2]);
@@ -534,6 +552,26 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     }
 
+    /* ENTROPY past halfway: synthesis turning on itself. A chaos oscillator at the note's pitch (in key), blended in
+     * with the engine: FM feedback (a growl, then the screech of a DX at feedback 7), PWM (a pulse whose width swings
+     * faster and wider), or a sine phase-modulated by that pulse; each note one of the three */
+    if (v->ent > 0.001f) {
+        float e = v->ent, m = 0.75f * e, beta = 0.3f + 1.7f * e;
+        v->clfo += (0.15f + 7.0f * e * e) * BLK_S * (float)n / BLK; if (v->clfo >= 1.0f) v->clfo -= 1.0f;
+        float w = 0.5f + (0.1f + 0.38f * e) * fm_sin_turns(v->clfo), cd = dt * (v->cmode == 2 ? 2.0f : 1.0f);
+        for (int i = 0; i < n; i++) {
+            v->cph += cd; if (v->cph >= 1.0f) v->cph -= 1.0f;
+            float y;
+            if (v->cmode == 0) {                     /* FM feedback, the two last samples averaged (as the DX does) */
+                y = sine_c(v->cph + beta * 0.5f * (v->cz + v->cz2)); v->cz2 = v->cz; v->cz = y;
+            } else {                                 /* the pulse, band-limited at both edges */
+                float t2 = v->cph - w; if (t2 < 0) t2 += 1.0f;
+                float pl = (v->cph < w ? 1.0f : -1.0f) + blep(v->cph, cd) - blep(t2, cd);
+                y = v->cmode == 1 ? pl * 0.7f : sine_c(v->cph * 0.5f + beta * 0.35f * pl);
+            }
+            out[i] = out[i] * (1.0f - m) + envs[i] * y * 0.8f * m;
+        }
+    }
     /* SWEEP on the engines without a filter of their own (FM, DX, E.PIANO, GLASS, SINE, STRING, VOICE): a gentle
      * 12 dB low-pass, there only while it opens */
     if (v->sweep > 0.001f && !HAS_FILTER[v->engine % NUM_ENGINES]) {

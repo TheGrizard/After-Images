@@ -50,6 +50,14 @@ static void midi_due(Engine *e)
 /* each bus's ghost: a note whose voice a new one took, fading out over ~80 ms, not cut off (in the RAM beside the
  * engine's, not the pool's: the pool keeps its headroom) */
 static Voice g_ghost[NBUS];
+static Shifter g_shim;                           /* the shimmer's pitch shifter (8 KB: beside the engine, not in the pool) */
+
+/* the mix's buffers, a block's (engine_mix_*: the stages two cores share) */
+#define MIXN (ENGINE_SUB * BLK)
+static float mx_dl[MIXN], mx_dr[MIXN], mx_rl[MIXN], mx_rr[MIXN], mx_el[MIXN], mx_er[MIXN], mx_gm[MIXN];
+static float mx_vl[MIXN], mx_vr[MIXN], mx_wl[MIXN], mx_wr[MIXN];   /* the reverb's out; the echo's and grains' (to the dry mix) */
+static float mx_rvk, mx_shk, mx_grk;
+static int mx_nsub;                              /* the sends' block's length, for the reverb a block on */
 
 void engine_all_off(Engine *e)
 {
@@ -95,7 +103,9 @@ static void layer_seq_check(Engine *e, int l)
 void engine_init(Engine *e, const Piece *p)
 {
     memset(e, 0, sizeof *e);
-    memset(g_ghost, 0, sizeof g_ghost);
+    memset(mx_rl, 0, sizeof mx_rl); memset(mx_rr, 0, sizeof mx_rr); memset(mx_el, 0, sizeof mx_el); memset(mx_er, 0, sizeof mx_er);
+    memset(mx_gm, 0, sizeof mx_gm); mx_nsub = 0;
+    memset(g_ghost, 0, sizeof g_ghost); memset(&g_shim, 0, sizeof g_shim);
     e->p = p;
     e->gov = 1.0f; e->playing = 1; e->fade = 0.0f;
     for (int l = 0; l < NUM_LAYERS; l++) {
@@ -109,8 +119,8 @@ void engine_init(Engine *e, const Piece *p)
     reverb_init(&e->rv, 1.3f);
     echo_init(&e->echo);
     grains_init(&e->gr, p->seed);
-    for (int l = 0; l < NUM_LAYERS; l++) { dirt_init(&e->L[l].dirt, p->seed + (uint32_t)l); dirt_init(&e->L[l].ent, p->seed * 3u + (uint32_t)l); e->L[l].gate = 1.0f; }
-    dirt_init(&e->kdirt, p->seed + 11u); dirt_init(&e->kent, p->seed * 3u + 11u);
+    for (int l = 0; l < NUM_LAYERS; l++) dirt_init(&e->L[l].dirt, p->seed + (uint32_t)l);
+    dirt_init(&e->kdirt, p->seed + 11u);
     patch(e, p->seed);
     e->mask = 0xF; e->chord_bars = 4; e->chord_left = 4; e->sec_left = 32;
     rng_seed(&e->rng, p->seed);
@@ -483,8 +493,6 @@ void engine_block_layer(Engine *e, int b)
                 Rb[i] = svf_lp(&e->klp[1], svf_hp(&e->khp[1], Rb[i]));
             }
             dirt_run(&e->kdirt, u(e->p->dirt), mo(e, kl, MW_DIRT, e->p->s_dirt[kl], 0.45f), Lb, Rb, BLK);
-            float ken = clamp01((mo(e, kl, MW_ENT, e->p->l[kl].weird, 0.4f) - 0.4f) / 0.6f);
-            if (ken > 0.001f) dirt_run(&e->kent, ken, fm_minf(1.0f, ken * 1.6f), Lb, Rb, BLK);
             continue;
         }
         Layer *L = &e->L[b];
@@ -503,20 +511,7 @@ void engine_block_layer(Engine *e, int b)
             Rb[i] = svf_lp(&L->lp[1], svf_hp(&L->hp[1], Rb[i]));
         }
         dirt_run(&L->dirt, u(e->p->dirt), mo(e, b, MW_DIRT, e->p->s_dirt[b], 0.45f), Lb, Rb, BLK);   /* its own DIRT, its send's amount (DRIFT morphing it) */
-        /* ENTROPY past 40: the sound starts to destroy itself. Folding first, then crushed, then noise; past 60 holes torn
-         * in it, longer and more often towards the end, until it is more broken than whole */
-        float en = clamp01((mo(e, b, MW_ENT, e->p->l[b].weird, 0.4f) - 0.4f) / 0.6f);
-        if (en > 0.001f) {
-            dirt_run(&L->ent, en, fm_minf(1.0f, en * 1.6f), Lb, Rb, BLK);
-            float tear = clamp01((en - 0.33f) * 1.5f);
-            if ((L->gate_left -= BLK_S) <= 0) {
-                /* (tape dropouts, not holes: down to 10-40 %, and only so far) */
-                L->gate_hole = tear > 0 && (float)(L->ent.rng.s & 1023u) / 1023.0f < tear * 0.55f ? 0.1f + 0.3f * (float)(L->ent.rng.s >> 10 & 255u) / 255.0f : 1.0f;
-                rng_u32(&L->ent.rng);
-                L->gate_left = 0.02f + 0.2f * (float)(L->ent.rng.s & 255u) / 255.0f * (0.3f + tear);
-            }
-            for (int i = 0; i < BLK; i++) { L->gate += (L->gate_hole - L->gate) * 0.003f; Lb[i] *= L->gate; Rb[i] *= L->gate; }   /* (~8 ms in and out) */
-        }
+        /* (ENTROPY is in the voices: synthesis turning on itself, not distortion; DIRT is the tape) */
     }
     cost_add(e, b, t0);
 }
@@ -530,18 +525,24 @@ static float energy(const float *a, const float *b) { float s = 0; for (int i = 
 static int fx_wake(int *q, float in, int mem) { if (in > FX_QUIET) { *q = 0; return 1; } return *q < mem; }
 static void fx_rest(int *q, float out) { if (out > FX_QUIET) *q = 0; else if (*q < 1 << 30) *q += BLK; }
 
-void engine_block_mix(Engine *e, float *outL, float *outR)
+/* the mix, in stages so two cores can share it. The wet effects, echo, grains, shimmer and reverb (engine_mix_reverb),
+ * take the sends of the block before (5.8 ms later: unheard; the echo's time that much shorter, so its repeats stay on
+ * the beat), so the second core can run them beside its layers; then the sends gathered (engine_mix_sends), the wet
+ * added and the chorus (engine_mix_echo), and the sum, the shelf and the leveller (engine_mix_finish) */
+
+void engine_mix_sends(Engine *e)
 {
-    uint32_t t0 = now(e);
     const Piece *p = e->p;
     /* REVERB: up to 12 o'clock the reverb; past it the shimmer comes in, an octave up, and by the end down too.
      * ECHO: up to 12 o'clock the echo; past it, it turns into a reversed smear */
     float rk = u(p->reverb), rvk = clamp01(rk * 2.0f), shk = clamp01(rk * 2.0f - 1.0f);
     float ek = u(p->echo), eck = clamp01(ek * 2.0f), rev = clamp01(ek * 2.0f - 1.0f);
     float grk = u(p->grain);
-    reverb_set(&e->rv, 2.5f + 12.0f * rvk * rvk - 3.0f * shk, 1800.0f + 4200.0f * u(p->mood) + 4000.0f * shk);
+    mx_rvk = rvk; mx_shk = shk; mx_grk = grk; mx_nsub = e->nsub;
+    e->rv_size = 2.5f + 12.0f * rvk * rvk - 3.0f * shk; e->rv_damp = 1800.0f + 4200.0f * u(p->mood) + 4000.0f * shk;
     e->echo.time_s = clampf(60.0f / e->bpm * 0.75f, 0.12f, 0.7f);   /* a dotted eighth */
     while (e->echo.time_s > 0.7f) e->echo.time_s *= 0.5f;
+    e->echo.time_s -= (float)(e->nsub * BLK) / SR;  /* (it runs a block late: a block shorter, so it lands on the beat) */
     e->echo.fb = rev > 0 ? 0.45f + 0.3f * rev : 0.2f + 0.45f * eck; e->echo.wow = u(p->warp) + u(p->drift) * 0.5f;
     e->echo.rev = rev;
     e->gr.density = grk < 0.9f ? grk : 1.0f; e->gr.frozen = grk >= 0.92f; e->gr.size = 0.3f + 0.7f * grk;
@@ -554,7 +555,9 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
         e->gr.ratios = e->gr_ratio; e->gr.nratios = 6;
     }
     for (int k = 0; k < e->nsub; k++) {
-        float dl[BLK] = { 0 }, dr[BLK] = { 0 }, rl[BLK] = { 0 }, rr[BLK] = { 0 }, el[BLK] = { 0 }, er[BLK] = { 0 }, gm[BLK] = { 0 };
+        float *dl = mx_dl + k * BLK, *dr = mx_dr + k * BLK, *rl = mx_rl + k * BLK, *rr = mx_rr + k * BLK;
+        float *el = mx_el + k * BLK, *er = mx_er + k * BLK, *gm = mx_gm + k * BLK;
+        for (int i = 0; i < BLK; i++) dl[i] = dr[i] = el[i] = er[i] = gm[i] = rl[i] = rr[i] = 0;
         for (int b = 0; b < NBUS; b++) {
             float g = e->gains[k][b], *Lb = e->bus[k][b][0], *Rb = e->bus[k][b][1];
             /* the sends: each layer's own (SENDS), the keys' the chosen layer's */
@@ -579,34 +582,67 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
                 e->meter[b] += (lvl - e->meter[b]) * (lvl > e->meter[b] ? 0.3f : 0.02f);
             }
         }
+    }
+}
+
+void engine_mix_reverb(Engine *e)                /* the wet effects (the second core's: it touches only theirs) */
+{
+    uint32_t t0 = now(e);
+    float shk = mx_shk, gg = mx_grk * 1.3f;
+    if (e->rv_size > 0) reverb_set(&e->rv, e->rv_size, e->rv_damp);
+    int ns = mx_nsub < e->nsub ? mx_nsub : e->nsub;
+    for (int k = ns; k < e->nsub; k++) for (int i = 0; i < BLK; i++) mx_vl[k * BLK + i] = mx_vr[k * BLK + i] = mx_wl[k * BLK + i] = mx_wr[k * BLK + i] = 0;
+    for (int k = 0; k < ns; k++) {
+        float *rl = mx_rl + k * BLK, *rr = mx_rr + k * BLK, *vl = mx_vl + k * BLK, *vr = mx_vr + k * BLK;
+        float *el = mx_el + k * BLK, *er = mx_er + k * BLK, *gm = mx_gm + k * BLK, *wl = mx_wl + k * BLK, *wr = mx_wr + k * BLK;
         float ol[BLK] = { 0 }, orr[BLK] = { 0 }, gl[BLK] = { 0 }, grr[BLK] = { 0 }, sh[BLK];
         if (fx_wake(&e->q_echo, energy(el, er), 34000)) { echo_run(&e->echo, el, er, ol, orr, BLK); fx_rest(&e->q_echo, energy(ol, orr)); }
         if (fx_wake(&e->q_gr, energy(gm, gm), 26000) || e->gr.frozen) { grains_run(&e->gr, gm, gl, grr, sh, BLK); fx_rest(&e->q_gr, energy(gl, grr)); }
+        (void)sh;
         for (int i = 0; i < BLK; i++) {
-            float gg = grk * 1.3f;
-            dl[i] += ol[i] + gl[i] * gg; dr[i] += orr[i] + grr[i] * gg;
+            wl[i] = ol[i] + gl[i] * gg; wr[i] = orr[i] + grr[i] * gg;
             rl[i] += ol[i] * 0.3f + gl[i] * gg * 0.5f;
             rr[i] += orr[i] * 0.3f + grr[i] * gg * 0.5f;
         }
-        (void)sh;
         if (shk > 0.001f && fx_wake(&e->q_sh, energy(e->shim_prev, e->shim_prev), 4400)) {   /* the shimmer: the reverb's last block, an octave up and down, back in */
-            float up[BLK], dn_[BLK], gu = shk * 0.3f, gd = shk * shk * 0.26f;
-            shifter_run(&e->shim, e->shim_prev, up, dn_, BLK);
+            /* (a limiter in the loop: the louder the reverb, the less goes round again, so it never runs away) */
+            float pr = fm_sqrtf(energy(e->shim_prev, e->shim_prev) * (1.0f / (2.0f * BLK)));
+            e->shim_env += (pr - e->shim_env) * (pr > e->shim_env ? 0.05f : 0.01f);
+            float lim = 1.0f / (1.0f + 25.0f * fm_maxf(0.0f, e->shim_env - 0.03f));
+            float up[BLK], dn_[BLK], gu = shk * 0.3f * lim, gd = shk * shk * 0.26f * lim;
+            shifter_run(&g_shim, e->shim_prev, up, dn_, BLK);
             fx_rest(&e->q_sh, energy(up, dn_));
             for (int i = 0; i < BLK; i++) { float x = up[i] * gu + dn_[i] * gd; rl[i] += x; rr[i] += x; }
         }
-        chorus_run(&e->ch, u(p->chorus), dl, dr, BLK);  /* the chorus on the dry sound (the reverb's sends taken before it) */
-        float vl[BLK] = { 0 }, vr[BLK] = { 0 };
+        for (int i = 0; i < BLK; i++) vl[i] = vr[i] = 0;
         if (fx_wake(&e->q_rv, energy(rl, rr), 9000)) { reverb_run(&e->rv, rl, rr, vl, vr, BLK); fx_rest(&e->q_rv, energy(vl, vr)); }
         for (int i = 0; i < BLK; i++) e->shim_prev[i] = (vl[i] + vr[i]) * 0.5f;
+    }
+    if (e->clock) e->cost_rv += ((float)(now(e) - t0) - e->cost_rv) * 0.05f;
+}
+
+void engine_mix_echo(Engine *e)                  /* the wet added to the dry, and the chorus on it */
+{
+    const Piece *p = e->p;
+    for (int k = 0; k < e->nsub; k++) {
+        float *dl = mx_dl + k * BLK, *dr = mx_dr + k * BLK, *wl = mx_wl + k * BLK, *wr = mx_wr + k * BLK;
+        for (int i = 0; i < BLK; i++) { dl[i] += wl[i]; dr[i] += wr[i]; }
+        chorus_run(&e->ch, u(p->chorus), dl, dr, BLK);  /* the chorus on the dry sound (the reverb's sends taken before it) */
+    }
+}
+
+void engine_mix_finish(Engine *e, float *outL, float *outR)
+{
+    const Piece *p = e->p;
+    float shelf = 1.8f * clamp01((0.5f - u(p->mood)) * 2.0f);   /* MOOD dark: the sub, up to +9 dB below ~110 Hz */
+    for (int k = 0; k < e->nsub; k++) {
+        float *dl = mx_dl + k * BLK, *dr = mx_dr + k * BLK, *vl = mx_vl + k * BLK, *vr = mx_vr + k * BLK;
         float *L = outL + k * BLK, *R = outR + k * BLK;
-        for (int i = 0; i < BLK; i++) { dl[i] += vl[i] * 0.55f; dr[i] += vr[i] * 0.55f; }
         for (int i = 0; i < BLK; i++) {
-            float l = dl[i], r = dr[i];
+            float l = dl[i] + vl[i] * 0.55f, r = dr[i] + vr[i] * 0.55f;
             e->dc[0] += 0.0035f * (l - e->dc[0]); e->dc[1] += 0.0035f * (r - e->dc[1]);
             L[i] = l - e->dc[0]; R[i] = r - e->dc[1];
         }
-        float shelf = 1.8f * clamp01((0.5f - u(p->mood)) * 2.0f);   /* MOOD dark: the sub, up to +9 dB below ~110 Hz */
         if (shelf > 0.001f)
             for (int i = 0; i < BLK; i++) {
                 e->sub[0] += 0.0156f * (L[i] - e->sub[0]); e->sub[1] += 0.0156f * (R[i] - e->sub[1]);
@@ -624,5 +660,14 @@ void engine_block_mix(Engine *e, float *outL, float *outR)
         }
         for (int i = 0; i < BLK; i++) { L[i] *= e->lev_g; R[i] *= e->lev_g; }
     }
+}
+
+void engine_block_mix(Engine *e, float *outL, float *outR)   /* the stages one after another, on one core */
+{
+    uint32_t t0 = now(e);
+    engine_mix_reverb(e);
+    engine_mix_sends(e);
+    engine_mix_echo(e);
+    engine_mix_finish(e, outL, outR);
     cost_add(e, NBUS, t0);
 }

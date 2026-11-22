@@ -212,17 +212,21 @@ static void layers_job(uint32_t mask) { for (int b = 0; b < NUM_LAYERS; b++) if 
 
 static uint8_t balance(void)             /* the split that leaves the busier core least to do (the keys stay here) */
 {
+    /* (the second core has the reverb as well as its layers) */
     uint8_t best = 0x3u; float best_t = 1e30f, total = eng.cost[KEYS];
     for (int l = 0; l < NUM_LAYERS; l++) total += eng.cost[l];
     if (total <= 0) return best;
-    for (uint8_t m = 1; m < 15; m++) {
+    for (uint8_t m = 0; m < 15; m++) {
         float t2 = 0;
         for (int l = 0; l < NUM_LAYERS; l++) if (m >> l & 1u) t2 += eng.cost[l];
-        float t = t2 > total - t2 ? t2 : total - t2;
+        float t1 = total - t2; t2 += eng.cost_rv;
+        float t = t2 > t1 ? t2 : t1;
         if (t < best_t - 1.0f) { best_t = t; best = m; }
     }
     return best;
 }
+
+static void core2_job(uint32_t mask) { layers_job(mask); engine_mix_reverb(&eng); }   /* (the second core's: its layers, the reverb) */
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
@@ -241,12 +245,16 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         was_out = out;
     }
     engine_block_begin(&eng, nsub);
+    /* the second core: some layers and the reverb (the last block's sends); this one the rest, the keys, then the mix */
     uint8_t mask = two_cores && plat_cpu2_on() ? on2_mask : 0;
-    int sent = mask && plat_cpu2_run(layers_job, mask);
+    int sent = two_cores && plat_cpu2_on() && plat_cpu2_run(core2_job, mask);
     layers_job(sent ? (uint32_t)(~mask & 0xFu) : 0xFu);
     engine_block_layer(&eng, KEYS);
-    if (sent && plat_cpu2_wait() != 0) layers_job(mask);
-    engine_block_mix(&eng, L, R);
+    if (sent && plat_cpu2_wait() != 0) core2_job(mask);
+    if (!sent) engine_mix_reverb(&eng);
+    engine_mix_sends(&eng);
+    engine_mix_echo(&eng);
+    engine_mix_finish(&eng, L, R);
     if (two_cores) on2_mask = balance();
     for (uint32_t i = 0; i < n && i < (uint32_t)(nsub * BLK); i++) {
         gain_now += (g - gain_now) * 0.002f;

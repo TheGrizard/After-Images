@@ -89,7 +89,6 @@ typedef struct {
     float im, im_t, im_g, im_far, im_pan, im_l, im_r;   /* DRIFT's: its wandering level, where it's going, its gain, how far off, its walk's pan and gains */
     Drift dwalk;
     Drift mwalk[NMORPH]; float mw[NMORPH];   /* DRIFT's morphing: each of its sends, TONE, WEIGHT, ENTROPY wandering (mw: -1..1, DRIFT's share) */
-    Dirt ent; float gate, gate_left, gate_hole;   /* ENTROPY's own breaking: its dirt, and the holes torn in it */
     Dirt dirt;                           /* its own DIRT (the character EFFECTS', the amount its send's) */
     uint32_t knobs;                      /* its sound's knobs, last block (changed: the sounding notes follow) */
 } Layer;
@@ -100,7 +99,7 @@ struct Engine {
     Layer L[NUM_LAYERS];
     Voice kv[KEY_POLY]; VoiceEv kq[EVQ]; int nkq; int key_next;
     int8_t kv_lay[KEY_POLY];             /* each key voice's layer (whose knobs it follows) */
-    Svf khp[2], klp[2]; Dirt kdirt, kent; /* the keys through their layer's chain: its TONE, its DIRT, its ENTROPY */
+    Svf khp[2], klp[2]; Dirt kdirt;      /* the keys through their layer's chain: its TONE and DIRT (ENTROPY: in the voices) */
     int key_layer;                       /* the layer whose sound the keys play (SELECT) */
     volatile uint32_t key_in[16]; volatile uint32_t key_w, key_r;   /* keys and MIDI notes in: (on, note, vel) */
     float bus[ENGINE_SUB][NBUS][2][BLK];
@@ -117,7 +116,7 @@ struct Engine {
     int playing;
     float gr_ratio[6];
     /* effects */
-    Reverb rv; Echo echo; Grains gr; Shifter shim; float shim_prev[BLK]; Chorus ch;
+    Reverb rv; Echo echo; Grains gr; float shim_prev[BLK]; Chorus ch;   /* (the shimmer's shifter: in engine.c, out of the pool) */
     float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];
     float im_left;                       /* DRIFT: seconds until the levels choose where to wander next */   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];
@@ -130,7 +129,7 @@ struct Engine {
     float clock_acc; float t;
     /* costs, for the balance between the cores (ticks an app block) */
     uint32_t (*clock)(void);
-    float cost[NBUS + 1];
+    float cost[NBUS + 1]; float cost_rv; float rv_size, rv_damp; float shim_env;   /* (shim_env: the shimmer loop's level, its limiter's) */  /* (cost_rv: the reverb stage's, which the second core may take beside its layers) */
     /* the screen's */
     UiNote uiq[UI_Q]; volatile uint32_t uiq_head;
     float meter[NUM_LAYERS];
@@ -151,6 +150,12 @@ void engine_block_begin(Engine *e, int nsub);
 void engine_block_layer(Engine *e, int bus);
 void engine_block_mix(Engine *e, float *outL, float *outR);
 void engine_all_off(Engine *e);
-void engine_overload(Engine *e);         /* from the audio interrupt: that block nearly overran; shed at the next */          /* MIDI notes off (stop, a new piece) */
+void engine_overload(Engine *e);
+/* the mix's stages (engine_block_mix runs them in turn): sends; then reverb (another core may take it) beside echo;
+ * then finish */
+void engine_mix_sends(Engine *e);
+void engine_mix_reverb(Engine *e);
+void engine_mix_echo(Engine *e);
+void engine_mix_finish(Engine *e, float *outL, float *outR);         /* from the audio interrupt: that block nearly overran; shed at the next */          /* MIDI notes off (stop, a new piece) */
 
 #endif

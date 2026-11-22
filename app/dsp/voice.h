@@ -54,7 +54,7 @@ typedef struct {
     Svf f, f2;
     OnePole lp;
     float z1, z2;
-    int16_t ks[KS_MAX]; int ks_len, ks_pos; float ks_frac, ks_damp, ks_lp;
+    int16_t ks[KS_MAX]; int ks_len, ks_pos; float ks_frac, ks_damp, ks_lp, ks_e;   /* ks_e: how hard it rings (ENTROPY's slack) */
     uint32_t noise;
     float age;
     float pan_amt, pan_ph, pan_dp;       /* the note's wandering in the stereo field */
@@ -63,6 +63,9 @@ typedef struct {
     float sweep, sw, sw_k, reso;         /* the filter's sweep: how far, where it is (0 closed .. 1 open), its pace */
     OnePole sl[2];                       /* SWEEP's own filter, for the engines without one */
     uint32_t seed; float ix;             /* the note's seed (its settings again, the same: voice_retune); DX's index */
+    float ent, cph, cz, cz2, clfo;       /* ENTROPY past halfway: the chaos oscillator (how much; its phase, feedback, PWM's sweep) */
+    uint8_t cmode;                       /* which: FM feedback, PWM, or a sine phase-modulated by the PWM pulse */
+    float bab;                           /* VOICE's babble under ENTROPY: where its vowels have wandered */
 } Voice;
 
 void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float pan, float from_hz, uint32_t seed);   /* from_hz: glide from there (0: no) */

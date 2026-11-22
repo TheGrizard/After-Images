@@ -28,7 +28,7 @@ wait 100
 turn K1 2
 wait 9500
 tap PLAY
-wait 3500
+wait 7000
 expect playing 0
 reboot
 wait 2500

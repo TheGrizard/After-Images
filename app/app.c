@@ -141,6 +141,7 @@ static void hist_push(void)
 #define OUT_GAIN 1.2f
 static volatile int muted;
 static float gain_now;
+static volatile float out_lvl;            /* the output's level, slowly (the autosave waits for the tails to die away) */
 static volatile int save_hold;            /* SAVE while playing: the render's gain down to nothing while it's set */
 static int two_cores;
 static uint8_t on2_mask = 0x3u;
@@ -263,6 +264,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     if (two_cores) on2_mask = balance();
     for (uint32_t i = 0; i < n && i < (uint32_t)(nsub * BLK); i++) {
         gain_now += (g - gain_now) * 0.002f;
+        out_lvl += (fm_fabsf(L[i]) + fm_fabsf(R[i]) - out_lvl) * 0.0005f;
         lr[2 * i] = (int32_t)(soft(L[i] * gain_now) * 8388000.0f);
         lr[2 * i + 1] = (int32_t)(soft(R[i] * gain_now) * 8388000.0f);
     }
@@ -1272,9 +1274,15 @@ void app_frame(void)
     }
     /* the piece and settings kept: never while the music plays (erasing the flash stops the audio for tens of ms, a
      * drop), so when it has stopped and faded out (PLAY) */
-    if (autosave_at && (int32_t)(now - autosave_at) >= 0 && !set.playing && now - stopped_at >= 2500u) {
-        autosave_at = 0;
+    /* (and only once its tails have died away, or after 6 s; then the output faded to nothing first, as SAVE's) */
+    static int auto_fading;
+    if (auto_fading && set.playing) { auto_fading = 0; save_hold = 0; }   /* (PLAY again meanwhile: the sound back, kept later) */
+    if (autosave_at && (int32_t)(now - autosave_at) >= 0 && !set.playing && now - stopped_at >= 2500u && !save_pending
+        && (out_lvl < 0.002f || now - stopped_at >= 6000u)
+        && (auto_fading || (save_hold = 1, auto_fading = 1, save_t = now, 0)) && (gain_now <= 0.004f || now - save_t >= 250u)) {
+        autosave_at = 0; auto_fading = 0;
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
+        save_hold = 0;
     }
     if (now - ui.last_head >= 100u && !full_now()) {   /* the header: its words, and the layers' lights */
         ui.last_head = now;

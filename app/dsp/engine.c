@@ -657,7 +657,7 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
         for (int i = 0; i < BLK; i++) ss += L[i] * L[i] + R[i] * R[i];
         e->lev_ss += (ss / (2.0f * BLK) - e->lev_ss) * (BLK_S / 4.0f);
         if (e->lev_g <= 0) e->lev_g = 1.0f;
-        if (e->lev_ss > 1e-6f) {
+        if (e->lev_ss > 1e-6f && e->playing) {   /* (stopped: held, so the fading tails aren't lifted, nor their grain) */
             float want = clampf(0.12f * fm_rsqrtf(e->lev_ss), 0.4f, 2.5f);
             e->lev_g += (want - e->lev_g) * (BLK_S / 3.0f);
         }

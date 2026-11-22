@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /* After Images: the sound engines (voice.h). */
 #include "voice.h"
+#include "waves_tab.h"
 
 const char *const ENGINE_NAME[NUM_ENGINES] = {
     "DRIFT SAW", "FM", "STRING", "DX", "BLEEP", "GLASS", "BREATH", "VOICE", "FOLD", "SUB", "STRINGS", "E.PIANO",
-    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "BOARDS", "REESE"
+    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "BOARDS", "REESE", "ORGAN", "BOWL", "MALLET", "WAVES", "CHOIR"
 };
 
 float g_sine[SINE_SIZE + 1];
@@ -185,6 +186,66 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         v->lfo_dp = (0.07f + 0.25f * wd) * BLK_S;                /* the beating's slow sweep: every 3 to 14 s */
         if (start || v->hold > 0) v->r_k = k_of(fm_maxf(0.6f, s->release * 0.8f + 0.004f));   /* a long tail, closing as it goes */
         break;
+    case E_ORGAN: {
+        static const float REG[4][6] = {                         /* the drawbars: 16', 8', 4', 2 2/3', 2', 1' */
+            { 1, 1, 1, 0, 0, 0 }, { 1, 1, 0.8f, 0.6f, 0.6f, 0.4f }, { 0, 1, 0.5f, 0, 0.3f, 0 }, { 0.6f, 1, 0.3f, 0.8f, 0.4f, 0.2f } };
+        const float *rg = REG[seed % 4u]; float sum = 0;
+        for (int k = 0; k < 6; k++) {
+            v->p[k] = rg[k] * (k >= 3 ? 0.3f + 1.4f * tone : 1.0f);   /* TONE: the upper drawbars out */
+            sum += v->p[k];
+        }
+        for (int k = 0; k < 6; k++) v->p[k] /= sum > 0.1f ? sum : 1.0f;
+        v->lfo_dp = (0.75f + 5.8f * wd * wd) * BLK_S;           /* the rotary: chorale, to tremolo with ENTROPY */
+        if (start) v->oe[0] = 0.5f * wt;                         /* percussion, on the third harmonic (WEIGHT) */
+        v->ok[0] = 1.0f - k_of(0.25f);
+        break;
+    }
+    case E_BOWL: {
+        static const float RAT[4] = { 1.0f, 2.76f, 5.40f, 8.93f };
+        for (int k = 0; k < 4; k++) v->r[k] = RAT[k] * (1.0f + wd * 0.025f * (float)k);   /* ENTROPY: further off */
+        v->p[0] = 1.0f; v->p[1] = 0.55f * (0.4f + tone); v->p[2] = 0.4f * tone; v->p[3] = 0.25f * tone * tone;
+        v->p[4] = 0.55f - 0.45f * wt;                            /* rubbed (soft) .. struck (heavy): what the partials ring down to */
+        if (start) for (int k = 0; k < 4; k++) v->oe[k] = 1.0f;
+        for (int k = 0; k < 4; k++) v->ok[k] = 1.0f - k_of((5.0f - 1.1f * (float)k) * (0.5f + 0.5f * (1.0f - wt)));
+        v->lfo_dp = (0.45f + 1.2f * wd) * BLK_S;                 /* the beating */
+        if (start) v->z2 = 0.0f;
+        break;
+    }
+    case E_MALLET: {
+        static const float RAT[3][3] = { { 1.0f, 3.93f, 9.24f }, { 1.0f, 4.0f, 10.0f }, { 1.0f, 5.93f, 13.0f } };
+        int kind = (int)(seed % 3u);                             /* marimba, vibes, kalimba */
+        for (int k = 0; k < 3; k++) v->r[k] = RAT[kind][k] * (1.0f + wd * 0.06f * (float)k);   /* ENTROPY: wood to metal */
+        v->p[0] = 1.0f; v->p[1] = 0.25f + 0.4f * wt; v->p[2] = (0.1f + 0.3f * wt) * tone;
+        float tm = (0.4f + 1.4f * (1.0f - 0.5f * tone)) * clampf(fm_sqrtf(300.0f / f), 0.5f, 2.5f) * (kind == 1 ? 2.5f : 1.0f);
+        v->ok[0] = 1.0f - k_of(tm); v->ok[1] = 1.0f - k_of(tm * 0.3f); v->ok[2] = 1.0f - k_of(tm * 0.1f);
+        v->p[3] = kind == 1 ? 1.0f : 0.0f;                       /* vibes: the tremolo */
+        v->lfo_dp = 4.8f * BLK_S;
+        if (start) {
+            for (int k = 0; k < 3; k++) v->oe[k] = 1.0f;
+            v->z1 = 0.25f + 0.5f * wt;                           /* the knock */
+            v->a_k = k_of(0.0006f + 0.002f * (1.0f - wt));       /* (always struck, whatever the layer's attack) */
+        }
+        v->p[4] = 1.0f - k_of(0.004f + 0.004f * wt);
+        svf_set(&v->f, clampf(f * 3.0f, 300.0f, 6000.0f), 2.0f);
+        break;
+    }
+    case E_WAVES:
+        v->p[0] = tone * 5.0f;                                   /* where it starts: dark to bright */
+        v->p[1] = 0.5f + 2.0f * wt;                              /* how far it scans up over the note */
+        v->p[2] = 0.3f + 1.5f * wd;                              /* how far it wanders */
+        v->p[3] = 1.0f - k_of(0.6f + 3.0f * (1.0f - wt));        /* the scan's pace, a block */
+        v->lfo_dp = (0.08f + 0.5f * wd) * BLK_S;
+        if (start) v->z1 = 0.0f;
+        break;
+    case E_CHOIR:
+        v->p[0] = 0.003f + 0.007f * wd;                          /* the voices' spread */
+        v->p[1] = tone;                                          /* the vowel: ooh, oh, aah */
+        v->p[2] = 6.0f + 4.0f * (1.0f - wt);
+        v->p[3] = 0.12f * (1.0f - wt) + 0.04f;                   /* breath */
+        v->p[4] = (0.05f + 0.35f * wd) * BLK_S;                  /* the vowel's wandering */
+        v->lfo_dp = (4.6f + 0.8f * (float)(seed & 255u) / 255.0f) * BLK_S;   /* vibrato */
+        if (start) v->z1 = (float)(seed >> 8 & 255u) / 256.0f;
+        break;
     case E_SUB:
     default:
         v->p[0] = 0.15f + 0.35f * tone;                          /* the octave */
@@ -247,7 +308,7 @@ static inline float saw_bl(float ph, float dt) { return 2.0f * ph - 1.0f - blep(
 float g_voice_floor = 0.001f;
 static const uint8_t HAS_FILTER[NUM_ENGINES] = {   /* (their own filter follows SWEEP and F.GLIDE) */
     [E_SAW] = 1, [E_PULSE] = 1, [E_BREATH] = 1, [E_FOLD] = 1, [E_SUB] = 1, [E_STRINGS] = 1, [E_TRI] = 1, [E_SQUARE] = 1,
-    [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1, [E_REESE] = 1 };
+    [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1, [E_REESE] = 1, [E_CHOIR] = 1 };
 
 /* a voice nobody can hear (its layer faded right out): its envelope goes on, so it ends when it would, no sound made */
 void voice_skip(Voice *v, int n)
@@ -562,6 +623,89 @@ void voice_render(Voice *v, float *L, float *R, int n)
             v->ph[2] += d2; if (v->ph[2] >= 1.0f) v->ph[2] -= 1.0f;
             float x = soft_clip(0.5f * (saw_bl(v->ph[0], d0) + saw_bl(v->ph[1], d1)) * dr) * g;
             out[i] *= svf_lp(&v->f2, svf_lp(&v->f, x)) + sub * sine_c(v->ph[2]);
+        }
+        break;
+    }
+    case E_ORGAN: {
+        float am = 1.0f + 0.16f * lfo, d0 = dt * 0.5f * (1.0f + 0.002f * lfo);   /* the rotary: louder and sharp as it comes round */
+        float e = v->oe[0], k = v->ok[0];
+        float g0 = v->p[0] * am, g1 = v->p[1] * am, g2 = v->p[2] * am, g3 = v->p[3] * am, g4 = v->p[4] * am, g5 = v->p[5] * am;
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;  /* (at half the pitch: the 16' at one) */
+            float p = v->ph[0];
+            out[i] *= g0 * sine_c(p) + g1 * sine_c(2.0f * p) + g2 * sine_c(4.0f * p) + (g3 + e) * sine_c(6.0f * p)
+                      + g4 * sine_c(8.0f * p) + g5 * sine_c(16.0f * p);
+            e *= k;
+        }
+        v->oe[0] = e > 1e-5f ? e : 0.0f;
+        float t = (clampf(v->pan + 0.35f * fm_sin_turns(v->lfo + 0.25f), -1.0f, 1.0f) + 1.0f) * 0.25f * PI_F;
+        v->gl = fm_cosf(t); v->gr = fm_sinf(t);                  /* (and round the room) */
+        break;
+    }
+    case E_BOWL: {
+        float bt = v->lfo, a[4];
+        for (int k = 0; k < 4; k++) {                            /* each partial: ringing down to its floor, beating */
+            float fl = v->p[4] * (k ? 0.6f : 1.0f);
+            v->oe[k] = fl + (v->oe[k] - fl) * fm_powf(v->ok[k], (float)n);
+            a[k] = v->p[k] * v->oe[k] * (0.7f + 0.3f * fm_sin_turns(bt * (float)(k + 1) + 0.23f * (float)k));
+        }
+        float d0 = dt * v->r[0], d1 = dt * v->r[1], d2 = dt * v->r[2], d3 = dt * v->r[3];
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            v->ph[2] += d2; if (v->ph[2] >= 1.0f) v->ph[2] -= 1.0f;
+            v->z2 += d3; if (v->z2 >= 1.0f) v->z2 -= 1.0f;
+            out[i] *= 0.6f * (a[0] * sine_c(v->ph[0]) + a[1] * sine_c(v->ph[1]) + a[2] * sine_c(v->ph[2]) + a[3] * sine_c(v->z2));
+        }
+        break;
+    }
+    case E_MALLET: {
+        float e0 = v->oe[0], e1 = v->oe[1], e2 = v->oe[2], k0 = v->ok[0], k1 = v->ok[1], k2 = v->ok[2], kn = v->z1, kk = v->p[4];
+        float a1 = v->p[1], a2 = v->p[2], tr = 1.0f - 0.3f * v->p[3] * (0.5f + 0.5f * lfo);
+        float d0 = dt * v->r[0], d1 = dt * v->r[1], d2 = dt * v->r[2];
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            v->ph[2] += d2; if (v->ph[2] >= 1.0f) v->ph[2] -= 1.0f;
+            float x = e0 * sine_c(v->ph[0]) + a1 * e1 * sine_c(v->ph[1]) + a2 * e2 * sine_c(v->ph[2]);
+            if (kn > 1e-4f) { x += kn * svf_bp(&v->f, noise(&v->noise)); kn *= kk; }
+            out[i] *= x * tr;
+            e0 *= k0; e1 *= k1; e2 *= k2;
+        }
+        v->oe[0] = e0 > 1e-5f ? e0 : 0.0f; v->oe[1] = e1 > 1e-5f ? e1 : 0.0f; v->oe[2] = e2 > 1e-5f ? e2 : 0.0f;
+        v->z1 = kn > 1e-4f ? kn : 0.0f;
+        break;
+    }
+    case E_WAVES: {
+        v->z1 = 1.0f - (1.0f - v->z1) * v->p[3];                 /* the scan up over the note, 0 to 1 */
+        float pos = clampf(v->p[0] + v->p[1] * v->z1 + v->p[2] * (0.5f + 0.5f * lfo), 0.0f, (float)(WAVES_W - 1) - 0.001f);
+        int w = (int)pos; float fr = pos - (float)w;
+        const int16_t *ta = WAVES_TAB[f > 800.0f][w], *tb = WAVES_TAB[f > 800.0f][w + 1];
+        const float sc = 1.0f / 32000.0f;
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            float x = v->ph[0] * (float)WAVES_N; int j = (int)x; float t = x - (float)j; int j1 = (j + 1) & (WAVES_N - 1);
+            j &= WAVES_N - 1;
+            float ya = (float)ta[j] + t * (float)(ta[j1] - ta[j]), yb = (float)tb[j] + t * (float)(tb[j1] - tb[j]);
+            out[i] *= (ya + fr * (yb - ya)) * sc;
+        }
+        break;
+    }
+    case E_CHOIR: {
+        v->z1 += v->p[4]; if (v->z1 >= 1.0f) v->z1 -= 1.0f;
+        float vw = clamp01(v->p[1] + 0.25f * fm_sin_turns(v->z1)) * 2.0f;   /* ooh (0) .. oh (1) .. aah (2) */
+        static const float FM[3][2] = { { 325, 700 }, { 450, 800 }, { 800, 1150 } };
+        int a = vw >= 1.0f ? 1 : 0; float t = vw - (float)a;
+        svf_set(&v->f, lerpf(FM[a][0], FM[a + 1][0], t) * swf, v->p[2]);
+        svf_set(&v->f2, lerpf(FM[a][1], FM[a + 1][1], t) * swf, v->p[2] + 2.0f);
+        float vib = 1.0f + 0.003f * lfo, sp = v->p[0], br = v->p[3];
+        float d0 = dt * vib, d1 = dt * vib * (1.0f + sp), d2 = dt * vib * (1.0f - sp * 1.3f);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            v->ph[2] += d2; if (v->ph[2] >= 1.0f) v->ph[2] -= 1.0f;
+            float x = 0.33f * (saw_bl(v->ph[0], d0) + saw_bl(v->ph[1], d1) + saw_bl(v->ph[2], d2)) + br * noise(&v->noise);
+            out[i] *= 1.2f * (svf_bp(&v->f, x) + 0.5f * svf_bp(&v->f2, x)) + 0.08f * x;
         }
         break;
     }

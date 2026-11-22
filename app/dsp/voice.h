@@ -28,6 +28,11 @@ enum {
     E_SHAPES,   /* SHAPES: unusual waves (rectified, half, trapezoid, sine of sine, parabola, bent), DRIFT moves through them */
     E_BOARDS,   /* BOARDS: a saw and a square a little apart, a dark filter opening slowly on each note (a wah), a slow vibrato */
     E_REESE,    /* REESE: two saws a little apart, their beating sweeping slowly, driven into a 24 dB low-pass, a sub under */
+    E_ORGAN,    /* ORGAN: drawbars (sines on the 16', 8', 4', 2 2/3', 2' and 1'), a rotary speaker's swirl, percussion */
+    E_BOWL,     /* BOWL: a singing bowl, four inharmonic partials each beating slowly, struck or rubbed */
+    E_MALLET,   /* MALLET: a struck bar, marimba, vibes or kalimba: three modes ringing down, a knock of noise */
+    E_WAVES,    /* WAVES: a wavetable, eight waves dark to bright, scanned through as the note sounds */
+    E_CHOIR,    /* CHOIR: three voices a little apart through two formants, an aah to an ooh, breathing */
     NUM_ENGINES
 };
 extern const char *const ENGINE_NAME[NUM_ENGINES];

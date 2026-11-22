@@ -918,8 +918,8 @@ static inline void px_blend(int x, int y, uint16_t c, float k)
 static void disc(float cx, float cy, float r, uint16_t c)
 {
     if (r < 0.5f) r = 0.5f;
-    const float W = 0.75f;                       /* (half the soft edge's width: 1.5 pixels across) */
-    float ro = r + W, ri = r - W;
+    const float W = 0.71f;                       /* (half a pixel's diagonal: the edge pixels, the ones the circle crosses) */
+    float ro = r + W, ri = r - W, r2 = r * r;
     int y0 = (int)fm_floorf(cy - ro), y1 = (int)fm_floorf(cy + ro);
     for (int py = y0; py <= y1; py++) {
         if (py + cv_oy < cv_y0 || py + cv_oy >= cv_y1) continue;
@@ -932,10 +932,15 @@ static void disc(float cx, float cy, float r, uint16_t c)
         if (xi1 >= xi0) cv_rect(xi0, py, xi1 - xi0 + 1, 1, c);
         for (int x = xo0; x <= xo1; x++) {
             if (x >= xi0 && x <= xi1) { x = xi1; continue; }
-            float dx = (float)x + 0.5f - cx, d = fm_sqrtf(dx * dx + dy2), k = (r + W - d) * (1.0f / (2.0f * W));
-            if (k <= 0.02f) continue;
-            if (k >= 0.98f) cv_pset(x, py, c);
-            else px_blend(x, py, c, fm_sqrtf(k));   /* (the screen's gamma: a half-covered pixel looks half as bright) */
+            /* how much of the pixel the ball covers, exactly: sixteen points across it, counted */
+            int n = 0;
+            for (int j = 0; j < 4; j++) {
+                float sy = (float)py + 0.125f + 0.25f * (float)j - cy, sy2 = sy * sy;
+                for (int i = 0; i < 4; i++) { float sx = (float)x + 0.125f + 0.25f * (float)i - cx; n += sx * sx + sy2 <= r2; }
+            }
+            if (n == 0) continue;
+            if (n == 16) cv_pset(x, py, c);
+            else px_blend(x, py, c, fm_sqrtf((float)n * (1.0f / 16.0f)));   /* (the screen's gamma: half covered looks half as bright) */
         }
     }
 }
@@ -944,7 +949,8 @@ static void draw_pegs(void)
 {
     static uint8_t acc[PG_MAX][PG_MAX][3];
     int rows = peg_rows(), cols = peg_cols(), cell = peg_cell(), y0 = (VIEW_H - rows * cell) / 2;
-    float rad = (float)cell * (0.12f + 0.0038f * (float)(splash_pegs ? 100 : set.peg_size));   /* SIZE: a speck .. touching (half the cell) */
+    float rad = (float)cell * (0.12f + 0.0038f * (float)(splash_pegs ? 100 : set.peg_size));   /* SIZE: a speck .. near touching */
+    if (rad > (float)cell * 0.5f - 0.75f) rad = (float)cell * 0.5f - 0.75f;   /* (a line of dark between: each ball its own circle) */
     memset(acc, 0, sizeof acc);
     for (int i = 0; i < PG_NOTES; i++) {           /* the notes' light, added */
         float lv = pn_level(i); if (lv <= 0.01f) continue;
@@ -1197,7 +1203,7 @@ static void splash_frame(uint32_t ms)
             if (cy + 18 < top || cy - 18 >= top + 60) continue;
             float s = a < 90 ? (float)a / 90.0f * 1.08f : a < 170 ? 1.08f - (float)(a - 90) / 80.0f * 0.08f : 1.0f;
             uint16_t c = sp_let[i].col, col = a < 120 ? mix565(c, C_WHITE, 0.8f * (1.0f - (float)a / 120.0f)) : c;
-            disc((float)cx, (float)cy, 15.0f * fm_minf(s, 1.0f), dim(col, pegs_gain));
+            disc((float)cx, (float)cy, 14.25f * fm_minf(s, 1.0f), dim(col, pegs_gain));
             if (s > 0.6f) {
                 int r = c >> 11, g = (c >> 5) & 63, b = c & 31;
                 float lum = 0.3f * (float)r / 31.0f + 0.59f * (float)g / 63.0f + 0.11f * (float)b / 31.0f;

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MPL-2.0
+# power-on: a layer turned right down (a solo of the moment) comes back at its usual level
+wait 2500
+turn K2 -50
+turn K3 -50
+wait 300
+expect level1 0
+tap PLAY
+wait 11000
+reboot
+wait 3500
+expect level0 70
+expect level1 72
+expect level2 62

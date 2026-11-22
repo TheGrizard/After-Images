@@ -117,6 +117,10 @@ static void settings_load(void)
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
     }
+    {   /* power-on: a layer turned right down was a solo of the moment; it comes back at its usual level */
+        static const uint8_t LEVEL_DEF[NUM_LAYERS] = { 70, 72, 62, 48 };
+        for (int l = 0; l < NUM_LAYERS; l++) if (set.cur.l[l].level < 15) set.cur.l[l].level = LEVEL_DEF[l];
+    }
     set.playing = 1;
 }
 

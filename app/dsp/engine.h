@@ -48,6 +48,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx);   /* fx: the effect i
 /* the effect each new piece features (REC deals them from a shuffled deck, none twice in a row) */
 enum { FX_SHIMMER, FX_REVERSE, FX_CLOUD, FX_FREEZE, FX_FOLD, FX_CRUSH, FX_SPACE, FX_HAZE, NUM_FX };
 extern const char *const FX_NAME[NUM_FX];
+void piece_next_key(Piece *p, int key, int scale, uint32_t seed);   /* REC: round the circle of fifths from the last */
 void piece_roll_layer(Piece *p, int layer, uint32_t seed);
 void piece_default(Piece *p);
 int piece_ok(const Piece *p);

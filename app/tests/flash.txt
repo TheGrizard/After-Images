@@ -6,8 +6,11 @@ tap HOME
 wait 200
 shot info.png
 expect store_writes >0
-tap REC
+press REC
+wait 1200
+release REC
 wait 300
+expect key 9
 tap SAVE
 wait 300
 expect nsaved 1

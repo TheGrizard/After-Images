@@ -65,6 +65,29 @@ static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and th
 
 const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "FOLDED", "CRUSHED", "WIDE SPACE", "HAZE" };
 
+/* the scales a new piece is dealt: mostly minor and consonant, for ambient; the harsh ones (AEOLIAN B5, LYD DOM, PHRYG
+ * DOM, HUNGARIAN, DBL HARM, IN SEN, WHOLE TONE) only by hand */
+static const struct { uint8_t scale, w; } DEAL[] = {
+    { 1, 16 }, { 2, 16 }, { 14, 12 }, { 19, 10 }, { 15, 8 }, { 4, 7 }, { 8, 6 }, { 16, 5 }, { 13, 5 },
+    { 0, 4 }, { 5, 4 }, { 3, 4 }, { 7, 3 } };       /* MINOR, DORIAN, MIN PENTA, HEXATONIC, SUSPENDED, LYDIAN, MEL MINOR,
+                                                      * HIRAJOSHI, MAJ PENTA, MAJOR, MIXOLYDIAN, PHRYGIAN, HARM MINOR */
+#define NDEAL ((int)(sizeof DEAL / sizeof DEAL[0]))
+/* minor (a minor third over the root) or not, each scale */
+static const uint8_t SCALE_MINOR[NUM_SCALES] = { 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1 };
+static int DEALT(int scale) { for (int i = 0; i < NDEAL; i++) if (DEAL[i].scale == scale) return 1; return 0; }
+static int deal_scale(Rng *r, int minor)          /* minor: -1 any, 1 a minor one, 0 a major one */
+{
+    int tot = 0;
+    for (int i = 0; i < NDEAL; i++) if (minor < 0 || SCALE_MINOR[DEAL[i].scale] == minor) tot += DEAL[i].w;
+    int x = rng_int(r, tot);
+    for (int i = 0; i < NDEAL; i++) {
+        if (minor >= 0 && SCALE_MINOR[DEAL[i].scale] != minor) continue;
+        if (x < DEAL[i].w) return DEAL[i].scale;
+        x -= DEAL[i].w;
+    }
+    return 1;
+}
+
 void piece_roll(Piece *p, uint32_t seed, int all, int fx)
 {
     Rng r; rng_seed(&r, seed);
@@ -121,12 +144,30 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     if (fx == FX_REVERSE) p->s_echo[L_LIGHT] = (uint8_t)clampi_(p->s_echo[L_LIGHT] + 30, 0, 100);
     p->link = pick(&r, 15, 60); p->warp = pick(&r, 0, 40); p->drift = pick(&r, 20, 60); p->chaos = pick(&r, 0, 30);
     p->tempo = pick(&r, 25, 70);                     /* every new piece its own tempo: 65 to 110 BPM */
+    p->key = (uint8_t)rng_int(&r, 12); p->scale = deal_scale(&r, -1);   /* (REC: piece_next_key, from the last) */
     if (all) {
-        p->key = (uint8_t)rng_int(&r, 12);
-        static const uint8_t FAV[10] = { 1, 2, 0, 4, 13, 14, 15, 16, 8, 5 };   /* the gentler scales come up more */
-        p->scale = rng_chance(&r, 0.7f) ? FAV[rng_int(&r, 10)] : (uint8_t)rng_int(&r, NUM_SCALES);
         p->mood = pick(&r, 20, 85); p->motion = pick(&r, 30, 70); p->evolve = pick(&r, 25, 70);
         p->weird = pick(&r, 20, 70);                 /* DRIFT: the layers wandering in and out */
+    }
+}
+
+/* the next piece's key, from the last one's round the circle of fifths, so the pieces lead on from one another:
+ * up a fifth 35 %, down a fifth 30 % (the same scale mostly: one sharp or flat away), the relative major or minor
+ * 15 %, the same root in another mode 20 % */
+void piece_next_key(Piece *p, int key, int scale, uint32_t seed)
+{
+    Rng r; rng_seed(&r, seed ^ 0xF1F7Eu);
+    int x = rng_int(&r, 100), minor = SCALE_MINOR[scale % NUM_SCALES];
+    if (x < 65) {
+        p->key = (uint8_t)((key + (x < 35 ? 7 : 5)) % 12);
+        p->scale = (uint8_t)(rng_chance(&r, 0.65f) && DEALT(scale) ? scale : deal_scale(&r, -1));
+    } else if (x < 80) {                         /* relative: a minor's major a minor third up, a major's minor below */
+        p->key = (uint8_t)((key + (minor ? 3 : 9)) % 12);
+        p->scale = deal_scale(&r, minor ? 0 : 1);
+    } else {
+        p->key = (uint8_t)key;
+        int s; do s = deal_scale(&r, -1); while (s == scale);
+        p->scale = (uint8_t)s;
     }
 }
 
@@ -145,9 +186,10 @@ void piece_roll_layer(Piece *p, int l, uint32_t seed)
 void piece_default(Piece *p)
 {
     memset(p, 0, sizeof *p);
-    p->key = 9; p->scale = 1; p->chord = CH_SEVENTH; p->tempo = 44;   /* A minor, 84 BPM */
+    p->chord = CH_SEVENTH; p->tempo = 44;
     p->mood = 55; p->motion = 50; p->evolve = 45; p->weird = 35;
     piece_roll(p, 0xAF7E1u, 0, FX_SPACE);
+    p->key = 9; p->scale = 1;                        /* (the first piece: A minor) */
     p->tempo = 44;                                   /* (the first piece: 84 BPM) */
     p->l[L_LIGHT].octave = 0;
 }

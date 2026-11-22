@@ -463,22 +463,25 @@ static int fx_next(void)
     return fx_last = fxdeck[--fxdeck_n];
 }
 
-static void new_piece(int all)
+static void new_piece(int keep_key)      /* REC: a new piece, a new key and scale too; held, in the same key */
 {
+    int all = 0, key = set.cur.key, scale = set.cur.scale;   /* (the HOME macros stay yours either way) */
     char nm[32];
     palette_next();
     int fx = fx_next();
     hist_push();
     uint32_t seed = (set.cur.seed * 1664525u + 1013904223u) ^ plat_ms() * 2654435761u ^ plat_ticks24();
     piece_roll(&set.cur, seed, all, fx);
+    if (keep_key) { set.cur.key = (uint8_t)key; set.cur.scale = (uint8_t)scale; }
+    else piece_next_key(&set.cur, key, scale, seed);
     set.slot = 255;
     changed();
     piece_name(seed, nm);
-    pop(all ? "A NEW WORLD" : "NEW PIECE", nm, LAYER_C[(seed >> 3) % NUM_LAYERS]);
-    if (!all) { char n[8]; int_text(40 + set.cur.tempo, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM + "); text_cat(ui.pop_3, FX_NAME[fx]); }
-    if (all) {
+    {   char t[32] = "", n[8];                   /* NEW PIECE + SHIMMER / its name / D DORIAN  92 BPM */
+        text_cat(t, keep_key ? "SAME KEY + " : "NEW PIECE + "); text_cat(t, FX_NAME[fx]);
+        pop(t, nm, LAYER_C[(seed >> 3) % NUM_LAYERS]);
         text_cat(ui.pop_3, NOTE_NAME[set.cur.key]); text_cat(ui.pop_3, " "); text_cat(ui.pop_3, SCALES[set.cur.scale].name);
-        char n[8]; text_cat(ui.pop_3, "  "); int_text(40 + set.cur.tempo, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM");
+        text_cat(ui.pop_3, "  "); int_text(40 + set.cur.tempo, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM");
     }
 }
 

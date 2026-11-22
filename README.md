@@ -82,8 +82,8 @@ Press a page's button again for its next page; dots by the page's name show how 
 | LFO | MOTION | LINK · WARP · FLOW · CHAOS |
 | LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · CHORUS |
 | GLO | SCALE | KEY · SCALE · CHORDS · TEMPO |
-| GLO again | SCREEN | the chosen visual's four (below) |
-| GLO a third time | VISUAL | VISUAL · · SHAPES (MOSH's) · |
+| GLO again | VISUAL | VISUAL · · SHAPES (MOSH's) · |
+| GLO a third time | SCREEN | the chosen visual's four (below) |
 | ARP | MIDI OUT | OUT · CHANNEL · KEYS CH · CLOCK |
 | ARP again | MIDI IN | IN CH · LAYERS · CLOCK · CC |
 | ARP a third time | USB AUDIO | RECORD · COMPUTER |
@@ -124,7 +124,7 @@ at about the same loudness.
 
 ## The visuals
 
-Choose on the VISUAL page (GLO three times); set them on SCREEN (GLO twice). REC deals a new colour palette each time,
+Choose on the VISUAL page (GLO twice); set them on SCREEN, the page after (GLO three times). REC deals a new colour palette each time,
 and the four layers always keep four clearly different hues.
 
 - **MATRIX:** a pegboard. Each note lights the peg at its pitch and stereo position, mixes breed between lit colours,

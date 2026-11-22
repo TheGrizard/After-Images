@@ -74,6 +74,7 @@ wait 300
 expect scale 2
 shot scale.png
 tap GLO
+tap GLO
 wait 200
 expect page 10
 turn K1 2
@@ -159,6 +160,7 @@ tap PLAY
 wait 5000
 tap GLO
 tap GLO
+tap GLO
 wait 100
 expect page 10
 turn K3 1
@@ -166,6 +168,7 @@ wait 100
 tap HOME
 wait 3000
 shot full.png
+tap GLO
 tap GLO
 tap GLO
 turn K2 4

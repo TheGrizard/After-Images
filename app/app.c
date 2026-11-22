@@ -307,6 +307,8 @@ static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX
 /* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: SCALE, SCREEN; ARP: MIDI OUT,
  * MIDI IN, USB) */
 static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO };
+/* the order a button steps through its pages: GLO's SCALE, VISUAL (which), then SCREEN (its settings) */
+static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 10 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
        K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
@@ -736,8 +738,11 @@ static void input(void)
         static const uint8_t BTNS[7] = { B_EDIT, B_SEQ, B_ENV, B_FX, B_LFO, B_GLO, B_ARP };
         for (int b = 0; b < 7; b++) {
             if (!(down >> BTNS[b] & 1u)) continue;
-            int first = -1, next = -1;
-            for (int pg = 1; pg < NPAGES; pg++) if (PAGE_BTN[pg] == BTNS[b]) { if (first < 0) first = pg; if (next < 0 && pg > ui.page && PAGE_BTN[ui.page] == BTNS[b]) next = pg; }
+            int first = -1, next = -1, here = PAGE_BTN[ui.page] == BTNS[b];
+            for (int pg = 1; pg < NPAGES; pg++) if (PAGE_BTN[pg] == BTNS[b]) {
+                if (first < 0 || PAGE_ORD[pg] < PAGE_ORD[first]) first = pg;
+                if (here && PAGE_ORD[pg] > PAGE_ORD[ui.page] && (next < 0 || PAGE_ORD[pg] < PAGE_ORD[next])) next = pg;
+            }
             page_to(PAGE_BTN[ui.page] == BTNS[b] ? (next >= 0 ? next : first) : first);
         }
     }
@@ -1462,7 +1467,7 @@ static void draw_panel_rows(int y0)
     int tx = cv_text(6, y0 + 4, &FONT_B, pg == PG_HOME ? "MACROS" : PAGE_NAME[pg], lay ? pc : C_TXT);
     if (pg != PG_HOME) {                         /* a button with more pages: a dot each, this one lit */
         int n = 0, at = 0;
-        for (int q = 1; q < NPAGES; q++) if (PAGE_BTN[q] == PAGE_BTN[pg]) { if (q == pg) at = n; n++; }
+        for (int q = 1; q < NPAGES; q++) if (PAGE_BTN[q] == PAGE_BTN[pg]) { if (PAGE_ORD[q] < PAGE_ORD[pg]) at++; n++; }
         for (int d = 0; n > 1 && d < n; d++) cv_rect(tx + 8 + d * 8, y0 + 10, 5, 5, d == at ? (lay ? pc : C_TXT) : C_RULE);
     }
     if (lay) { const char *n = LAYER_NAME[ui.sel]; cv_text(234 - text_w(&FONT_B, n), y0 + 4, &FONT_B, n, pc); }

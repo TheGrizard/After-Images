@@ -137,6 +137,7 @@ static void hist_push(void)
 #define OUT_GAIN 1.2f
 static volatile int muted;
 static float gain_now;
+static volatile int save_hold;            /* SAVE while playing: the render's gain down to nothing while it's set */
 static int two_cores;
 static uint8_t on2_mask = 0x3u;
 
@@ -231,7 +232,7 @@ static void core2_job(uint32_t mask) { layers_job(mask); engine_mix_reverb(&eng)
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float L[ENGINE_SUB * BLK], R[ENGINE_SUB * BLK];
-    float g = muted ? 0.0f : (float)master_q12 / 4096.0f * OUT_GAIN;
+    float g = muted || save_hold ? 0.0f : (float)master_q12 / 4096.0f * OUT_GAIN;
     int nsub = (int)(n / BLK);
     if (nsub > ENGINE_SUB) nsub = ENGINE_SUB;
     midi_in();
@@ -330,15 +331,16 @@ static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg 
 #define C_RED RGB(255, 90, 78)
 /* each layer its colour, everywhere: on the view and on its pages; the palettes (SCREEN), GROUND BODY LIGHT DUST */
 static const uint16_t LPAL[NPAL][NUM_LAYERS] = {
-    { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240) },
-    { RGB(215, 45, 70), RGB(235, 90, 170), RGB(255, 150, 60), RGB(255, 230, 170) },
-    { RGB(40, 90, 210), RGB(40, 165, 235), RGB(60, 230, 215), RGB(220, 245, 255) },
-    { RGB(150, 70, 255), RGB(255, 90, 200), RGB(60, 220, 255), RGB(240, 220, 255) },
-    { RGB(190, 35, 25), RGB(240, 95, 30), RGB(255, 175, 45), RGB(255, 235, 190) },
-    { RGB(120, 140, 45), RGB(45, 175, 95), RGB(155, 230, 85), RGB(220, 255, 210) },
-    { RGB(110, 110, 110), RGB(160, 160, 160), RGB(210, 210, 210), RGB(255, 255, 255) },
-    { RGB(25, 120, 45), RGB(45, 175, 75), RGB(90, 235, 120), RGB(195, 255, 205) },
-    { RGB(150, 75, 0), RGB(205, 115, 15), RGB(255, 165, 35), RGB(255, 222, 145) },
+    /* each its own character, its four layers always four clearly different hues (never shades of one) */
+    { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240) },    /* classic */
+    { RGB(225, 45, 75), RGB(150, 85, 255), RGB(255, 150, 50), RGB(255, 235, 165) },    /* sunset */
+    { RGB(45, 95, 235), RGB(255, 110, 90), RGB(60, 230, 210), RGB(255, 225, 240) },    /* ocean */
+    { RGB(150, 70, 255), RGB(255, 60, 170), RGB(60, 215, 255), RGB(205, 255, 90) },    /* neon */
+    { RGB(225, 45, 30), RGB(40, 190, 180), RGB(255, 180, 45), RGB(255, 240, 205) },    /* ember */
+    { RGB(95, 180, 50), RGB(185, 70, 175), RGB(245, 205, 60), RGB(215, 255, 235) },    /* forest */
+    { RGB(90, 135, 215), RGB(215, 100, 55), RGB(150, 205, 115), RGB(245, 245, 245) },  /* slate */
+    { RGB(30, 175, 95), RGB(235, 60, 125), RGB(95, 180, 255), RGB(250, 250, 165) },    /* jade */
+    { RGB(215, 120, 20), RGB(100, 85, 230), RGB(205, 230, 60), RGB(255, 222, 205) },   /* amber */
 };
 static uint16_t LAYER_C[NUM_LAYERS + 1] = { RGB(255, 72, 64), RGB(70, 140, 255), RGB(70, 230, 110), RGB(240, 240, 240), RGB(255, 255, 255) };
 static void palette_apply(void) { for (int l = 0; l < NUM_LAYERS; l++) LAYER_C[l] = LPAL[set.palette % NPAL][l]; }
@@ -538,15 +540,24 @@ static void hist_step(int d)
     pop(d < 0 ? "BACK TO" : "FORWARD TO", nm, C_TXT);
 }
 
+/* SAVE while the music plays: the flash's erase stops the sound for tens of ms, so the sound fades out first (a few
+ * ms), the save, and back in: a soft dip, not a crunch */
+static int save_pending; static uint32_t save_t;   /* the slot (+1) waiting for the fade, since when */
+static void store_now(int slot)
+{
+    store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
+    char s[12] = "SLOT ", n[4]; int_text(slot + 1, n); text_cat(s, n);
+    if (store_ok) pop("SAVED", s, C_TXT);
+    else pop("NOT SAVED", "UNTIL POWER OFF", C_RED);
+}
+
 static void save_piece(void)
 {
     int slot = set.slot != 255 ? set.slot : set.nsaved < NSAVED ? set.nsaved++ : NSAVED - 1;
     set.saved[slot] = set.cur; set.slot = (uint8_t)slot;
     set_dirty = 0; autosave_at = 0;
-    store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
-    char s[12] = "SLOT ", n[4]; int_text(slot + 1, n); text_cat(s, n);
-    if (store_ok) pop("SAVED", s, C_TXT);
-    else pop("NOT SAVED", "UNTIL POWER OFF", C_RED);
+    if (set.playing) { save_pending = slot + 1; save_hold = 1; save_t = plat_ms(); return; }
+    store_now(slot);
 }
 
 static void load_step(int d)
@@ -783,10 +794,12 @@ static uint16_t pg_t;                            /* the board's clock, 50 ms tic
 static float pg_acc, pg_tick;
 static int pg_n_now = -1;                        /* the COUNT the board was laid out for */
 
-static int peg_cols(void) { return PEG_NS[set.peg_n % NPEG_NS]; }
+static int splash_pegs;                   /* the splash: the board at COUNT 8, SIZE, BREED and FADE full */
+static float pegs_gain = 1.0f;            /* (the splash's fade out at its end) */
+static int peg_cols(void) { return splash_pegs ? 8 : PEG_NS[set.peg_n % NPEG_NS]; }
 static int peg_cell(void) { return 240 / peg_cols(); }
 static int peg_rows(void) { int r = VIEW_H / peg_cell(); return r > PG_MAX ? PG_MAX : r; }
-static float fade_k(void) { return 0.4f + (float)set.fade * 0.016f; }   /* FADE: 0.4 .. 2 */
+static float fade_k(void) { return 0.4f + (float)(splash_pegs ? 100 : set.fade) * 0.016f; }   /* FADE: 0.4 .. 2 */
 
 static float pn_level(int i)                     /* a note's peg: lit as it sounds, fading after */
 {
@@ -867,7 +880,8 @@ static void pegs_breed(void)
 
 static void pegs_step(float dt)
 {
-    if (pg_n_now != set.peg_n) { pg_n_now = set.peg_n; memset(mp, 0, sizeof mp); memset(pn, 0, sizeof pn); }   /* (a new COUNT: a clean board) */
+    int lay = splash_pegs ? -2 : set.peg_n;
+    if (pg_n_now != lay) { pg_n_now = lay; memset(mp, 0, sizeof mp); memset(pn, 0, sizeof pn); }   /* (a new COUNT, or the splash's: a clean board) */
     uint32_t head = eng.uiq_head;                /* the notes played since the last frame */
     if (head - ui.uiq_tail > UI_Q) ui.uiq_tail = head - UI_Q;
     while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; pegs_note(&n); }
@@ -883,7 +897,7 @@ static void pegs_step(float dt)
             if (m->die && (float)(uint16_t)(m->age - m->die) > 40.0f * fade_k() * 0.5f) { m->col = 0; continue; }
             if (!m->die && m->age > (uint16_t)(400.0f + 240.0f * fade_k()) && (jr() & 63u) == 0) m->die = m->age;   /* (a life of 30 s or so) */
         }
-    pg_acc += dt * (0.2f + (float)set.breed * 0.13f) * (0.2f + 0.8f * (float)(cols * cols) / 400.0f);   /* BREED: 0.2 .. 13 a second (on 20 x 20) */
+    pg_acc += dt * (0.2f + (float)(splash_pegs ? 100 : set.breed) * 0.13f) * (0.2f + 0.8f * (float)(cols * cols) / 400.0f);   /* BREED: 0.2 .. 13 a second (on 20 x 20) */
     int guard = 0;
     while (pg_acc >= 1.0f && guard++ < 32) { pg_acc -= 1.0f; pegs_breed(); }
     if (pg_acc > 1.0f) pg_acc = 0;
@@ -901,7 +915,7 @@ static void draw_pegs(void)
 {
     static uint8_t acc[PG_MAX][PG_MAX][3];
     int rows = peg_rows(), cols = peg_cols(), cell = peg_cell(), y0 = (VIEW_H - rows * cell) / 2;
-    int rad = (int)((float)cell * (0.12f + 0.0038f * (float)set.peg_size) + 0.5f);   /* SIZE: a speck .. touching */
+    int rad = (int)((float)cell * (0.12f + 0.0038f * (float)(splash_pegs ? 100 : set.peg_size)) + 0.5f);   /* SIZE: a speck .. touching */
     if (rad < 1) rad = 1;
     memset(acc, 0, sizeof acc);
     for (int i = 0; i < PG_NOTES; i++) {           /* the notes' light, added */
@@ -920,6 +934,7 @@ static void draw_pegs(void)
             int r = acc[y][x][0], g = acc[y][x][1], b = acc[y][x][2];
             if (ml > 0.01f && mc) { r += (int)((float)((mc >> 11) * 255 / 31) * ml); g += (int)((float)(((mc >> 5) & 63) * 255 / 63) * ml); b += (int)((float)((mc & 31) * 255 / 31) * ml); }
             if (r + g + b <= 45) continue;           /* unlit (or nearly out): nothing there */
+            if (pegs_gain < 1.0f) { r = (int)((float)r * pegs_gain); g = (int)((float)g * pegs_gain); b = (int)((float)b * pegs_gain); }
             disc(x * cell + cell / 2, py, rad, RGB(clamp(r, 0, 255), clamp(g, 0, 255), clamp(b, 0, 255)));
         }
     }
@@ -1089,40 +1104,86 @@ static void speak(void)
 }
 
 /* ------------------------------------------------------------------ the opening: the name and its afterimages */
-#define SPLASH_MS 1800u
-static void splash_title(int32_t off, uint16_t c)
+#define SPLASH_HOLD 350.0f               /* the words spelled: held this long (ms), then all fades out over SPLASH_FADE */
+#define SPLASH_FADE 600.0f
+#define SPLASH_MS 2950u
+
+/* the splash: the pegboard itself (COUNT 8, SIZE, BREED and FADE full), lit at random and breeding its mixes, and the
+ * letters of AFTER IMAGES coming up one by one, in random order, each in a ball of its own colour on the board's own
+ * grid, until the words are spelled */
+static const char SPLASH_TXT[2][7] = { "AFTER", "IMAGES" };
+static struct { uint8_t gx, gy; char ch; uint16_t at, col; } sp_let[11];
+static uint32_t sp_last_note;
+
+static uint16_t mix565(uint16_t a, uint16_t b, float k)   /* a towards b, by k */
 {
-    int w = text_w(&FONT_L, "AFTER"), w2 = text_w(&FONT_L, "IMAGES");
-    cv_text(120 - w / 2 + off, 4, &FONT_L, "AFTER", c);
-    cv_text(120 - w2 / 2 - off, 40, &FONT_L, "IMAGES", c);
+    int ar = a >> 11, ag = (a >> 5) & 63, ab = a & 31, br = b >> 11, bg = (b >> 5) & 63, bb = b & 31;
+    return (uint16_t)((ar + (int)((float)(br - ar) * k)) << 11 | (ag + (int)((float)(bg - ag) * k)) << 5 | (ab + (int)((float)(bb - ab) * k)));
 }
 
 void app_splash(void)
 {
     lcd_fill(0, 0, 240, 240, C_BLACK);
-    cv_begin(240, 60, C_BLACK); cv_oy = 0; cv_y0 = 0; cv_y1 = 60;
-    cv_rect(0, 0, 240, 60, C_BLACK);
-    cv_blit(0, 70);
-    cv_begin(240, 60, C_BLACK);
-    splash_title(0, C_WHITE);
-    cv_blit(0, 76);
+    splash_pegs = 1; sp_last_note = 0;
+    int n = 0; uint16_t last = 0;
+    for (int w = 0; w < 2; w++)                  /* the words left-aligned in one column, so the block sits centred */
+        for (int i = 0; SPLASH_TXT[w][i]; i++) {
+            sp_let[n].gx = (uint8_t)(1 + i); sp_let[n].gy = (uint8_t)(3 + w); sp_let[n].ch = SPLASH_TXT[w][i];
+            uint16_t c;
+            do {                                 /* a layer's colour, or two's mix; never the one before again */
+                int a = (int)(jr() % NUM_LAYERS), b = (int)(jr() % NUM_LAYERS);
+                c = (jr() & 1u) || a == b ? LAYER_C[a] : rgb_mix(LAYER_C[a], LAYER_C[b]);
+            } while (c == last);
+            sp_let[n].col = last = c; n++;
+        }
+    for (int i = 0; i < 11; i++) sp_let[i].at = 0;
+    for (int k = 0; k < 11; k++) {               /* their order: random */
+        int i; do i = (int)(jr() % 11u); while (sp_let[i].at);
+        sp_let[i].at = (uint16_t)(350 + k * 150 + (int)(jr() % 50u));
+    }
 }
 
 static void splash_frame(uint32_t ms)
 {
-    float t = (float)ms / 1000.0f;
-    cv_begin(240, 60, C_BLACK);
-    for (int g = 3; g >= 1; g--) {               /* the ghosts trail behind, drifting apart */
-        float k = 0.15f * (float)(4 - g) * (1.0f - t / 1.8f);
-        splash_title((int32_t)((float)g * 6.0f * t), dim(LAYER_C[g % NUM_LAYERS], k > 0 ? k : 0));
+    static uint32_t prev;
+    float dt = prev && ms > prev ? (float)(ms - prev) / 1000.0f : 0.03f; prev = ms;
+    while (sp_last_note + 90u <= ms) {           /* the board lit at random, as by notes */
+        sp_last_note += 90u;
+        UiNote n; n.layer = (uint8_t)(jr() % NUM_LAYERS); n.note = (uint8_t)(34 + jr() % 68u); n.vel = 110;
+        n.pan = (int8_t)((int)(jr() % 201u) - 100); n.dur = (uint8_t)(6 + jr() % 10u);
+        pegs_note(&n);
     }
-    splash_title(0, C_WHITE);
-    cv_blit(0, 76);
+    pegs_step(dt);
+    {   /* the words spelled: a moment, then everything fades out */
+        int done = 0; for (int i = 0; i < 11; i++) if (sp_let[i].at > done) done = sp_let[i].at;
+        pegs_gain = 1.0f - clampf(((float)ms - (float)done - SPLASH_HOLD) / SPLASH_FADE, 0.0f, 1.0f);
+    }
+    for (int top = 0; top < 240; top += 60) {
+        cv_begin(240, 60, C_BLACK);
+        cv_oy = -top; cv_y0 = 0; cv_y1 = 60;
+        draw_pegs();
+        for (int i = 0; i < 11; i++) {
+            int a = (int)ms - (int)sp_let[i].at;
+            if (a < 0) continue;
+            int cx = sp_let[i].gx * 30 + 15, cy = sp_let[i].gy * 30 + 15;
+            if (cy + 18 < top || cy - 18 >= top + 60) continue;
+            float s = a < 90 ? (float)a / 90.0f * 1.08f : a < 170 ? 1.08f - (float)(a - 90) / 80.0f * 0.08f : 1.0f;
+            uint16_t c = sp_let[i].col, col = a < 120 ? mix565(c, C_WHITE, 0.8f * (1.0f - (float)a / 120.0f)) : c;
+            disc(cx, cy, (int)(15.0f * s + 0.5f), dim(col, pegs_gain));
+            if (s > 0.6f) {
+                int r = c >> 11, g = (c >> 5) & 63, b = c & 31;
+                float lum = 0.3f * (float)r / 31.0f + 0.59f * (float)g / 63.0f + 0.11f * (float)b / 31.0f;
+                char t[2] = { sp_let[i].ch, 0 };
+                cv_text(cx - text_w(&FONT_M, t) / 2, cy - 8, &FONT_M, t, lum > 0.55f ? C_BLACK : dim(C_WHITE, pegs_gain));   /* (the capitals' middle on the ball's) */
+            }
+        }
+        cv_blit(0, (uint32_t)top);
+    }
 }
 
 static void splash_end(void)
 {
-    ui.splash_on = 0;
+    ui.splash_on = 0; splash_pegs = 0; pegs_gain = 1.0f;
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui.head_key[0] = 0;
     ui.last_view = plat_ms();
@@ -1167,6 +1228,9 @@ void app_frame(void)
             if (cpu > 80u) g -= 0.03f; else if (cpu < 65u) g += 0.004f;
             eng.gov = g < 0.3f ? 0.3f : g > 1.0f ? 1.0f : g;
         }
+    }
+    if (save_pending && (gain_now < 0.004f || now - save_t > 250u)) {   /* SAVE: faded out, kept, back in */
+        store_now(save_pending - 1); save_pending = 0; save_hold = 0;
     }
     /* the piece and settings kept: never while the music plays (erasing the flash stops the audio for tens of ms, a
      * drop), so when it has stopped and faded out (PLAY) */

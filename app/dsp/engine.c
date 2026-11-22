@@ -537,7 +537,10 @@ void engine_mix_sends(Engine *e)
      * ECHO: up to 12 o'clock the echo; past it, it turns into a reversed smear */
     float rk = u(p->reverb), rvk = clamp01(rk * 2.0f), shk = clamp01(rk * 2.0f - 1.0f);
     float ek = u(p->echo), eck = clamp01(ek * 2.0f), rev = clamp01(ek * 2.0f - 1.0f);
-    float grk = u(p->grain);
+    float grk = u(p->grain), gsend = 0;
+    for (int l = 0; l < NUM_LAYERS; l++) gsend = fm_maxf(gsend, mo(e, l, MW_GRAIN, p->s_grain[l], 0.5f) * e->L[l].present);
+    if (e->key_layer >= 0 && e->key_layer < NUM_LAYERS) gsend = fm_maxf(gsend, u(p->s_grain[e->key_layer]));
+    grk = fm_maxf(grk, 0.35f * gsend);              /* (a send wakes the grains: a gentle cloud with GRAIN's own at 0) */
     mx_rvk = rvk; mx_shk = shk; mx_grk = grk; mx_nsub = e->nsub;
     e->rv_size = 2.5f + 12.0f * rvk * rvk - 3.0f * shk; e->rv_damp = 1800.0f + 4200.0f * u(p->mood) + 4000.0f * shk;
     e->echo.time_s = clampf(60.0f / e->bpm * 0.75f, 0.12f, 0.7f);   /* a dotted eighth */

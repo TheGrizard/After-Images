@@ -51,7 +51,7 @@ stays clear.
 | SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
 | ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
 | ENV again | VOICE for the chosen layer: F.GLIDE (the filter glides after each new note; the pitch never slides), LEGATO (notes join, not started again), SWEEP (the filter opening over each note), RESO |
-| FX | SENDS for the chosen layer: how much of it goes to the REVERB, the ECHO, the GRAIN, and how much DIRT it gets (so GROUND can go only to the reverb while LIGHT is fuzzed and echoed) |
+| FX | SENDS for the chosen layer: how much of it goes to the REVERB, the ECHO, the GRAIN, and how much DIRT it gets (so GROUND can go only to the reverb while LIGHT is fuzzed and echoed). A send always does something: DIRT's send drives harder into the tape, and a GRAIN send wakes a gentle cloud even with GRAIN's own at 0 |
 | FX again | EFFECTS, shared by the layers: REVERB (to 12 o'clock the room, small to vast; past it the shimmer, an octave up, and by full an octave down too), ECHO (to 12 o'clock a tempo-locked echo with a tape wobble; past it a reversed, smeared wash), GRAIN (a cloud; right up, FREEZE), DIRT (the character, tape pushed: WARM saturation, FUZZ, then BREAK up: hiss, sputter, dropouts) |
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
 | LFO again | WARBLE, Boards of Canada's worn tape in the synth itself: WARBLE (the pitch wandering slowly, the whole piece as one, an LFO on an LFO), FLUTTER (a faster shiver), DETUNE (everything a touch flat), CHORUS (the Juno's) |

@@ -199,6 +199,8 @@ static inline float tape_sat(float x)            /* tanh, near enough (and flat 
 void dirt_run(Dirt *d, float a, float mix, float *L, float *R, int n)
 {
     if (mix < 0.005f) return;
+    a = clamp01(a + 0.45f * mix);                        /* (a send drives harder into the tape: with DIRT's own at 0,
+                                                          * a send at full is warm tipping into fuzz) */
     a = 0.05f + 0.95f * a;                               /* (its gentlest still a little warmth) */
     float w = clamp01(a * 3.0f), f = clamp01(a * 3.0f - 1.0f), z = clamp01(a * 3.0f - 2.0f);   /* warm, fuzz, breakup */
     float drive = 1.0f + 3.0f * w + 14.0f * f + 10.0f * z;

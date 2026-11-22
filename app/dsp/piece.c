@@ -149,6 +149,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
         p->mood = pick(&r, 20, 85); p->motion = pick(&r, 30, 70); p->evolve = pick(&r, 25, 70);
         p->weird = pick(&r, 20, 70);                 /* DRIFT: the layers wandering in and out */
     }
+    if (!p->grain) for (int l = 0; l < NUM_LAYERS; l++) p->s_grain[l] = 0;   /* (no grains in the piece: none sent; a send alone wakes them) */
 }
 
 /* the next piece's key, from the last one's round the circle of fifths, so the pieces lead on from one another:
@@ -181,6 +182,7 @@ void piece_roll_layer(Piece *p, int l, uint32_t seed)
     roll_sends(p, l, &r);
     if (p->dirt && rng_chance(&r, 0.3f)) p->s_dirt[l] = pick(&r, 30, 90);
     p->l[l].seq = (uint8_t)t;
+    if (!p->grain) p->s_grain[l] = 0;
 }
 
 void piece_default(Piece *p)

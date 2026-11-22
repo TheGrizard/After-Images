@@ -28,19 +28,19 @@ static Engine eng PLAT_POOL;
 typedef struct {
     uint32_t magic;
     uint8_t slot;                        /* the saved piece being played (255: none) */
-    uint8_t nsaved, midi_on, midi_ch, midi_keys, midi_clock, playing, sync;   /* sync: CLOCK, INT / IN / OUT (midi_clock and
-                                                                         * clock_in: v0.2-0.12's two switches, moved into it) */
+    uint8_t nsaved, midi_on, midi_ch, midi_keys, mosh_mould, playing, sync;   /* sync: CLOCK, INT / IN / OUT; mosh_mould: MOSH's
+                                                                         * MOULD (v0.2-0.12: CLOCK out, moved into sync) */
     Piece cur;
     Piece saved[NSAVED];
     /* v0.2 */
     uint8_t in_ch;                       /* MIDI in: notes on this channel play the chosen layer (0: any) */
     uint8_t layers_in;                   /* notes on the layers' channels (CHANNEL's four) play those layers */
-    uint8_t clock_in;                    /* follow MIDI clock: its tempo, its start and stop */
+    uint8_t clock_in;                    /* MOSH's SHAPES: 0 shards, 1 pebbles (v0.2-0.12: CLOCK in, moved into sync) */
     uint8_t cc_in;                       /* CCs move the macros */
     uint8_t usb_full;                    /* USB recording at full level, not at MASTER */
     uint8_t usb_play;                    /* the computer's audio through the FM-1, 0..100 */
-    uint8_t visual;                      /* VISUAL: MATRIX (the pegs) or RORSCHACH (the inkblot) (v0.2-0.7: STEMS) */
-    uint8_t palette, ink_gaps, ink_mix, rsv3;   /* the screen: the palette (dealt by REC); RORSCHACH's GAPS and MIX */
+    uint8_t visual;                      /* VISUAL: MATRIX (the pegs), RORSCHACH (the inkblot), MOSH (v0.2-0.7: STEMS) */
+    uint8_t palette, ink_gaps, ink_mix, mosh_size;   /* the screen: the palette (dealt by REC); RORSCHACH's GAPS, MIX; MOSH's SIZE */
     uint8_t breed, fade, pegs_set;       /* PEGS: how fast mixes breed, how long things linger (0..100); pegs_set: 2 once all four are set */
     uint8_t peg_n, peg_size;             /* PEGS: COUNT (an index into PEG_NS), SIZE 0..100 */
 } settings_t;
@@ -62,15 +62,15 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
 {
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
     set.usb_full = 0; set.usb_play = 100; set.visual = 0;
-    set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.rsv3 = 0;
-    set.breed = 100; set.fade = 100; set.pegs_set = 4; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
+    set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.mosh_size = 50;
+    set.breed = 100; set.fade = 100; set.pegs_set = 5; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
 }
 
 static void settings_defaults(void)
 {
     memset(&set, 0, sizeof set);
     set.magic = SET_MAGIC; set.slot = 255;
-    set.midi_on = 1; set.midi_ch = 0; set.midi_keys = 4; set.midi_clock = 0; set.sync = SYNC_INT;
+    set.midi_on = 1; set.midi_ch = 0; set.midi_keys = 4; set.mosh_mould = 50; set.sync = SYNC_INT;
     piece_default(&set.cur);
     settings_v2();
 }
@@ -78,10 +78,10 @@ static void settings_defaults(void)
 static int settings_ok(void)
 {
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
-    if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.midi_clock > 1 || set.sync >= NSYNC) return 0;
+    if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.mosh_mould > 100 || set.sync >= NSYNC) return 0;
     if (set.in_ch > 16 || set.layers_in > 1 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
-        || (set.pegs_set >= 3 && (set.visual > 1 || set.ink_gaps > 100 || set.ink_mix > 100))) return 0;
+        || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -109,12 +109,12 @@ static void settings_load(void)
         set.magic = SET_MAGIC;
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
-    if (set.pegs_set < 3 || set.pegs_set > 4) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; set.rsv3 = 0; }   /* (before RORSCHACH) */
-    if (set.pegs_set != 4) {                     /* (before v0.21: MATRIX's new defaults, once) */
-        set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; set.pegs_set = 4;
-    }
-    if (set.clock_in || set.midi_clock) {    /* (v0.2-0.12's two CLOCK switches: one setting now, IN first if both were on) */
-        set.sync = set.clock_in ? SYNC_IN : SYNC_OUT; set.clock_in = set.midi_clock = 0;
+    int was = set.pegs_set;                      /* (the store's version of these) */
+    if (was < 3 || was > 5) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
+    if (was < 4 || was > 5) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
+    if (was < 5 || was > 5) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
+        if (set.clock_in || set.mosh_mould) set.sync = set.clock_in ? SYNC_IN : SYNC_OUT;   /* (v0.2-0.12's two: one setting, IN first) */
+        set.clock_in = 0; set.mosh_mould = 50; set.mosh_size = 50; set.pegs_set = 5;
     }
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
@@ -308,7 +308,7 @@ static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX
  * MIDI IN, USB) */
 static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_VIS, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
+       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -331,7 +331,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_SYNC, 2, SO(sync) } },
     { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_SYNC, 2, SO(sync) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
     { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
-    { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
+    { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "SHAPES", K_SHAPE, 2, SO(clock_in) }, { "", K_NONE, 2, 0 } },
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
 
@@ -379,7 +379,10 @@ static const Knob *knob_of(int pg, int k)
 {
     static const Knob INK_KNOBS[4] = { { "SIZE", K_PCT, 2, SO(peg_size) }, { "GAPS", K_PCT, 2, SO(ink_gaps) },
                                        { "MIX", K_PCT, 2, SO(ink_mix) }, { "FADE", K_PCT, 2, SO(fade) } };
-    if (pg == PG_SCREEN && set.visual) return &INK_KNOBS[k];   /* (SCREEN: the chosen visual's own four) */
+    static const Knob MOSH_KNOBS[4] = { { "SIZE", K_PCT, 2, SO(mosh_size) }, { "BREED", K_PCT, 2, SO(breed) },
+                                        { "MOULD", K_PCT, 2, SO(mosh_mould) }, { "FADE", K_PCT, 2, SO(fade) } };
+    if (pg == PG_SCREEN && set.visual == 2) return &MOSH_KNOBS[k];
+    if (pg == PG_SCREEN && set.visual == 1) return &INK_KNOBS[k];   /* (SCREEN: the chosen visual's own four) */
     return &PAGES[pg][k];
 }
 
@@ -406,7 +409,8 @@ static void knob_text(int pg, int k, char *s)
     case K_GRAIN: if (v < 92) int_text(v, s); else text_cat(s, "FREEZE"); break;
     case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PEGN: int_text(PEG_NS[v % NPEG_NS], s); break;
-    case K_VIS: text_cat(s, v ? "RORSCHACH" : "MATRIX"); break;
+    case K_VIS: text_cat(s, v == 2 ? "MOSH" : v ? "RORSCHACH" : "MATRIX"); break;
+    case K_SHAPE: text_cat(s, v ? "PEBBLES" : "SHARDS"); break;
     case K_SYNC: text_cat(s, SYNC_NAME[v % NSYNC]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
@@ -432,7 +436,8 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_INCH: return (float)v / 16.0f;
     case K_REC: return v ? 1.0f : 0.0f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
-    case K_VIS: return (float)v;
+    case K_VIS: return (float)v * 0.5f;
+    case K_SHAPE: return (float)v;
     case K_SYNC: return (float)v / (NSYNC - 1);
     case K_ENGINE: return (float)v / (NUM_ENGINES - 1);
     case K_SEQ: return (float)v / (NUM_SEQS - 1);
@@ -630,7 +635,8 @@ static void knob_turn(int k, int d)
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
-    case K_VIS: hi = 1; step = 1; break;
+    case K_VIS: hi = 2; step = 1; break;
+    case K_SHAPE: hi = 1; step = 1; break;
     case K_SYNC: hi = NSYNC - 1; step = 1; break;
     case K_ENGINE: hi = NUM_ENGINES - 1; step = 1; wrap = 1; break;
     case K_SEQ: hi = NUM_SEQS - 1; step = 1; wrap = 1; break;
@@ -1169,6 +1175,183 @@ static void draw_ink(void)
     }
 }
 
+/* ------------------------------------------------------------------ MOSH: shards breeding and moulding
+ * Like MATRIX, but free shapes: each note lights a shard (SHARDS) or a pebble (PEBBLES) in its layer's ink, where it sits
+ * in the stereo field (left to right) at its pitch (high at the top); mixes breed beside lit shapes, from a parent and
+ * one of its nearest neighbours of another colour, so they grow where the music is. Overlaps mix their colours, and the
+ * shapes mould as they age, their corners creeping out or in. All in beats (the tempo, or the clock followed).
+ * SCREEN: SIZE (the zoom), BREED, MOULD, FADE. Edges smoothed: each edge pixel by how much of it the shape covers */
+#define MOSH_MAX 40
+#define MOSH_V 7
+typedef struct {
+    float cx, cy, size, born, life, rot, stretch;
+    uint8_t on, nv, ph; uint8_t a[MOSH_V], r[MOSH_V]; int8_t dr[MOSH_V]; float col[3];
+} Shard;
+static Shard msh[MOSH_MAX];
+static int msh_next; static float msh_breed_at, msh_t;
+static uint16_t msh_cov[241];                    /* a row's coverage, 0..1024 */
+
+static float mosh_rf(void) { return (float)(jr() & 65535u) / 65535.0f; }
+static void mosh_vivid(float *c)                 /* a mix pushed back to full colour, as the pegs' are */
+{
+    float m = (c[0] + c[1] + c[2]) / 3.0f, top = 1.0f;
+    for (int k = 0; k < 3; k++) { c[k] = fm_maxf(0.0f, m + (c[k] - m) * 1.5f); top = fm_maxf(top, c[k]); }
+    float s = fm_minf(1.6f, 235.0f / top);
+    for (int k = 0; k < 3; k++) c[k] = fm_minf(255.0f, c[k] * s);
+}
+
+static void mosh_add(float cx, float cy, float size, const float *col)
+{
+    Shard *p = &msh[msh_next]; msh_next = (msh_next + 1) % MOSH_MAX;
+    int peb = set.clock_in == 1;                 /* SHAPES: 0 shards, 1 pebbles */
+    p->on = 1; p->cx = clampf(cx, 8.0f, 232.0f); p->cy = clampf(cy, 8.0f, 232.0f); p->size = size; p->born = msh_t;
+    p->life = (6.0f + 10.0f * mosh_rf()) * (0.4f + (float)set.fade * 0.012f);
+    p->rot = mosh_rf(); p->ph = (uint8_t)jr();
+    p->nv = (uint8_t)(peb ? 5 + jr() % 3u : 4 + jr() % 3u);
+    p->stretch = peb ? 0.75f + 0.55f * mosh_rf() : (mosh_rf() < 0.3f ? 1.6f + mosh_rf() : 0.85f + 0.55f * mosh_rf());
+    float rmin = peb ? 0.78f : 0.68f;
+    for (int i = 0; i < p->nv; i++) {
+        p->a[i] = (uint8_t)(((float)i + 0.25f + 0.5f * mosh_rf()) / (float)p->nv * 256.0f);
+        p->r[i] = (uint8_t)((rmin + (1.0f - rmin) * mosh_rf()) * 255.0f);
+        p->dr[i] = (int8_t)((-0.2f + 0.5f * mosh_rf()) * 127.0f);
+    }
+    for (int k = 0; k < 3; k++) p->col[k] = col[k];
+}
+
+static float mosh_level(const Shard *p)          /* in over 1.5 beats, out over 3, breathing */
+{
+    float a = msh_t - p->born, k = fm_minf(1.0f, a / 1.5f);
+    if (a > p->life) k *= fm_maxf(0.0f, 1.0f - (a - p->life) / 3.0f);
+    return k * (0.78f + 0.22f * fm_sin_turns(msh_t * 0.143f + (float)p->ph / 256.0f));
+}
+
+static void mosh_breed(void)
+{
+    int lit[MOSH_MAX], nl = 0;
+    for (int i = 0; i < MOSH_MAX; i++) if (msh[i].on && mosh_level(&msh[i]) > 0.4f) lit[nl++] = i;
+    if (nl < 2) return;
+    const Shard *a = &msh[lit[jr() % (uint32_t)nl]];
+    int near[3] = { -1, -1, -1 }; float nd[3] = { 1e9f, 1e9f, 1e9f };   /* its three nearest of another colour */
+    for (int j = 0; j < nl; j++) {
+        const Shard *q = &msh[lit[j]];
+        if (q == a || (fm_fabsf(q->col[0] - a->col[0]) + fm_fabsf(q->col[1] - a->col[1]) + fm_fabsf(q->col[2] - a->col[2])) < 30.0f) continue;
+        float d = (q->cx - a->cx) * (q->cx - a->cx) + (q->cy - a->cy) * (q->cy - a->cy);
+        for (int s = 0; s < 3; s++) if (d < nd[s]) { for (int u = 2; u > s; u--) { nd[u] = nd[u - 1]; near[u] = near[u - 1]; } nd[s] = d; near[s] = lit[j]; break; }
+    }
+    int cnt = near[2] >= 0 ? 3 : near[1] >= 0 ? 2 : near[0] >= 0 ? 1 : 0;
+    if (!cnt) return;
+    const Shard *b = &msh[near[jr() % (uint32_t)cnt]];
+    float f = 0.12f + 0.23f * mosh_rf(), col[3];  /* beside the parent, not halfway: mixes grow where the sound is */
+    for (int k = 0; k < 3; k++) col[k] = (a->col[k] + b->col[k]) * 0.5f;
+    mosh_vivid(col);
+    mosh_add(a->cx + (b->cx - a->cx) * f + (mosh_rf() - 0.5f) * 16.0f, a->cy + (b->cy - a->cy) * f + (mosh_rf() - 0.5f) * 16.0f,
+             (a->size + b->size) * 0.5f * (0.7f + 0.45f * mosh_rf()), col);
+}
+
+static void mosh_step(void)
+{
+    uint32_t head = eng.uiq_head;
+    if (head - ui.uiq_tail > UI_Q) ui.uiq_tail = head - UI_Q;
+    ink_colours();                               /* (the palette's inks: a near-white one turned to two others' mix) */
+    float zoom = 0.5f + (float)set.mosh_size * 0.017f;   /* SIZE: the zoom, 0.5 .. 2.2 (1.35 at 12 o'clock) */
+    msh_t = eng.beat;
+    while (ui.uiq_tail != head) {
+        UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++;
+        float sp = (float)n.pan / 100.0f, sx = (sp < 0 ? -1.0f : 1.0f) * fm_sqrtf(fm_fabsf(sp));   /* (the field spread wide: a little pan goes far) */
+        mosh_add(120.0f + sx * 108.0f + (mosh_rf() - 0.5f) * 36.0f,
+                 24.0f + clampf(1.0f - ((float)n.note - 34.0f) / 68.0f, 0.0f, 1.0f) * 192.0f,
+                 (10.0f + 18.0f * mosh_rf()) * zoom * (0.7f + 0.3f * (float)n.vel / 127.0f), ink_rgb[n.layer % NUM_LAYERS]);
+    }
+    float every = 4.0f / (1.0f + (float)set.breed * 0.15f);   /* BREED: a mix every 4 beats .. every quarter beat */
+    if (msh_breed_at > msh_t + 8.0f || msh_breed_at < msh_t - 8.0f) msh_breed_at = msh_t;   /* (a new piece: its beat from 0) */
+    int guard = 0;
+    while (msh_breed_at < msh_t && guard++ < 8) { msh_breed_at += every; mosh_breed(); }
+    for (int i = 0; i < MOSH_MAX; i++)
+        if (msh[i].on && (msh_t - msh[i].born > msh[i].life + 3.0f || msh_t < msh[i].born - 1.0f)) msh[i].on = 0;
+}
+
+static int mosh_poly(const Shard *p, float *px, float *py)   /* its corners now, in the view */
+{
+    float age = msh_t - p->born, mould = (float)set.mosh_mould / 50.0f, sy = (float)VIEW_H / 240.0f;
+    float cr = fm_sin_turns(p->rot + 0.25f), sr = fm_sin_turns(p->rot);
+    for (int i = 0; i < p->nv; i++) {
+        float g = fm_minf(1.8f, 1.0f + fm_maxf(-0.4f, (float)p->dr[i] / 127.0f * age * 0.12f * mould));
+        float r = p->size * (float)p->r[i] / 255.0f * g, an = (float)p->a[i] / 256.0f;
+        float lx = fm_sin_turns(an + 0.25f) * r * p->stretch, ly = fm_sin_turns(an) * r;
+        px[i] = p->cx + lx * cr - ly * sr; py[i] = (p->cy + lx * sr + ly * cr) * sy;
+    }
+    return p->nv;
+}
+
+static void mosh_fill(const float *px, const float *py, int n, const float *col, float k)
+{
+    float y0f = 1e9f, y1f = -1e9f, x0f = 1e9f, x1f = -1e9f;
+    for (int i = 0; i < n; i++) { y0f = fm_minf(y0f, py[i]); y1f = fm_maxf(y1f, py[i]); x0f = fm_minf(x0f, px[i]); x1f = fm_maxf(x1f, px[i]); }
+    int ya = (int)fm_floorf(y0f), yb = (int)fm_floorf(y1f), r0 = -cv_oy + cv_y0, r1 = -cv_oy + cv_y1 - 1;
+    if (ya < r0) ya = r0;
+    if (yb > r1) yb = r1;
+    if (ya < 0) ya = 0;
+    if (yb > VIEW_H - 1) yb = VIEW_H - 1;
+    int bx0 = (int)fm_floorf(x0f), bx1 = (int)fm_floorf(x1f) + 1;
+    if (bx0 < 0) bx0 = 0;
+    if (bx1 > 239) bx1 = 239;
+    if (bx1 < bx0) return;
+    float cc[3] = { col[0] * k, col[1] * k, col[2] * k };
+    for (int y = ya; y <= yb; y++) {
+        for (int x = bx0; x <= bx1; x++) msh_cov[x] = 0;
+        for (int s = 0; s < 4; s++) {            /* four lines through the row: how much of each pixel is inside */
+            float yc = (float)y + 0.125f + 0.25f * (float)s, xs[MOSH_V]; int nx = 0;
+            for (int i = 0; i < n; i++) {
+                float ax = px[i], ay = py[i], bx = px[(i + 1) % n], by = py[(i + 1) % n];
+                if ((ay <= yc && by > yc) || (by <= yc && ay > yc)) xs[nx++] = ax + (yc - ay) / (by - ay) * (bx - ax);
+            }
+            for (int i = 1; i < nx; i++) for (int j = i; j > 0 && xs[j] < xs[j - 1]; j--) { float t = xs[j]; xs[j] = xs[j - 1]; xs[j - 1] = t; }
+            for (int q = 0; q + 1 < nx; q += 2) {
+                float xa = fm_maxf((float)bx0, xs[q]), xb = fm_minf((float)bx1 + 1.0f, xs[q + 1]);
+                if (xb <= xa) continue;
+                int ia = (int)xa, ib = (int)xb;
+                if (ia == ib) msh_cov[ia] = (uint16_t)(msh_cov[ia] + (int)((xb - xa) * 256.0f));
+                else {
+                    msh_cov[ia] = (uint16_t)(msh_cov[ia] + (int)(((float)(ia + 1) - xa) * 256.0f));
+                    for (int x = ia + 1; x < ib; x++) msh_cov[x] = (uint16_t)(msh_cov[x] + 256);
+                    if (ib <= bx1) msh_cov[ib] = (uint16_t)(msh_cov[ib] + (int)((xb - (float)ib) * 256.0f));
+                }
+            }
+        }
+        int row = y + cv_oy;
+        uint16_t *line = &cv_px[(uint32_t)row * cv_w];
+        for (int x = bx0; x <= bx1; x++) {
+            int cv = msh_cov[x];
+            if (cv < 10) continue;
+            uint16_t u = swap16(line[x]);
+            float e[3] = { (float)((u >> 11) * 255 / 31), (float)(((u >> 5) & 63) * 255 / 63), (float)((u & 31) * 255 / 31) }, t[3];
+            if (e[0] + e[1] + e[2] < 25.0f) { t[0] = cc[0]; t[1] = cc[1]; t[2] = cc[2]; }
+            else {                               /* over another: their mix */
+                for (int c = 0; c < 3; c++) t[c] = (e[c] + col[c]) * 0.5f;
+                mosh_vivid(t);
+                float sc = fm_maxf(fm_maxf(fm_maxf(e[0], e[1]), fm_maxf(e[2], cc[0])), fm_maxf(cc[1], cc[2])) / 255.0f;
+                for (int c = 0; c < 3; c++) t[c] *= sc;
+            }
+            float g = cv >= 1024 ? 1.0f : fm_sqrtf((float)cv / 1024.0f);   /* (the screen's gamma) */
+            line[x] = swap16(RGB((int)(e[0] + (t[0] - e[0]) * g), (int)(e[1] + (t[1] - e[1]) * g), (int)(e[2] + (t[2] - e[2]) * g)));
+        }
+    }
+}
+
+static void draw_mosh(void)
+{
+    float px[MOSH_V], py[MOSH_V];
+    for (int j = 0; j < MOSH_MAX; j++) {         /* oldest first, so the newest lie on top */
+        const Shard *p = &msh[(msh_next + j) % MOSH_MAX];
+        if (!p->on) continue;
+        float k = mosh_level(p);
+        if (k < 0.02f) continue;
+        int n = mosh_poly(p, px, py);
+        mosh_fill(px, py, n, p->col, k);
+    }
+}
+
+
 
 static void frame_box(int x, int y, int w, int h, uint16_t c)
 {
@@ -1213,7 +1396,7 @@ static void draw_view(void)
         int h = VIEW_H - top < 60 ? VIEW_H - top : 60;
         cv_begin(240, (uint32_t)h, C_BLACK);
         cv_oy = -top; cv_y0 = 0; cv_y1 = h;
-        if (set.visual) draw_ink(); else draw_pegs();
+        if (set.visual == 2) draw_mosh(); else if (set.visual) draw_ink(); else draw_pegs();
         if (!set.playing) { int w = text_w(&FONT_M, "STOPPED"); cv_text(120 - w / 2, (panel ? PANEL_TOP : VIEW_H) / 2 - 12, &FONT_M, "STOPPED", C_SUB); }
         if (panel && top + h > PANEL_TOP) { cv_rect(0, PANEL_TOP, 240, PANEL_H, C_BLACK); draw_panel_rows(PANEL_TOP); }
         if (now < ui.list_until) draw_list();
@@ -1294,8 +1477,9 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "THE LAYERS ON FOUR CHANNELS", "LAYER CHANNELS PLAY THE LAYERS",
-            "RECORDING THE FM-1 OVER USB", "THE SCREEN: MATRIX OR RORSCHACH" };
-        cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
+            "RECORDING THE FM-1 OVER USB", "MATRIX, RORSCHACH OR MOSH" };
+        cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "SHARDS, BREEDING, MOULDING"
+                : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }
     /* four columns: label, value, bar */
     for (int k = 0; k < 4; k++) {
@@ -1448,7 +1632,7 @@ void app_frame(void)
         float dt = (float)(now - ui.last_view) / 1000.0f;
         if (dt > 0.2f) dt = 0.2f;
         ui.last_view = now; ui.t += dt;
-        if (set.visual) ink_step(); else pegs_step(dt);
+        if (set.visual == 2) mosh_step(); else if (set.visual) ink_step(); else pegs_step(dt);
         draw_view();
     }
     {   /* the load guard: past 80 % of the render's time, fewer notes, fewer voices, shorter tails; back slowly as it

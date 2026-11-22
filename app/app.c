@@ -148,6 +148,7 @@ static void cc_set(uint8_t *v, uint32_t x) { *v = (uint8_t)(x * 100u / 127u); }
  * the chosen layer's; every note put into the scale. CC 20-23 HOME's macros, 24-27 EFFECTS', 28-31 MOTION's. Clock:
  * its tempo followed, start and stop obeyed (CLOCK IN) */
 static volatile float ext_bpm; static volatile uint32_t ext_at, ext_last;
+static uint32_t clk_n;                    /* the leader's clocks since its Start (24 a beat) */
 static void midi_in(void)
 {
     uint32_t pkt; int port;
@@ -167,8 +168,21 @@ static void midi_in(void)
                     ext_bpm = ext_bpm > 0 ? ext_bpm + (b - ext_bpm) * 0.5f : b;
                 }
             }
+            /* locked to the leader's beat, not only its tempo: at each of its beats (24 clocks from its Start) our beat
+             * should be whole; how far off it is the engine takes up over the next moments (no notes skipped) */
+            if (set.clock_in && set.playing && ++clk_n % 24u == 0) {
+                /* within a bar: a new piece (REC) starts our count again, a missed Start leaves it anywhere; the bars stay
+                 * the leader's either way (at most two beats to take up) */
+                float err = (float)(clk_n / 24u) - eng.beat;
+                err -= 4.0f * fm_floorf(err * 0.25f + 0.5f);
+                eng.beat_adj = err;
+            }
             if (set.clock_in) ext_at = now;
-        } else if ((st == 0xFAu || st == 0xFBu) && set.clock_in) { eng.playing = set.playing = 1; if (st == 0xFAu) eng.beat = 0; }
+        } else if ((st == 0xFAu || st == 0xFBu) && set.clock_in) {
+            eng.playing = set.playing = 1;
+            if (st == 0xFAu) { eng.sync_req = 1; clk_n = 0; }   /* Start: the top of the bar, with the leader */
+            else clk_n = (uint32_t)(eng.beat + 0.5f) * 24u;                  /* Continue: from where we are */
+        }
         else if (st == 0xFCu && set.clock_in) { eng.playing = set.playing = 0; engine_all_off(&eng); }
         else if (ty == 0x90u || ty == 0x80u) {
             int note = deg_note(sc, set.cur.key, note_deg(sc, set.cur.key, (int)d1)), layer = -1;
@@ -523,7 +537,10 @@ static void play_toggle(void)
     set.playing = (uint8_t)!set.playing;
     if (!set.playing) stopped_at = plat_ms();
     eng.playing = set.playing;
-    if (set.midi_on && set.midi_clock) midi_send(0x0Fu | (set.playing ? 0xFAu : 0xFCu) << 8);
+    if (set.midi_on && set.midi_clock) {     /* leading: Start from the top of the bar, so the follower's 1 is ours */
+        if (set.playing) eng.sync_req = 1;
+        midi_send(0x0Fu | (set.playing ? 0xFAu : 0xFCu) << 8);
+    }
     if (!set.playing) engine_all_off(&eng);
     pop(set.playing ? "PLAY" : "STOP", "", C_TXT);
 }
@@ -1154,6 +1171,10 @@ int app_expect(const char *what, int *got)
     else if (!strncmp(what, "sweep", 5)) *got = set.cur.sweep[atoi(what + 5) & 3];
     else if (!strcmp(what, "layers_in")) *got = set.layers_in;
     else if (!strcmp(what, "clockbpm")) *got = (int)(eng.bpm + 0.5f);
+    else if (!strcmp(what, "beatlag")) {        /* following a clock: our beat off the leader's, in 1/100 beat (within a bar) */
+        float err = ((float)clk_n / 24.0f) - eng.beat; err -= 4.0f * fm_floorf(err * 0.25f + 0.5f);
+        *got = (int)(err * 100.0f + (err < 0 ? -0.5f : 0.5f));
+    }
     else if (!strcmp(what, "lastchord")) *got = ui.last_chord;
     else if (!strncmp(what, "seq", 3)) *got = set.cur.l[atoi(what + 3) & 3].seq;
     else if (!strncmp(what, "engine", 6)) *got = set.cur.l[atoi(what + 6) & 3].engine;

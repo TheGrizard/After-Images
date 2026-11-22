@@ -132,6 +132,8 @@ struct Engine {
     /* the load guard: overruns the platform saw (from its interrupt), the ones dealt with; each effect's quiet time
      * (samples with nothing in and nothing out: past its memory's length it rests until something comes) */
     volatile uint32_t shed; uint32_t shed_seen; float shed_t;
+    volatile float beat_adj;             /* following a clock: how far our beat is off the leader's, taken up gently */
+    volatile int sync_req;               /* a Start (in or out): the top of the bar, every sequencer's step on the beat */
     int q_echo, q_gr, q_rv, q_sh;
 };
 

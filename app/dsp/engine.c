@@ -278,6 +278,14 @@ static void control(Engine *e, int sub)
     const Piece *p = e->p;
     e->bpm = e->ext_bpm > 20.0f ? clampf(e->ext_bpm, 30.0f, 240.0f) : 40.0f + (float)p->tempo;
     float beats = BLK_S * e->bpm / 60.0f;
+    if (e->sync_req) {                               /* a Start: the top of the bar; the steps on the 16ths from here */
+        e->sync_req = 0; e->beat = 0; e->beat_adj = 0; e->clock_acc = 0;
+        for (int l = 0; l < NUM_LAYERS; l++) { Seq *s = &e->L[l].seq; s->t = 0; s->bend_ph = 0; s->swing_phase = 0; s->ratchet_left = 0; }
+    }
+    if (e->beat_adj != 0.0f) {                       /* locked to a clock: up to half again or half as fast, a moment */
+        float lim = beats * 0.5f, a = clampf(e->beat_adj, -lim, lim);
+        beats += a; e->beat_adj -= a;
+    }
     e->t += BLK_S;
     if (e->seed_now != p->seed) {                    /* a new piece: the conductor starts again */
         e->seed_now = p->seed; rng_seed(&e->rng, p->seed);
@@ -290,7 +298,7 @@ static void control(Engine *e, int sub)
     midi_due(e);
     e->fade += ((e->playing ? 1.0f : 0.0f) - e->fade) * (BLK_S / 1.2f);
     if (!e->playing && e->fade < 0.01f) return;
-    if (e->midi && e->midi_on && e->midi_clock) {    /* MIDI clock: 24 a beat */
+    if (e->midi && e->midi_on && e->midi_clock && e->playing) {   /* MIDI clock: 24 a beat (none in the fade after STOP) */
         e->clock_acc += beats * 24.0f;
         while (e->clock_acc >= 1.0f) { e->clock_acc -= 1.0f; e->midi(0x0Fu | 0xF8u << 8); }
     }

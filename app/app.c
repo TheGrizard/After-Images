@@ -903,18 +903,38 @@ static void pegs_step(float dt)
     if (pg_acc > 1.0f) pg_acc = 0;
 }
 
-/* a ball centred anywhere, to the sub-pixel: a pixel's centre is half a pixel in, so a ball on an even cell's middle
- * is symmetric, and at its full size fills the cell exactly, edge to edge */
+/* a ball centred anywhere, to the sub-pixel (a pixel's centre is half a pixel in, so a ball on an even cell's middle
+ * is symmetric, and at its full size fills the cell exactly), its edge smoothed: each edge pixel blended with what's
+ * under it by how much of it the ball covers */
+static inline void px_blend(int x, int y, uint16_t c, float k)
+{
+    y += cv_oy;
+    if ((uint32_t)x >= cv_w || y < cv_y0 || y >= cv_y1) return;
+    uint16_t *q = &cv_px[(uint32_t)y * cv_w + (uint32_t)x], u = swap16(*q);
+    int ur = u >> 11, ug = (u >> 5) & 63, ub = u & 31, cr = c >> 11, cg = (c >> 5) & 63, cb = c & 31;
+    *q = swap16((uint16_t)((ur + (int)((float)(cr - ur) * k)) << 11 | (ug + (int)((float)(cg - ug) * k)) << 5 | (ub + (int)((float)(cb - ub) * k))));
+}
+
 static void disc(float cx, float cy, float r, uint16_t c)
 {
     if (r < 0.5f) r = 0.5f;
-    int y0 = (int)fm_floorf(cy - r), y1 = (int)fm_floorf(cy + r);
+    float ro = r + 0.5f, ri = r - 0.5f;
+    int y0 = (int)fm_floorf(cy - ro), y1 = (int)fm_floorf(cy + ro);
     for (int py = y0; py <= y1; py++) {
-        float dy = (float)py + 0.5f - cy;
-        if (dy * dy > r * r) continue;
-        float half = fm_sqrtf(r * r - dy * dy);
-        int x0 = -(int)fm_floorf(-(cx - half - 0.5f)), x1 = (int)fm_floorf(cx + half - 0.5f);
-        if (x1 >= x0) cv_rect(x0, py, x1 - x0 + 1, 1, c);
+        if (py + cv_oy < cv_y0 || py + cv_oy >= cv_y1) continue;
+        float dy = (float)py + 0.5f - cy, dy2 = dy * dy;
+        if (dy2 >= ro * ro) continue;
+        float ho = fm_sqrtf(ro * ro - dy2), hi = ri > 0 && dy2 < ri * ri ? fm_sqrtf(ri * ri - dy2) : -1.0f;
+        int xo0 = -(int)fm_floorf(-(cx - ho - 0.5f)), xo1 = (int)fm_floorf(cx + ho - 0.5f);
+        int xi0 = xo1 + 1, xi1 = xo1;            /* (the solid middle: none on the top and bottom rows) */
+        if (hi >= 0) { xi0 = -(int)fm_floorf(-(cx - hi - 0.5f)); xi1 = (int)fm_floorf(cx + hi - 0.5f); }
+        if (xi1 >= xi0) cv_rect(xi0, py, xi1 - xi0 + 1, 1, c);
+        for (int x = xo0; x <= xo1; x++) {
+            if (x >= xi0 && x <= xi1) { x = xi1; continue; }
+            float dx = (float)x + 0.5f - cx, d = fm_sqrtf(dx * dx + dy2), k = r + 0.5f - d;
+            if (k <= 0.02f) continue;
+            if (k >= 0.98f) cv_pset(x, py, c); else px_blend(x, py, c, k);
+        }
     }
 }
 

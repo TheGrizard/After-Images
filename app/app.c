@@ -410,7 +410,7 @@ static void knob_text(int pg, int k, char *s)
     case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PEGN: int_text(PEG_NS[v % NPEG_NS], s); break;
     case K_VIS: text_cat(s, v == 2 ? "MOSH" : v ? "RORSCHACH" : "MATRIX"); break;
-    case K_SHAPE: text_cat(s, v ? "PEBBLES" : "SHARDS"); break;
+    case K_SHAPE: text_cat(s, v ? "LINES" : "BLOCKS"); break;
     case K_SYNC: text_cat(s, SYNC_NAME[v % NSYNC]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
@@ -1175,21 +1175,23 @@ static void draw_ink(void)
     }
 }
 
-/* ------------------------------------------------------------------ MOSH: shards breeding and moulding
- * Like MATRIX, but free shapes: each note lights a shard (SHARDS) or a pebble (PEBBLES) in its layer's ink, where it sits
- * in the stereo field (left to right) at its pitch (high at the top); mixes breed beside lit shapes, from a parent and
- * one of its nearest neighbours of another colour, so they grow where the music is. Overlaps mix their colours, and the
- * shapes mould as they age, their corners creeping out or in. All in beats (the tempo, or the clock followed).
- * SCREEN: SIZE (the zoom), BREED, MOULD, FADE. Edges smoothed: each edge pixel by how much of it the shape covers */
+/* ------------------------------------------------------------------ MOSH: blocks breeding and moulding
+ * Like MATRIX, but free blocks: each note lights a block in its layer's ink where it sits in the stereo field (left to
+ * right) at its pitch (high at the top): squares, rectangles and lines (SHAPES: BLOCKS, all three; LINES, mostly
+ * lines). Mixes breed beside lit blocks, from a parent and one of its nearest neighbours of another colour, so they
+ * grow where the music is. Overlaps mix their colours, and the blocks mould as they age, stretching or shrinking.
+ * All in beats (the tempo, or the clock followed). SCREEN: SIZE (the zoom), BREED, MOULD, FADE. Edges smoothed.
+ * Its cost is bounded whatever SIZE: blocks no bigger than the screen, at most MOSH_BUDGET screens' worth of
+ * pixels drawn a frame (the oldest left out past it), and a run over the same colour mixed once */
 #define MOSH_MAX 40
-#define MOSH_V 7
+#define MOSH_BUDGET 2.5f                         /* screens of block drawn a frame, at most */
 typedef struct {
-    float cx, cy, size, born, life, rot, stretch;
-    uint8_t on, nv, ph; uint8_t a[MOSH_V], r[MOSH_V]; int8_t dr[MOSH_V]; float col[3];
+    float cx, cy, w, h, born, life, dw, dh;      /* centre; half width and height (at 240 lines); their moulding */
+    uint8_t on, ph; float col[3];
 } Shard;
 static Shard msh[MOSH_MAX];
 static int msh_next; static float msh_breed_at, msh_t;
-static uint16_t msh_cov[241];                    /* a row's coverage, 0..1024 */
+static float msh_scale = 1.0f;                 /* the budget's share, eased down if a frame's drawing runs long */
 
 static float mosh_rf(void) { return (float)(jr() & 65535u) / 65535.0f; }
 static void mosh_vivid(float *c)                 /* a mix pushed back to full colour, as the pegs' are */
@@ -1203,18 +1205,22 @@ static void mosh_vivid(float *c)                 /* a mix pushed back to full co
 static void mosh_add(float cx, float cy, float size, const float *col)
 {
     Shard *p = &msh[msh_next]; msh_next = (msh_next + 1) % MOSH_MAX;
-    int peb = set.clock_in == 1;                 /* SHAPES: 0 shards, 1 pebbles */
-    p->on = 1; p->cx = clampf(cx, 8.0f, 232.0f); p->cy = clampf(cy, 8.0f, 232.0f); p->size = size; p->born = msh_t;
-    p->life = (6.0f + 10.0f * mosh_rf()) * (0.4f + (float)set.fade * 0.012f);
-    p->rot = mosh_rf(); p->ph = (uint8_t)jr();
-    p->nv = (uint8_t)(peb ? 5 + jr() % 3u : 4 + jr() % 3u);
-    p->stretch = peb ? 0.75f + 0.55f * mosh_rf() : (mosh_rf() < 0.3f ? 1.6f + mosh_rf() : 0.85f + 0.55f * mosh_rf());
-    float rmin = peb ? 0.78f : 0.68f;
-    for (int i = 0; i < p->nv; i++) {
-        p->a[i] = (uint8_t)(((float)i + 0.25f + 0.5f * mosh_rf()) / (float)p->nv * 256.0f);
-        p->r[i] = (uint8_t)((rmin + (1.0f - rmin) * mosh_rf()) * 255.0f);
-        p->dr[i] = (int8_t)((-0.2f + 0.5f * mosh_rf()) * 127.0f);
+    float r = mosh_rf(), w, h;
+    float pline = set.clock_in == 1 ? 0.7f : 0.15f, psq = set.clock_in == 1 ? 0.3f : 0.4f;   /* SHAPES: BLOCKS, LINES */
+    size = fm_minf(size, 90.0f);
+    if (r < pline) {                             /* a line: long and thin, across or down */
+        w = size * (1.8f + 2.2f * mosh_rf()); h = fm_maxf(0.9f, size * (0.05f + 0.08f * mosh_rf()));
+    } else if (r < pline + psq) {                /* a square */
+        w = h = size * (0.55f + 0.4f * mosh_rf());
+    } else {                                     /* a rectangle */
+        w = size * (0.9f + 0.8f * mosh_rf()); h = size * (0.35f + 0.4f * mosh_rf());
     }
+    if (jr() & 1u) { float t = w; w = h; h = t; }
+    p->on = 1; p->cx = clampf(cx, 8.0f, 232.0f); p->cy = clampf(cy, 8.0f, 232.0f);
+    p->w = fm_minf(w, 120.0f); p->h = fm_minf(h, 120.0f); p->born = msh_t;
+    p->life = (6.0f + 10.0f * mosh_rf()) * (0.4f + (float)set.fade * 0.012f);
+    p->ph = (uint8_t)jr();
+    p->dw = -0.2f + 0.5f * mosh_rf(); p->dh = -0.2f + 0.5f * mosh_rf();
     for (int k = 0; k < 3; k++) p->col[k] = col[k];
 }
 
@@ -1244,8 +1250,9 @@ static void mosh_breed(void)
     float f = 0.12f + 0.23f * mosh_rf(), col[3];  /* beside the parent, not halfway: mixes grow where the sound is */
     for (int k = 0; k < 3; k++) col[k] = (a->col[k] + b->col[k]) * 0.5f;
     mosh_vivid(col);
+    float sa = fm_sqrtf(a->w * a->h), sb = fm_sqrtf(b->w * b->h);   /* (a size that doesn't creep up generation on generation) */
     mosh_add(a->cx + (b->cx - a->cx) * f + (mosh_rf() - 0.5f) * 16.0f, a->cy + (b->cy - a->cy) * f + (mosh_rf() - 0.5f) * 16.0f,
-             (a->size + b->size) * 0.5f * (0.7f + 0.45f * mosh_rf()), col);
+             (sa + sb) * 0.5f * (0.75f + 0.3f * mosh_rf()), col);
 }
 
 static void mosh_step(void)
@@ -1260,7 +1267,7 @@ static void mosh_step(void)
         float sp = (float)n.pan / 100.0f, sx = (sp < 0 ? -1.0f : 1.0f) * fm_sqrtf(fm_fabsf(sp));   /* (the field spread wide: a little pan goes far) */
         mosh_add(120.0f + sx * 108.0f + (mosh_rf() - 0.5f) * 36.0f,
                  24.0f + clampf(1.0f - ((float)n.note - 34.0f) / 68.0f, 0.0f, 1.0f) * 192.0f,
-                 (10.0f + 18.0f * mosh_rf()) * zoom * (0.7f + 0.3f * (float)n.vel / 127.0f), ink_rgb[n.layer % NUM_LAYERS]);
+                 (9.0f + 14.0f * mosh_rf()) * zoom * (0.7f + 0.3f * (float)n.vel / 127.0f), ink_rgb[n.layer % NUM_LAYERS]);
     }
     float every = 4.0f / (1.0f + (float)set.breed * 0.15f);   /* BREED: a mix every 4 beats .. every quarter beat */
     if (msh_breed_at > msh_t + 8.0f || msh_breed_at < msh_t - 8.0f) msh_breed_at = msh_t;   /* (a new piece: its beat from 0) */
@@ -1270,84 +1277,71 @@ static void mosh_step(void)
         if (msh[i].on && (msh_t - msh[i].born > msh[i].life + 3.0f || msh_t < msh[i].born - 1.0f)) msh[i].on = 0;
 }
 
-static int mosh_poly(const Shard *p, float *px, float *py)   /* its corners now, in the view */
+typedef struct { float x0, x1, y0, y1; } MoshBox;
+static int mosh_box(const Shard *p, MoshBox *b)  /* its edges now, in the view, clipped to the screen; 0 if off it */
 {
     float age = msh_t - p->born, mould = (float)set.mosh_mould / 50.0f, sy = (float)VIEW_H / 240.0f;
-    float cr = fm_sin_turns(p->rot + 0.25f), sr = fm_sin_turns(p->rot);
-    for (int i = 0; i < p->nv; i++) {
-        float g = fm_minf(1.8f, 1.0f + fm_maxf(-0.4f, (float)p->dr[i] / 127.0f * age * 0.12f * mould));
-        float r = p->size * (float)p->r[i] / 255.0f * g, an = (float)p->a[i] / 256.0f;
-        float lx = fm_sin_turns(an + 0.25f) * r * p->stretch, ly = fm_sin_turns(an) * r;
-        px[i] = p->cx + lx * cr - ly * sr; py[i] = (p->cy + lx * sr + ly * cr) * sy;
-    }
-    return p->nv;
+    float gw = clampf(1.0f + p->dw * age * 0.12f * mould, 0.6f, 1.8f), gh = clampf(1.0f + p->dh * age * 0.12f * mould, 0.6f, 1.8f);
+    float w = p->w * gw, h = p->h * gh;
+    b->x0 = fm_maxf(0.0f, p->cx - w); b->x1 = fm_minf(240.0f, p->cx + w);
+    b->y0 = fm_maxf(0.0f, (p->cy - h) * sy); b->y1 = fm_minf((float)VIEW_H, (p->cy + h) * sy);
+    return b->x1 > b->x0 + 0.05f && b->y1 > b->y0 + 0.05f;
 }
 
-static void mosh_fill(const float *px, const float *py, int n, const float *col, float k)
+static void mosh_fill(const MoshBox *b, const float *col, float k)
 {
-    float y0f = 1e9f, y1f = -1e9f, x0f = 1e9f, x1f = -1e9f;
-    for (int i = 0; i < n; i++) { y0f = fm_minf(y0f, py[i]); y1f = fm_maxf(y1f, py[i]); x0f = fm_minf(x0f, px[i]); x1f = fm_maxf(x1f, px[i]); }
-    int ya = (int)fm_floorf(y0f), yb = (int)fm_floorf(y1f), r0 = -cv_oy + cv_y0, r1 = -cv_oy + cv_y1 - 1;
+    int r0 = -cv_oy + cv_y0, r1 = -cv_oy + cv_y1;    /* the band's rows, in the view: [r0, r1) */
+    int ya = (int)b->y0, yb = (int)fm_minf(b->y1, (float)VIEW_H - 0.001f);
     if (ya < r0) ya = r0;
-    if (yb > r1) yb = r1;
-    if (ya < 0) ya = 0;
-    if (yb > VIEW_H - 1) yb = VIEW_H - 1;
-    int bx0 = (int)fm_floorf(x0f), bx1 = (int)fm_floorf(x1f) + 1;
-    if (bx0 < 0) bx0 = 0;
-    if (bx1 > 239) bx1 = 239;
-    if (bx1 < bx0) return;
+    if (yb > r1 - 1) yb = r1 - 1;
+    if (yb < ya) return;
+    int xa = (int)b->x0, xb = (int)fm_minf(b->x1, 239.999f);
     float cc[3] = { col[0] * k, col[1] * k, col[2] * k };
+    uint16_t solid = swap16(RGB((int)cc[0], (int)cc[1], (int)cc[2]));
+    float lcov = fm_minf(1.0f, (float)(xa + 1) - b->x0), rcov = b->x1 - (float)xb;
+    if (xa == xb) lcov = rcov = b->x1 - b->x0;
+    uint16_t last_u = 0, last_o = solid; int have = 0;   /* (a run over one colour: mixed once) */
     for (int y = ya; y <= yb; y++) {
-        for (int x = bx0; x <= bx1; x++) msh_cov[x] = 0;
-        for (int s = 0; s < 4; s++) {            /* four lines through the row: how much of each pixel is inside */
-            float yc = (float)y + 0.125f + 0.25f * (float)s, xs[MOSH_V]; int nx = 0;
-            for (int i = 0; i < n; i++) {
-                float ax = px[i], ay = py[i], bx = px[(i + 1) % n], by = py[(i + 1) % n];
-                if ((ay <= yc && by > yc) || (by <= yc && ay > yc)) xs[nx++] = ax + (yc - ay) / (by - ay) * (bx - ax);
-            }
-            for (int i = 1; i < nx; i++) for (int j = i; j > 0 && xs[j] < xs[j - 1]; j--) { float t = xs[j]; xs[j] = xs[j - 1]; xs[j - 1] = t; }
-            for (int q = 0; q + 1 < nx; q += 2) {
-                float xa = fm_maxf((float)bx0, xs[q]), xb = fm_minf((float)bx1 + 1.0f, xs[q + 1]);
-                if (xb <= xa) continue;
-                int ia = (int)xa, ib = (int)xb;
-                if (ia == ib) msh_cov[ia] = (uint16_t)(msh_cov[ia] + (int)((xb - xa) * 256.0f));
-                else {
-                    msh_cov[ia] = (uint16_t)(msh_cov[ia] + (int)(((float)(ia + 1) - xa) * 256.0f));
-                    for (int x = ia + 1; x < ib; x++) msh_cov[x] = (uint16_t)(msh_cov[x] + 256);
-                    if (ib <= bx1) msh_cov[ib] = (uint16_t)(msh_cov[ib] + (int)((xb - (float)ib) * 256.0f));
-                }
-            }
-        }
-        int row = y + cv_oy;
-        uint16_t *line = &cv_px[(uint32_t)row * cv_w];
-        for (int x = bx0; x <= bx1; x++) {
-            int cv = msh_cov[x];
-            if (cv < 10) continue;
-            uint16_t u = swap16(line[x]);
+        float vc = fm_minf((float)(y + 1), b->y1) - fm_maxf((float)y, b->y0);
+        uint16_t *line = &cv_px[(uint32_t)(y + cv_oy) * cv_w];
+        for (int x = xa; x <= xb; x++) {
+            float cov = vc * (x == xa ? lcov : x == xb ? rcov : 1.0f);
+            if (cov < 0.04f) continue;
+            uint16_t su = line[x], u = swap16(su);
+            int full = cov > 0.97f;
+            if (full && have && su == last_u) { line[x] = last_o; continue; }
             float e[3] = { (float)((u >> 11) * 255 / 31), (float)(((u >> 5) & 63) * 255 / 63), (float)((u & 31) * 255 / 31) }, t[3];
-            if (e[0] + e[1] + e[2] < 25.0f) { t[0] = cc[0]; t[1] = cc[1]; t[2] = cc[2]; }
+            if (e[0] + e[1] + e[2] < 25.0f) { if (full) { line[x] = solid; continue; } t[0] = cc[0]; t[1] = cc[1]; t[2] = cc[2]; }
             else {                               /* over another: their mix */
                 for (int c = 0; c < 3; c++) t[c] = (e[c] + col[c]) * 0.5f;
                 mosh_vivid(t);
                 float sc = fm_maxf(fm_maxf(fm_maxf(e[0], e[1]), fm_maxf(e[2], cc[0])), fm_maxf(cc[1], cc[2])) / 255.0f;
                 for (int c = 0; c < 3; c++) t[c] *= sc;
             }
-            float g = cv >= 1024 ? 1.0f : fm_sqrtf((float)cv / 1024.0f);   /* (the screen's gamma) */
-            line[x] = swap16(RGB((int)(e[0] + (t[0] - e[0]) * g), (int)(e[1] + (t[1] - e[1]) * g), (int)(e[2] + (t[2] - e[2]) * g)));
+            float g = full ? 1.0f : fm_sqrtf(cov);   /* (the screen's gamma) */
+            uint16_t o = swap16(RGB((int)(e[0] + (t[0] - e[0]) * g), (int)(e[1] + (t[1] - e[1]) * g), (int)(e[2] + (t[2] - e[2]) * g)));
+            line[x] = o;
+            if (full) { last_u = su; last_o = o; have = 1; }
         }
     }
 }
 
 static void draw_mosh(void)
 {
-    float px[MOSH_V], py[MOSH_V];
+    MoshBox bx[MOSH_MAX]; float kk[MOSH_MAX]; int ok[MOSH_MAX];
+    float budget = MOSH_BUDGET * msh_scale * 240.0f * (float)VIEW_H, used = 0.0f;
+    for (int j = MOSH_MAX - 1; j >= 0; j--) {    /* newest first, until the budget's spent: the oldest left out */
+        int i = (msh_next + j) % MOSH_MAX; const Shard *p = &msh[i];
+        ok[i] = 0;
+        if (!p->on || used > budget) continue;
+        kk[i] = mosh_level(p);
+        if (kk[i] < 0.02f || !mosh_box(p, &bx[i])) continue;
+        used += (bx[i].x1 - bx[i].x0 + 1.0f) * (bx[i].y1 - bx[i].y0 + 1.0f);
+        ok[i] = 1;
+    }
     for (int j = 0; j < MOSH_MAX; j++) {         /* oldest first, so the newest lie on top */
-        const Shard *p = &msh[(msh_next + j) % MOSH_MAX];
-        if (!p->on) continue;
-        float k = mosh_level(p);
-        if (k < 0.02f) continue;
-        int n = mosh_poly(p, px, py);
-        mosh_fill(px, py, n, p->col, k);
+        int i = (msh_next + j) % MOSH_MAX;
+        if (ok[i]) mosh_fill(&bx[i], msh[i].col, kk[i]);
     }
 }
 
@@ -1392,16 +1386,22 @@ static void draw_view(void)
 {
     uint32_t now = plat_ms();
     int panel = panel_on();
+    uint32_t took = 0;                           /* (MOSH's drawing, the blits left out) */
     for (int top = 0; top < VIEW_H; top += 60) {
         int h = VIEW_H - top < 60 ? VIEW_H - top : 60;
         cv_begin(240, (uint32_t)h, C_BLACK);
         cv_oy = -top; cv_y0 = 0; cv_y1 = h;
-        if (set.visual == 2) draw_mosh(); else if (set.visual) draw_ink(); else draw_pegs();
+        if (set.visual == 2) { uint32_t t0 = plat_ms(); draw_mosh(); took += plat_ms() - t0; }
+        else if (set.visual) draw_ink(); else draw_pegs();
         if (!set.playing) { int w = text_w(&FONT_M, "STOPPED"); cv_text(120 - w / 2, (panel ? PANEL_TOP : VIEW_H) / 2 - 12, &FONT_M, "STOPPED", C_SUB); }
         if (panel && top + h > PANEL_TOP) { cv_rect(0, PANEL_TOP, 240, PANEL_H, C_BLACK); draw_panel_rows(PANEL_TOP); }
         if (now < ui.list_until) draw_list();
         else if (now < ui.pop_until) draw_popup();
         cv_blit(0, (uint32_t)(VIEW_Y + top));
+    }
+    if (set.visual == 2) {                       /* (MOSH: a long frame draws less next time, so the buttons stay quick) */
+        if (took > 30u) msh_scale = fm_maxf(0.25f, msh_scale * 0.7f);
+        else if (took < 15u) msh_scale = fm_minf(1.0f, msh_scale * 1.05f);
     }
 }
 
@@ -1478,7 +1478,7 @@ static void draw_panel_rows(int y0)
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "THE LAYERS ON FOUR CHANNELS", "LAYER CHANNELS PLAY THE LAYERS",
             "RECORDING THE FM-1 OVER USB", "MATRIX, RORSCHACH OR MOSH" };
-        cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "SHARDS, BREEDING, MOULDING"
+        cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }
     /* four columns: label, value, bar */

@@ -29,7 +29,7 @@ Most FM-1 firmwares are instruments you play or program. After Images composes.
 - **An ambient mixer.** DRIFT fades the layers in and out, walks them round the stereo field and morphs each one's
   effects and character over half-minutes, so the piece never settles.
 - **Three visuals that play along.** MATRIX (a pegboard of light breeding colour mixes), RORSCHACH (a folded inkblot
-  swelling to the beat) and MOSH (shards or pebbles breeding and moulding where the music sits in the stereo field).
+  swelling to the beat) and MOSH (blocks and lines breeding and moulding where the music sits in the stereo field).
 - **Plays with your other gear.** It follows MIDI clock to the beat and the bar (an Ableton Move, say), sends each
   layer on its own MIDI channel, and records over USB audio.
 
@@ -128,8 +128,9 @@ and the four layers always keep four clearly different hues.
   the board fills and old ones fade. SCREEN: COUNT, SIZE, BREED, FADE.
 - **RORSCHACH:** a folded inkblot. Each layer's ink swells with the beat and as it sounds, notes drop blots, the colours
   bleed together and voids carve black through. SCREEN: SIZE, GAPS, MIX, FADE.
-- **MOSH:** shards or pebbles (SHAPES on the VISUAL page). Each note lights a shape where it sits in the stereo field,
-  mixes breed beside them, overlaps mix and the shapes slowly reshape. SCREEN: SIZE (the zoom), BREED, MOULD, FADE.
+- **MOSH:** squares, rectangles and lines (SHAPES on the VISUAL page: BLOCKS, all three; LINES, mostly lines). Each
+  note lights a block where it sits in the stereo field, mixes breed beside them, overlaps mix and the blocks slowly
+  stretch and shrink. SCREEN: SIZE (the zoom), BREED, MOULD, FADE.
 
 ## MIDI and sync
 

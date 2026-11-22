@@ -217,16 +217,18 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         for (int k = 0; k < 3; k++) v->r[k] = RAT[kind][k] * (1.0f + wd * 0.06f * (float)k);   /* ENTROPY: wood to metal */
         v->p[0] = 1.0f; v->p[1] = 0.25f + 0.4f * wt; v->p[2] = (0.1f + 0.3f * wt) * tone;
         float tm = (0.4f + 1.4f * (1.0f - 0.5f * tone)) * clampf(fm_sqrtf(300.0f / f), 0.5f, 2.5f) * (kind == 1 ? 2.5f : 1.0f);
-        v->ok[0] = 1.0f - k_of(tm); v->ok[1] = 1.0f - k_of(tm * 0.3f); v->ok[2] = 1.0f - k_of(tm * 0.1f);
+        v->sus = 0.0f; v->d_k = k_of(tm);                         /* the bar ringing down: the envelope itself */
+        v->ok[0] = 1.0f; v->ok[1] = 1.0f - k_of(tm * 0.3f); v->ok[2] = 1.0f - k_of(tm * 0.1f);
         v->p[3] = kind == 1 ? 1.0f : 0.0f;                       /* vibes: the tremolo */
         v->lfo_dp = 4.8f * BLK_S;
         if (start) {
             for (int k = 0; k < 3; k++) v->oe[k] = 1.0f;
-            v->z1 = 0.25f + 0.5f * wt;                           /* the knock */
+            if (v->env < 0.002f) v->ph[0] = v->ph[1] = v->ph[2] = 0.0f;   /* (from silence: each mode from zero, no step) */
+            v->z1 = 0.08f + 0.17f * wt;                          /* the knock: a soft thock, not a click */
             v->a_k = k_of(0.0006f + 0.002f * (1.0f - wt));       /* (always struck, whatever the layer's attack) */
         }
-        v->p[4] = 1.0f - k_of(0.004f + 0.004f * wt);
-        svf_set(&v->f, clampf(f * 3.0f, 300.0f, 6000.0f), 2.0f);
+        v->p[4] = 1.0f - k_of(0.006f + 0.006f * wt);
+        svf_set(&v->f, clampf(f * 2.0f, 200.0f, 3000.0f), 1.2f);
         break;
     }
     case E_WAVES:
@@ -257,6 +259,8 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
 void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float pan, float from_hz, uint32_t seed)
 {
     float wt = clamp01(s->weight);
+    int warm = v->on && v->env > 0.002f;         /* a voice taken while it still sounds: its level, phases and filters
+                                                  * carried on into the new note, not cut (a cut is a click) */
     v->on = 1; v->rel = 0; v->engine = s->engine; v->note = (int8_t)note; v->seed = seed;
     v->freq = mtof((float)note); v->vel = vel; v->pan = clampf(pan, -1.0f, 1.0f); v->age = 0;
     {
@@ -271,12 +275,16 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
     v->sw = 0;
     v->pan_ph = (float)(seed >> 20 & 255u) / 256.0f;
     v->pan_dp = (0.04f + 0.3f * (float)(seed >> 4 & 255u) / 255.0f) * BLK_S;   /* once every 3 to 25 s */
-    v->env = 0; v->hold = dur;
+    if (!warm) v->env = 0;
+    v->hold = dur;
     float att = s->attack * (1.15f - 0.9f * wt);                 /* heavy: sharper */
     v->a_k = k_of(att * 0.33f + 0.0008f);
-    for (int i = 0; i < 4; i++) v->ph[i] = (float)((seed >> (i * 8)) & 255u) * (1.0f / 256.0f);
-    v->fb = 0; v->z1 = v->z2 = 0; v->lfo = 0; v->lp.z = 0; v->sl[0].z = v->sl[1].z = 0; v->ix = 0;
-    memset(&v->f, 0, sizeof v->f); memset(&v->f2, 0, sizeof v->f2);
+    if (!warm) {
+        for (int i = 0; i < 4; i++) v->ph[i] = (float)((seed >> (i * 8)) & 255u) * (1.0f / 256.0f);
+        v->fb = 0; v->lp.z = 0; v->sl[0].z = v->sl[1].z = 0;
+        memset(&v->f, 0, sizeof v->f); memset(&v->f2, 0, sizeof v->f2);
+    }
+    v->z1 = v->z2 = 0; v->lfo = 0; v->ix = 0;
     voice_params(v, s, seed, 1);
     v->ws = 0;                                   /* (the piece's DRIFT ring modulator: set by the engine each block) */
     v->ph[3] = 0;

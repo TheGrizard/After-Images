@@ -101,7 +101,8 @@ Press a page's button again for its next page; dots by the page's name show how 
   while LIGHT is fuzzed and echoed. **REVERB:** to 12 o'clock a room, small to vast; past it a shimmer an octave up,
   and by full an octave down too. **ECHO:** a tempo-locked tape echo; past 12 o'clock a reversed, smeared wash.
   **GRAIN:** a cloud; right up it freezes. **DIRT:** tape pushed hard, from warm saturation to fuzz to breakup with
-  hiss, sputter and dropouts. A send always does something, even with the shared amount at 0.
+  hiss, sputter and dropouts. A send always does something, even with the shared amount at 0, and the shared GRAIN and DIRT reach every
+  layer a little, even with its send at 0.
 - **MOTION:** LINK (layers answering each other), WARP (swing, phrases speeding and slowing), FLOW (slow random
   movement), CHAOS (ratchets and skips).
 - **WARBLE** puts Boards of Canada's worn tape in the synth itself: the pitch wandering, a faster flutter, everything

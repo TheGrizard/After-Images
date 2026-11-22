@@ -198,7 +198,9 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
             if (L->nq < EVQ) { VoiceEv *q = &L->q[L->nq++]; q->sub = (uint8_t)sub; q->voice = (uint8_t)vi; q->rel = 2; q->note = (int8_t)note; q->vel = nv; q->dur = dur; }
             L->last_hz[i] = mtof((float)note);
         } else {
-            int cap = (int)((float)L->nv * (0.4f + 0.6f * e->gov) + 0.5f);   /* (under load, fewer voices) */
+            int keys = 0;                                 /* (the keys' notes sounding: each takes a layer voice's room) */
+            for (int k = 0; k < KEY_POLY; k++) keys += e->kv[k].on && e->kv[k].env > 0.01f;
+            int cap = (int)((float)L->nv * (0.4f + 0.6f * e->gov) + 0.5f) - (keys + 1) / 2;   /* (under load, fewer voices) */
             int vi = pick_voice(L->v, cap < 1 ? 1 : cap > L->nv ? L->nv : cap, &L->next_v);
             queue(L->q, &L->nq, sub, vi, note, nv, dur, pan, &snd, rng_u32(&e->rng));
             if (p->glide[l] && i < L->last_n) L->q[L->nq - 1].from_hz = L->last_hz[i];   /* GLIDE: from the last note */
@@ -492,7 +494,7 @@ void engine_block_layer(Engine *e, int b)
                 Lb[i] = svf_lp(&e->klp[0], svf_hp(&e->khp[0], Lb[i]));
                 Rb[i] = svf_lp(&e->klp[1], svf_hp(&e->khp[1], Rb[i]));
             }
-            dirt_run(&e->kdirt, u(e->p->dirt), mo(e, kl, MW_DIRT, e->p->s_dirt[kl], 0.45f), Lb, Rb, BLK);
+            dirt_run(&e->kdirt, u(e->p->dirt), fm_maxf(mo(e, kl, MW_DIRT, e->p->s_dirt[kl], 0.45f), 0.4f * u(e->p->dirt)), Lb, Rb, BLK);
             continue;
         }
         Layer *L = &e->L[b];
@@ -510,7 +512,7 @@ void engine_block_layer(Engine *e, int b)
             Lb[i] = svf_lp(&L->lp[0], svf_hp(&L->hp[0], Lb[i]));
             Rb[i] = svf_lp(&L->lp[1], svf_hp(&L->hp[1], Rb[i]));
         }
-        dirt_run(&L->dirt, u(e->p->dirt), mo(e, b, MW_DIRT, e->p->s_dirt[b], 0.45f), Lb, Rb, BLK);   /* its own DIRT, its send's amount (DRIFT morphing it) */
+        dirt_run(&L->dirt, u(e->p->dirt), fm_maxf(mo(e, b, MW_DIRT, e->p->s_dirt[b], 0.45f), 0.4f * u(e->p->dirt)), Lb, Rb, BLK);   /* its own DIRT, its send's amount (DRIFT morphing it); the shared DIRT reaching every layer a little */
         /* (ENTROPY is in the voices: synthesis turning on itself, not distortion; DIRT is the tape) */
     }
     cost_add(e, b, t0);
@@ -548,7 +550,7 @@ void engine_mix_sends(Engine *e)
     e->echo.time_s -= (float)(e->nsub * BLK) / SR;  /* (it runs a block late: a block shorter, so it lands on the beat) */
     e->echo.fb = rev > 0 ? 0.45f + 0.3f * rev : 0.2f + 0.45f * eck; e->echo.wow = u(p->warp) + u(p->drift) * 0.5f;
     e->echo.rev = rev;
-    e->gr.density = grk < 0.9f ? grk : 1.0f; e->gr.frozen = grk >= 0.92f; e->gr.size = 0.3f + 0.7f * grk;
+    e->gr.density = grk < 0.9f ? fm_sqrtf(grk) : 1.0f; e->gr.frozen = grk >= 0.92f; e->gr.size = 0.3f + 0.7f * grk;
     e->gr.spread = 0.3f + 0.7f * grk; e->gr.shimmer = 0;   /* (SHIMMER gave way to DIRT) */
     {   /* the grains' pitches: octaves, and the fifth only where the scale has one */
         const Scale *sc = &SCALES[p->scale % NUM_SCALES]; int has5 = 0;
@@ -569,7 +571,7 @@ void engine_mix_sends(Engine *e)
             /* (DRIFT morphing each send: a dry layer may wander into the reverb, a wet one out of it) */
             float rs = mo(e, sl, MW_RV, p->s_rv[sl], 0.5f) * 0.8f * (0.3f + 1.2f * rvk) * g * (1.0f + 1.5f * far);   /* (far off: more reverb than itself) */
             float es = mo(e, sl, MW_ECHO, p->s_echo[sl], 0.5f) * eck * 1.4f * g;
-            float gs = mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f) * 0.9f * g;
+            float gs = fm_maxf(mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f), 0.8f * u(p->grain)) * 0.9f * g;   /* (the shared GRAIN: every layer into it a little) */
             float ss = 0;
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];
@@ -591,7 +593,7 @@ void engine_mix_sends(Engine *e)
 void engine_mix_reverb(Engine *e)                /* the wet effects (the second core's: it touches only theirs) */
 {
     uint32_t t0 = now(e);
-    float shk = mx_shk, gg = mx_grk * 1.3f;
+    float shk = mx_shk, gg = fm_sqrtf(mx_grk) * (e->gr.frozen ? 3.2f : 2.0f);   /* (the cloud up with the dry; a freeze a little over it) */
     if (e->rv_size > 0) reverb_set(&e->rv, e->rv_size, e->rv_damp);
     int ns = mx_nsub < e->nsub ? mx_nsub : e->nsub;
     for (int k = ns; k < e->nsub; k++) for (int i = 0; i < BLK; i++) mx_vl[k * BLK + i] = mx_vr[k * BLK + i] = mx_wl[k * BLK + i] = mx_wr[k * BLK + i] = 0;

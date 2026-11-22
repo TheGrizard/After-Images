@@ -35,9 +35,9 @@ void echo_init(Echo *e);
 void echo_run(Echo *e, const float *inL, const float *inR, float *outL, float *outR, int n);
 
 #define GR_MAX 24576                     /* 0.56 s */
-#define GR_N 6
+#define GR_N 8
 typedef struct {
-    int16_t buf[GR_MAX]; int pos;
+    int16_t buf[GR_MAX]; int pos, fill;  /* fill: samples of sound in it (a freeze waits for a bufferful) */
     int frozen;
     struct { float at, rate, t, len, amp, pan; int on, shimmer; } g[GR_N];
     float density, size, spread, shimmer;   /* set from GRAIN and SHIMMER */

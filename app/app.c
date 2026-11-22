@@ -1642,14 +1642,14 @@ void app_frame(void)
         if (set.visual == 2) mosh_step(); else if (set.visual) ink_step(); else pegs_step(dt);
         draw_view();
     }
-    {   /* the load guard: past 80 % of the render's time, fewer notes, fewer voices, shorter tails; back slowly as it
+    {   /* the load guard: past 72 % of the render's time, fewer notes, fewer voices, shorter tails; back slowly as it
          * eases (a block that nearly overruns sheds at once: app_overload) */
         static uint32_t last_g;
         if (now - last_g >= 20u) {
             last_g = now;
             uint32_t cpu = plat_cpu_pct();
             float g = eng.gov;
-            if (cpu > 80u) g -= 0.03f; else if (cpu < 65u) g += 0.004f;
+            if (cpu > 72u) g -= 0.03f; else if (cpu < 60u) g += 0.004f;   /* (room left for a burst: the keys, a chord) */
             eng.gov = g < 0.3f ? 0.3f : g > 1.0f ? 1.0f : g;
         }
     }

@@ -32,6 +32,8 @@ int main(int argc, char **argv)
         int l = getenv("LAYER") ? atoi(getenv("LAYER")) : getenv("SOLO") ? atoi(getenv("SOLO")) : 1;
         for (int e = 0; e < NUM_ENGINES; e++) if (!strcmp(ENGINE_NAME[e], getenv("ENG"))) pc.l[l].engine = (uint8_t)e;
     }
+    if (getenv("GRAIN")) pc.grain = (uint8_t)atoi(getenv("GRAIN"));   /* GRAIN=0..100: the shared GRAIN */
+    if (getenv("DIRT")) pc.dirt = (uint8_t)atoi(getenv("DIRT"));
     if (getenv("SOLO")) {                        /* SOLO=0..3: that layer alone */
         int k = atoi(getenv("SOLO"));
         for (int l = 0; l < NUM_LAYERS; l++) if (l != k) pc.l[l].level = 0;

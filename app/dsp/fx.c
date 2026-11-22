@@ -141,8 +141,11 @@ void grains_init(Grains *g, uint32_t seed)
 
 void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shim, int n)
 {
-    if (!g->frozen)
-        for (int i = 0; i < n; i++) { g->buf[g->pos] = to16(in[i]); g->pos = g->pos + 1 >= GR_MAX ? 0 : g->pos + 1; }
+    if (!g->frozen || g->fill < GR_MAX) {       /* (frozen: held, once there's a bufferful of sound to hold) */
+        float e = 0;
+        for (int i = 0; i < n; i++) { g->buf[g->pos] = to16(in[i]); g->pos = g->pos + 1 >= GR_MAX ? 0 : g->pos + 1; e += in[i] * in[i]; }
+        if (e > 1e-7f * (float)n) g->fill = g->fill + n > GR_MAX ? GR_MAX : g->fill + n;
+    }
     for (int i = 0; i < n; i++) { outL[i] = outR[i] = shim[i] = 0; }
     if (g->density <= 0.001f && g->shimmer <= 0.001f) return;
     g->next -= (float)n / SR;
@@ -158,7 +161,7 @@ void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shi
             float back = (float)GR_MAX * 0.9f * (0.1f + 0.9f * g->spread * rng_f(&g->rng));
             if (g->g[k].rate > 1.0f) back += g->g[k].len * (g->g[k].rate - 1.0f) + 64.0f;   /* (ahead of the writer: never) */
             g->g[k].at = (float)g->pos - back; while (g->g[k].at < 0) g->g[k].at += (float)GR_MAX;
-            g->g[k].t = 0; g->g[k].amp = 0.5f; g->g[k].pan = rng_bi(&g->rng);
+            g->g[k].t = 0; g->g[k].amp = 0.8f; g->g[k].pan = rng_bi(&g->rng);
             break;
         }
     }

@@ -49,10 +49,11 @@ void grains_init(Grains *g, uint32_t seed);
 /* in: mono; out: stereo, and the octaves for the reverb */
 void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shim, int n);
 
-/* DIRT: one knob, three characters as it turns. Up to a third, a wavefolder (warm, then buzzing); to two thirds, a bit
- * and sample-rate crusher comes in over it (lo-fi); past that, noise that follows the signal and crackles (broken).
- * On the dry sound only: the reverb's tails stay clean */
-typedef struct { float held[2]; int hold_n, hold_i; Rng rng; OnePole tone[2]; float env; } Dirt;
+/* DIRT: tape, pushed. Up to a third, warm saturation (asymmetric, as tape's: even harmonics); to two thirds, fuzz, the
+ * top end going as saturated tape loses it; past that, breakup: hiss that rises with the sound, the fuzz sputtering as
+ * notes die away, and dropouts (the level dipping and dulling a moment, as worn tape lifting off the head). No digital
+ * crushing. On the dry sound only: the reverb's tails stay clean */
+typedef struct { Rng rng; OnePole tone[2], hiss; float env, drop, drop_t, drop_left; } Dirt;
 void dirt_init(Dirt *d, uint32_t seed);
 void dirt_run(Dirt *d, float character, float mix, float *L, float *R, int n);   /* character: fold .. crush .. noise; mix: how much */
 

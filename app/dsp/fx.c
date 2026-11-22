@@ -184,37 +184,49 @@ void dirt_init(Dirt *d, uint32_t seed)
 {
     memset(d, 0, sizeof *d);
     rng_seed(&d->rng, seed ^ 0xD127u);
-    op_set(&d->tone[0], 9000.0f); op_set(&d->tone[1], 9000.0f);
+    op_set(&d->tone[0], 12000.0f); op_set(&d->tone[1], 12000.0f); op_set(&d->hiss, 7000.0f);
+    d->drop = d->drop_t = 1.0f;
+}
+
+static inline float tape_sat(float x)            /* tanh, near enough (and flat past +-3) */
+{
+    if (x > 3.0f) return 1.0f;
+    if (x < -3.0f) return -1.0f;
+    float x2 = x * x;
+    return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
 
 void dirt_run(Dirt *d, float a, float mix, float *L, float *R, int n)
 {
     if (mix < 0.005f) return;
-    a = 0.08f + 0.92f * a;                               /* (its gentlest still a fold) */
-    float f = clamp01(a * 3.0f), c = clamp01(a * 3.0f - 1.0f), z = clamp01(a * 3.0f - 2.0f);
-    float gain = 1.0f + 5.0f * f, norm = 1.0f / (1.0f + 1.2f * f);
-    float bits = 4096.0f * fm_exp2f(-9.0f * c);              /* 12 bits down to 3 */
-    int hold = 1 + (int)(c * c * 14.0f);                     /* 44.1 kHz down to ~3 kHz */
-    float cutoff = 9000.0f - 5500.0f * c;
+    a = 0.05f + 0.95f * a;                               /* (its gentlest still a little warmth) */
+    float w = clamp01(a * 3.0f), f = clamp01(a * 3.0f - 1.0f), z = clamp01(a * 3.0f - 2.0f);   /* warm, fuzz, breakup */
+    float drive = 1.0f + 3.0f * w + 14.0f * f + 10.0f * z;
+    float bias = 0.12f + 0.3f * f, sb = tape_sat(bias);  /* (the asymmetry: tape's even harmonics) */
+    float norm = fm_minf(1.0f, fm_maxf(1.0f / drive, 0.09f) * 1.1f);   /* (about the same loudness, a little denser) */
+    if (z > 0 && (d->drop_left -= (float)n / SR) <= 0) {   /* the dropouts: now and then a dip, 40 to 400 ms */
+        d->drop_t = rng_chance(&d->rng, 0.15f + 0.45f * z) ? 0.15f + 0.4f * rng_f(&d->rng) : 1.0f;
+        d->drop_left = 0.04f + 0.36f * rng_f(&d->rng);
+    }
+    if (z <= 0) d->drop_t = 1.0f;
+    float cutoff = (12000.0f - 5500.0f * f - 3500.0f * z) * (0.3f + 0.7f * d->drop);   /* (a dropout dull too) */
     op_set(&d->tone[0], cutoff); op_set(&d->tone[1], cutoff);
     for (int i = 0; i < n; i++) {
         float x[2] = { L[i], R[i] };
         d->env += (fm_fabsf(x[0]) + fm_fabsf(x[1]) - d->env) * 0.002f;
-        float nz = z > 0 ? z * (0.25f * d->env * rng_bi(&d->rng) + (rng_chance(&d->rng, z * 0.0015f) ? 0.2f * rng_bi(&d->rng) : 0.0f)) : 0.0f;
-        int take = d->hold_i == 0;
+        d->drop += (d->drop_t - d->drop) * 0.0025f;      /* (~9 ms: a dip, never a click) */
+        float hs = 0, choke = 1.0f;
+        if (z > 0) {
+            hs = op_lp(&d->hiss, rng_bi(&d->rng)) * z * (0.004f + 0.3f * d->env);   /* hiss, rising with the sound */
+            choke = 1.0f - 0.7f * z * (1.0f - clamp01(d->env * 25.0f));            /* the fuzz sputtering as it dies */
+        }
         for (int ch = 0; ch < 2; ch++) {
-            float y = x[ch];
-            y = lerpf(y, fold(y * gain) * norm, f);          /* the fold */
-            if (c > 0) {                                     /* the crush */
-                if (take) d->held[ch] = fm_floorf(y * bits + 0.5f) / bits;
-                y = lerpf(y, d->held[ch], fm_minf(c * 2.0f, 1.0f));
-                y = op_lp(&d->tone[ch], y);
-            }
-            y += nz;                                         /* the noise */
+            float y = (tape_sat(x[ch] * drive + bias) - sb) * norm;
+            if (f > 0 || z > 0) y = op_lp(&d->tone[ch], y);
+            y = (y * choke + hs) * d->drop;
             y = x[ch] + (y - x[ch]) * mix;
             if (ch) R[i] = y; else L[i] = y;
         }
-        if (++d->hold_i >= hold) d->hold_i = 0;
     }
 }
 

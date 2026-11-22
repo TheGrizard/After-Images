@@ -378,7 +378,7 @@ static void knob_text(int pg, int k, char *s)
     case K_REC: text_cat(s, v ? "FULL" : "MASTER"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
-    case K_DIRT: text_cat(s, v < 34 ? "FOLD " : v < 67 ? "CRUSH " : "NOISE "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
+    case K_DIRT: text_cat(s, v < 34 ? "WARM " : v < 67 ? "FUZZ " : "BREAK "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
     case K_GRAIN: if (v < 92) int_text(v, s); else text_cat(s, "FREEZE"); break;
     case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PEGN: int_text(PEG_NS[v % NPEG_NS], s); break;

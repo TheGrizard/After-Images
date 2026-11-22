@@ -63,7 +63,7 @@ static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and th
     p->reso[l] = rng_chance(r, 0.25f) ? pick(r, 15, 60) : 0;
 }
 
-const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "FOLDED", "CRUSHED", "WIDE SPACE", "HAZE" };
+const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "SATURATED", "TAPE FUZZ", "WIDE SPACE", "HAZE" };
 
 /* the scales a new piece is dealt: mostly minor and consonant, for ambient; the harsh ones (AEOLIAN B5, LYD DOM, PHRYG
  * DOM, HUNGARIAN, DBL HARM, IN SEN, WHOLE TONE) only by hand */

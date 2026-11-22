@@ -510,11 +510,12 @@ void engine_block_layer(Engine *e, int b)
             dirt_run(&L->ent, en, fm_minf(1.0f, en * 1.6f), Lb, Rb, BLK);
             float tear = clamp01((en - 0.33f) * 1.5f);
             if ((L->gate_left -= BLK_S) <= 0) {
-                L->gate_hole = tear > 0 && (float)(L->ent.rng.s & 1023u) / 1023.0f < tear * 0.55f ? 0.0f : 1.0f;
+                /* (tape dropouts, not holes: down to 10-40 %, and only so far) */
+                L->gate_hole = tear > 0 && (float)(L->ent.rng.s & 1023u) / 1023.0f < tear * 0.55f ? 0.1f + 0.3f * (float)(L->ent.rng.s >> 10 & 255u) / 255.0f : 1.0f;
                 rng_u32(&L->ent.rng);
                 L->gate_left = 0.02f + 0.2f * (float)(L->ent.rng.s & 255u) / 255.0f * (0.3f + tear);
             }
-            for (int i = 0; i < BLK; i++) { L->gate += (L->gate_hole - L->gate) * 0.08f; Lb[i] *= L->gate; Rb[i] *= L->gate; }
+            for (int i = 0; i < BLK; i++) { L->gate += (L->gate_hole - L->gate) * 0.003f; Lb[i] *= L->gate; Rb[i] *= L->gate; }   /* (~8 ms in and out) */
         }
     }
     cost_add(e, b, t0);

@@ -383,6 +383,7 @@ static const Knob *knob_of(int pg, int k)
                                         { "MOULD", K_PCT, 2, SO(mosh_mould) }, { "FADE", K_PCT, 2, SO(fade) } };
     if (pg == PG_SCREEN && set.visual == 2) return &MOSH_KNOBS[k];
     if (pg == PG_SCREEN && set.visual == 1) return &INK_KNOBS[k];   /* (SCREEN: the chosen visual's own four) */
+    if (pg == PG_VISUAL && k == 2 && set.visual != 2) return &PAGES[PG_VISUAL][1];   /* (SHAPES: MOSH's alone) */
     return &PAGES[pg][k];
 }
 

@@ -56,7 +56,7 @@ stays clear.
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
 | LFO again | WARBLE, Boards of Canada's worn tape in the synth itself: WARBLE (the pitch wandering slowly, the whole piece as one, an LFO on an LFO), FLUTTER (a faster shiver), DETUNE (everything a touch flat), CHORUS (the Juno's) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
-| GLO again | SCREEN: PALETTE (nine), FRACTAL (JULIA, FERN, DRAGON, POLYGON, ATTRACTOR, TREE), FULL (the whole screen at HOME, every pixel a fractal zooming endlessly into itself, steered along the set's edge: JULIA SEA, MANDELBROT, SHIP, TRICORN, CUBIC, SPIRAL), GLOW. REC deals a new palette and a new fractal each time, none twice until all have come |
+| GLO again | SCREEN: PALETTE (nine), VISUAL (the fractals, then PEGS), and for a fractal FULL (the whole screen at HOME, every pixel a fractal zooming endlessly into itself: JULIA SEA, MANDELBROT, SHIP, TRICORN, CUBIC, SPIRAL) and GLOW; for PEGS, BREED and FADE. REC deals a new palette and a new visual each time, none twice until all have come |
 | ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK out |
 | ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (follow MIDI clock's tempo, start and stop), CC |
 | ARP a third time | USB AUDIO: RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1), STEMS (the four layers on USB audio channels 3-10, beside the mix on 1-2) |
@@ -71,6 +71,11 @@ stays clear.
 | HOME | back home from any page; tapped at home, the processor's load and whether saving works |
 | white keys | the scale's notes, up from the key, on the chosen layer's sound: no wrong notes |
 | black keys | the scale's chords: I to VII, then I to IV an octave up (CHORDS sets triads, sevenths, ninths, sus, spread, fifths) |
+
+PEGS is a pegboard of light filling the screen: each note lights the peg at its pitch (low at the bottom) and its place in
+the stereo field, in its layer's colour, fading as it ends; whenever two colours are lit, a peg in their mix appears
+about halfway between them (red and blue: purple), mixes mix with each other, the board fills, and then the oldest
+fade out as new ones come, each breathing at its own pace. BREED sets how fast mixes come, FADE how long things linger.
 
 The home screen is abstract: a fractal behind everything (SCREEN chooses which, and FULL lets it fill the screen),
 always moving by itself and moved by the music, coloured by the layers as they sound;

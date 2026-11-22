@@ -40,11 +40,14 @@ typedef struct {
     uint8_t usb_play;                    /* the computer's audio through the FM-1, 0..100 */
     uint8_t stems;                       /* the four layers on USB audio channels 3-10 */
     uint8_t palette, fractal, full, glow;   /* the screen */
-    uint8_t rsv2[5];
+    uint8_t breed, fade, pegs_set;       /* PEGS: how fast mixes breed, how long things linger (0..100); pegs_set: they've been set */
+    uint8_t rsv2[2];
 } settings_t;
 static settings_t set;
 #define NPAL 9
 #define NFRACTALS 6
+#define V_PEGS NFRACTALS                 /* VISUAL's last: the pegboard */
+#define NVISUALS (NFRACTALS + 1)
 static uint8_t set_dirty;
 static int store_ok = 1;
 static uint32_t autosave_at;
@@ -56,6 +59,7 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
     set.usb_full = 0; set.usb_play = 100; set.stems = 0;
     set.palette = 0; set.fractal = 0; set.full = 0; set.glow = 60;
     memset(set.rsv2, 0, sizeof set.rsv2);
+    set.breed = 50; set.fade = 50; set.pegs_set = 1;
 }
 
 static void settings_defaults(void)
@@ -72,7 +76,7 @@ static int settings_ok(void)
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.midi_clock > 1) return 0;
     if (set.in_ch > 16 || set.layers_in > 1 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
-        || set.stems > 1 || set.palette >= NPAL || set.fractal >= NFRACTALS || set.full > 1 || set.glow > 100) return 0;
+        || set.stems > 1 || set.palette >= NPAL || set.fractal >= NVISUALS || set.breed > 100 || set.fade > 100 || set.full > 1 || set.glow > 100) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -100,6 +104,7 @@ static void settings_load(void)
         set.magic = SET_MAGIC;
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
+    if (set.pegs_set != 1) { set.breed = 50; set.fade = 50; set.pegs_set = 1; }   /* (a store from before PEGS) */
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -284,6 +289,10 @@ typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
 #define LO(f) (uint16_t)__builtin_offsetof(LayerP, f)
 #define SO(f) (uint16_t)__builtin_offsetof(settings_t, f)
+/* SCREEN with PEGS chosen: K3 and K4 are its own */
+static const Knob PEG_KNOBS[2] = { { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } };
+static const Knob PAGES[NPAGES][4];
+static const Knob *knob_of(int pg, int k);
 static const Knob PAGES[NPAGES][4] = {
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
     { { "ENGINE", K_ENGINE, 1, LO(engine) }, { "TONE", K_TONE, 1, LO(tone) }, { "WEIGHT", K_PCT, 1, LO(weight) }, { "DRIFT", K_PCT, 1, LO(weird) } },
@@ -295,7 +304,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "FLOW", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
     { { "WARBLE", K_PCT, 0, PO(warble) }, { "FLUTTER", K_PCT, 0, PO(flutter) }, { "DETUNE", K_PCT, 0, PO(detune) }, { "CHORUS", K_PCT, 0, PO(chorus) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
-    { { "PALETTE", K_PALETTE, 2, SO(palette) }, { "FRACTAL", K_FRACTAL, 2, SO(fractal) }, { "FULL", K_ONOFF, 2, SO(full) }, { "GLOW", K_PCT, 2, SO(glow) } },
+    { { "PALETTE", K_PALETTE, 2, SO(palette) }, { "VISUAL", K_FRACTAL, 2, SO(fractal) }, { "FULL", K_ONOFF, 2, SO(full) }, { "GLOW", K_PCT, 2, SO(glow) } },
     { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_ONOFF, 2, SO(midi_clock) } },
     { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_ONOFF, 2, SO(clock_in) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
     { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "STEMS", K_ONOFF, 2, SO(stems) }, { "", K_NONE, 2, 0 } },
@@ -346,9 +355,15 @@ static struct {
 
 static void settings_apply(void);
 
+static const Knob *knob_of(int pg, int k)
+{
+    if (pg == PG_SCREEN && k >= 2 && set.fractal == V_PEGS) return &PEG_KNOBS[k - 2];
+    return &PAGES[pg][k];
+}
+
 static uint8_t *knob_ptr(int pg, int k)
 {
-    const Knob *kn = &PAGES[pg][k];
+    const Knob *kn = knob_of(pg, k);
     if (kn->where == 1) return (uint8_t *)&set.cur.l[ui.sel] + kn->off;
     if (kn->where == 2) return (uint8_t *)&set + kn->off;
     if (kn->where == 3) return (uint8_t *)&set.cur + kn->off + ui.sel;
@@ -357,7 +372,7 @@ static uint8_t *knob_ptr(int pg, int k)
 
 static void knob_text(int pg, int k, char *s)
 {
-    const Knob *kn = &PAGES[pg][k]; uint8_t v = *knob_ptr(pg, k);
+    const Knob *kn = knob_of(pg, k); uint8_t v = *knob_ptr(pg, k);
     s[0] = 0;
     switch (kn->kind) {
     case K_NONE: break;
@@ -369,7 +384,7 @@ static void knob_text(int pg, int k, char *s)
     case K_GRAIN: if (v < 92) int_text(v, s); else text_cat(s, "FREEZE"); break;
     case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PALETTE: text_cat(s, LPAL_NAME[v % NPAL]); break;
-    case K_FRACTAL: text_cat(s, (set.full ? FIELD_NAME : FRACTAL_NAME)[v % NFRACTALS]); break;
+    case K_FRACTAL: text_cat(s, v == V_PEGS ? "PEGS" : (set.full ? FIELD_NAME : FRACTAL_NAME)[v % NFRACTALS]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
     case K_RATE: text_cat(s, RATE_NAME[v % NUM_RATES]); break;
@@ -388,13 +403,13 @@ static void knob_text(int pg, int k, char *s)
 }
 static float knob_frac(int pg, int k)    /* the bar under the value */
 {
-    const Knob *kn = &PAGES[pg][k]; uint8_t v = *knob_ptr(pg, k);
+    const Knob *kn = knob_of(pg, k); uint8_t v = *knob_ptr(pg, k);
     switch (kn->kind) {
     case K_NONE: return 0.0f;
     case K_INCH: return (float)v / 16.0f;
     case K_REC: return v ? 1.0f : 0.0f;
     case K_PALETTE: return (float)v / (NPAL - 1);
-    case K_FRACTAL: return (float)v / (NFRACTALS - 1);
+    case K_FRACTAL: return (float)v / (NVISUALS - 1);
     case K_ENGINE: return (float)v / (NUM_ENGINES - 1);
     case K_SEQ: return (float)v / (NUM_SEQS - 1);
     case K_RATE: return (float)v / (NUM_RATES - 1);
@@ -471,13 +486,13 @@ static int fx_next(void)
 static float fz, fz_dir = 1.0f, fcol, frot;     /* FULL's field: zoom depth (octaves), its way, the colours' cycle, the turn */
 static float fcx, fcy; static int fcentred;     /* where it zooms: steered to keep the set's edge in the middle */
 static int ftarget;
-static uint8_t frdeck[NFRACTALS]; static int frdeck_n;
+static uint8_t frdeck[NVISUALS]; static int frdeck_n;
 static void fractal_next(void)
 {
     if (frdeck_n == 0) {
-        for (int i = 0; i < NFRACTALS; i++) frdeck[i] = (uint8_t)i;
-        for (int i = NFRACTALS - 1; i > 0; i--) { int j = (int)((plat_ticks24() * 3266489917u ^ (uint32_t)i * 2654435761u) % (uint32_t)(i + 1)); uint8_t t = frdeck[i]; frdeck[i] = frdeck[j]; frdeck[j] = t; }
-        frdeck_n = NFRACTALS;
+        for (int i = 0; i < NVISUALS; i++) frdeck[i] = (uint8_t)i;
+        for (int i = NVISUALS - 1; i > 0; i--) { int j = (int)((plat_ticks24() * 3266489917u ^ (uint32_t)i * 2654435761u) % (uint32_t)(i + 1)); uint8_t t = frdeck[i]; frdeck[i] = frdeck[j]; frdeck[j] = t; }
+        frdeck_n = NVISUALS;
         if (frdeck[frdeck_n - 1] == set.fractal) { uint8_t t = frdeck[0]; frdeck[0] = frdeck[frdeck_n - 1]; frdeck[frdeck_n - 1] = t; }
     }
     set.fractal = frdeck[--frdeck_n];
@@ -583,14 +598,14 @@ static void select_layer(int l)
 
 static void knob_turn(int k, int d)
 {
-    const Knob *kn = &PAGES[ui.page][k]; uint8_t *p = knob_ptr(ui.page, k);
+    const Knob *kn = knob_of(ui.page, k); uint8_t *p = knob_ptr(ui.page, k);
     int v = kn->kind == K_OCT ? (int8_t)*p : *p, lo = 0, hi = 100, step = 2, wrap = 0;
     if (kn->kind == K_NONE) return;
     switch (kn->kind) {
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
     case K_PALETTE: hi = NPAL - 1; step = 1; wrap = 1; break;
-    case K_FRACTAL: hi = NFRACTALS - 1; step = 1; wrap = 1; break;
+    case K_FRACTAL: hi = NVISUALS - 1; step = 1; wrap = 1; break;
     case K_ENGINE: hi = NUM_ENGINES - 1; step = 1; wrap = 1; break;
     case K_SEQ: hi = NUM_SEQS - 1; step = 1; wrap = 1; break;
     case K_RATE: hi = NUM_RATES - 1; step = 1; break;
@@ -791,11 +806,13 @@ static uint16_t dim(uint16_t c, float k)
     return (uint16_t)(((uint32_t)((float)r * k) << 11) | ((uint32_t)((float)g * k) << 5) | (uint32_t)((float)b * k));
 }
 
+static void pegs_note(const UiNote *n);
+
 static void shapes_step(float dt)
 {
     uint32_t head = eng.uiq_head;
     if (head - ui.uiq_tail > UI_Q) ui.uiq_tail = head - UI_Q;
-    while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; spawn(&n); }
+    while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; spawn(&n); pegs_note(&n); }
     for (int i = 0; i < NSHAPE; i++) {
         shape_t *s = &shp[i];
         if (!s->on) continue;
@@ -838,6 +855,7 @@ static void fractal_step(float dt)
     jcur = (jcur + 1) % JGHOST;
     int16_t *X = jx[jcur], *Y = jy[jcur]; uint8_t *C = jc[jcur];
     switch (set.fractal) {
+    case V_PEGS: break;
     default:
     case 0: {                                    /* JULIA */
         static float rad = 0.72f;
@@ -967,6 +985,7 @@ static const fpt FTARGETS[NFRACTALS][3] = {
 static void field_step(float dt)
 {
     int type = set.fractal % NFRACTALS;
+    if (set.fractal == V_PEGS) return;
     float body = eng.L[L_BODY].cv, ground = eng.L[L_GROUND].cv;
     /* the zoom: in for a minute or two, out quicker, then on to the next point */
     float speed = (0.05f + 0.05f * (float)set.cur.motion * 0.01f) * (1.0f + 1.5f * body);
@@ -1081,8 +1100,154 @@ static void branch(float x, float y, float len, float ang, int depth, float spre
     branch(x2, y2, len * 0.68f, ang + spread, depth - 1, spread, cc);
 }
 
+/* ------------------------------------------------------------------ PEGS: a pegboard of light
+ * Each note lights the peg at its pitch (low at the bottom) and its place in the stereo field, in its layer's colour,
+ * and fades as it ends. Whenever two colours are lit, a new peg appears about halfway between them in their mix (red and
+ * blue: purple); mixes mix with notes and with each other, until the board is full; then the oldest fade out and new
+ * ones in. Each mix breathes at its own pace. Crisp pegs, no glow. */
+#define PG_C 20                                  /* pegs across */
+#define PG_R 20                                  /* pegs down (fewer show under the header) */
+#define PG_CELL 12
+#define PG_NOTES 48
+typedef struct { uint16_t col; uint16_t age, die; uint8_t ph, sp; } mixpeg_t;   /* age, die: 50 ms ticks (die 0: living) */
+static mixpeg_t mp[PG_R][PG_C];
+static struct { uint8_t on, x, y, layer, vel; uint16_t t, len; } pn[PG_NOTES];   /* the notes' pegs: 50 ms ticks */
+static uint16_t pg_t;                            /* the board's clock, 50 ms ticks */
+static float pg_acc, pg_tick;
+
+static int peg_rows(void) { int r = VIEW_H / PG_CELL; return r > PG_R ? PG_R : r; }
+static float fade_k(void) { return 0.4f + (float)set.fade * 0.016f; }   /* FADE: 0.4 .. 2 */
+
+static float pn_level(int i)                     /* a note's peg: lit as it sounds, fading after */
+{
+    if (!pn[i].on) return 0;
+    uint16_t a = (uint16_t)(pg_t - pn[i].t);
+    float v = (float)pn[i].vel / 127.0f;
+    if (a <= pn[i].len) return v;
+    float k = fm_expf(-(float)(a - pn[i].len) * 0.05f / (0.6f * fade_k()));
+    if (k < 0.01f) { pn[i].on = 0; return 0; }
+    return v * k;
+}
+
+static float mp_level(const mixpeg_t *m, int x, int y)   /* a mix: fading in, breathing, fading out */
+{
+    if (!m->col) return 0;
+    float inn = clampf((float)m->age / 30.0f, 0.0f, 1.0f), out = 1.0f;
+    if (m->die) out = clampf(1.0f - (float)(uint16_t)(m->age - m->die) / (40.0f * fade_k() * 0.5f), 0.0f, 1.0f);
+    float br = 0.45f + 0.4f * fm_sin_turns(ui.t * (0.1f + (float)m->sp * 0.002f) + (float)m->ph / 256.0f + (float)(x * 7 + y * 13) * 0.01f);
+    return inn * out * br;
+}
+
+static uint16_t rgb_mix(uint16_t a, uint16_t b)  /* two colours' mix, as light: averaged, then brightened back */
+{
+    int ar = a >> 11, ag = (a >> 5) & 63, ab = a & 31, br = b >> 11, bg = (b >> 5) & 63, bb = b & 31;
+    float r = (float)(ar + br) * 0.5f / 31.0f, g = (float)(ag + bg) * 0.5f / 63.0f, bl = (float)(ab + bb) * 0.5f / 31.0f;
+    float mx = fm_maxf(r, fm_maxf(g, bl)), k = mx > 0.01f ? fm_minf(1.6f, 0.92f / mx) : 1.0f;
+    uint16_t c = RGB((int)(fm_minf(1.0f, r * k) * 255.0f), (int)(fm_minf(1.0f, g * k) * 255.0f), (int)(fm_minf(1.0f, bl * k) * 255.0f));
+    return c ? c : 1;
+}
+
+static void pegs_note(const UiNote *n)
+{
+    int rows = peg_rows(), at = 0; uint16_t oldest = 0;
+    for (int i = 0; i < PG_NOTES; i++) {
+        if (!pn[i].on) { at = i; break; }
+        uint16_t a = (uint16_t)(pg_t - pn[i].t); if (a > oldest) { oldest = a; at = i; }
+    }
+    int x = (int)(((float)n->pan / 100.0f * 0.5f + 0.5f) * (float)(PG_C - 1) + 0.5f);
+    int y = (int)((1.0f - ((float)n->note - 34.0f) / 68.0f) * (float)(rows - 1) + 0.5f);
+    pn[at].on = 1; pn[at].x = (uint8_t)clamp(x, 0, PG_C - 1); pn[at].y = (uint8_t)clamp(y, 0, rows - 1);
+    pn[at].layer = n->layer; pn[at].vel = (uint8_t)(n->vel < 60 ? 60 : n->vel); pn[at].t = pg_t;
+    pn[at].len = (uint16_t)(n->dur * 2);
+}
+
+static void pegs_breed(void)
+{
+    int rows = peg_rows();
+    struct { uint8_t x, y; uint16_t c; uint8_t src; } lit[48]; int nl = 0;
+    for (int i = 0; i < PG_NOTES && nl < 48; i++)
+        if (pn_level(i) > 0.25f) { lit[nl].x = pn[i].x; lit[nl].y = pn[i].y; lit[nl].c = LAYER_C[pn[i].layer]; lit[nl].src = pn[i].layer; nl++; }
+    for (int k = 0; k < 24 && nl < 48; k++) {   /* a few mixes too: mixes of mixes */
+        int x = (int)(jr() % PG_C), y = (int)(jr() % (uint32_t)rows);
+        if (mp_level(&mp[y][x], x, y) > 0.3f) { lit[nl].x = (uint8_t)x; lit[nl].y = (uint8_t)y; lit[nl].c = mp[y][x].col; lit[nl].src = (uint8_t)(8 + (mp[y][x].col & 63)); nl++; }
+    }
+    if (nl < 2) return;
+    int a = (int)(jr() % (uint32_t)nl), b = -1;
+    for (int k = 0; k < 8; k++) { int c = (int)(jr() % (uint32_t)nl); if (lit[c].src != lit[a].src && lit[c].c != lit[a].c) { b = c; break; } }
+    if (b < 0) return;
+    int tx = (lit[a].x + lit[b].x) / 2 + (int)(jr() % 5) - 2, ty = (lit[a].y + lit[b].y) / 2 + (int)(jr() % 5) - 2;
+    int bx = -1, by = -1, bd = 1 << 30;
+    for (int y = 0; y < rows; y++)
+        for (int x = 0; x < PG_C; x++) {
+            if (mp[y][x].col) continue;
+            int d = (x - tx) * (x - tx) + (y - ty) * (y - ty) + (int)(jr() & 3);
+            if (d < bd) { bd = d; bx = x; by = y; }
+        }
+    if (bx < 0) {                                /* full: an old one starts to fade, to make room */
+        for (int k = 0; k < 40; k++) { int x = (int)(jr() % PG_C), y = (int)(jr() % (uint32_t)rows); if (mp[y][x].col && !mp[y][x].die) { mp[y][x].die = mp[y][x].age ? mp[y][x].age : 1; break; } }
+        return;
+    }
+    mixpeg_t *m = &mp[by][bx];
+    m->col = rgb_mix(lit[a].c, lit[b].c); m->age = 0; m->die = 0; m->ph = (uint8_t)jr(); m->sp = (uint8_t)jr();
+}
+
+static void pegs_step(float dt)
+{
+    pg_tick += dt * 20.0f;
+    int ticks = (int)pg_tick; pg_tick -= (float)ticks;
+    pg_t = (uint16_t)(pg_t + ticks);
+    int rows = peg_rows();
+    for (int y = 0; y < rows; y++)
+        for (int x = 0; x < PG_C; x++) {
+            mixpeg_t *m = &mp[y][x];
+            if (!m->col) continue;
+            m->age = (uint16_t)(m->age + ticks);
+            if (m->die && (float)(uint16_t)(m->age - m->die) > 40.0f * fade_k() * 0.5f) { m->col = 0; continue; }
+            if (!m->die && m->age > (uint16_t)(400.0f + 240.0f * fade_k()) && (jr() & 63u) == 0) m->die = m->age;   /* (a life of 30 s or so) */
+        }
+    pg_acc += dt * (0.2f + (float)set.breed * 0.13f);   /* BREED: 0.2 .. 13 a second */
+    while (pg_acc >= 1.0f) { pg_acc -= 1.0f; pegs_breed(); }
+}
+
+static void disc(int cx, int cy, int r, uint16_t c)
+{
+    for (int dy = -r; dy <= r; dy++) {
+        int w = 0; while ((w + 1) * (w + 1) + dy * dy <= r * r + r) w++;
+        cv_rect(cx - w, cy + dy, 2 * w + 1, 1, c);
+    }
+}
+
+static void draw_pegs(void)
+{
+    static uint8_t acc[PG_R][PG_C][3];
+    int rows = peg_rows(), y0 = (VIEW_H - rows * PG_CELL) / 2;
+    memset(acc, 0, sizeof acc);
+    for (int i = 0; i < PG_NOTES; i++) {           /* the notes' light, added */
+        float lv = pn_level(i); if (lv <= 0.01f) continue;
+        uint16_t c = LAYER_C[pn[i].layer]; uint8_t *a = acc[pn[i].y][pn[i].x];
+        int r = (int)((float)((c >> 11) * 255 / 31) * lv), g = (int)((float)(((c >> 5) & 63) * 255 / 63) * lv), b = (int)((float)((c & 31) * 255 / 31) * lv);
+        a[0] = (uint8_t)clamp(a[0] + r, 0, 255); a[1] = (uint8_t)clamp(a[1] + g, 0, 255); a[2] = (uint8_t)clamp(a[2] + b, 0, 255);
+    }
+    float glow = 0.4f + 0.6f * (float)set.glow * 0.01f;
+    for (int y = 0; y < rows; y++) {
+        int py = y0 + y * PG_CELL + PG_CELL / 2;
+        if (py + PG_CELL < -cv_oy || py - PG_CELL > -cv_oy + (int)cv_h) continue;
+        for (int x = 0; x < PG_C; x++) {
+            int px = x * PG_CELL + PG_CELL / 2;
+            float ml = mp_level(&mp[y][x], x, y);
+            uint16_t mc = mp[y][x].col;
+            int r = acc[y][x][0], g = acc[y][x][1], b = acc[y][x][2];
+            if (ml > 0.01f && mc) { r += (int)((float)((mc >> 11) * 255 / 31) * ml); g += (int)((float)(((mc >> 5) & 63) * 255 / 63) * ml); b += (int)((float)((mc & 31) * 255 / 31) * ml); }
+            r = clamp((int)((float)r * glow), 0, 255); g = clamp((int)((float)g * glow), 0, 255); b = clamp((int)((float)b * glow), 0, 255);
+            uint16_t c = (r + g + b) > 12 ? RGB(r > 16 ? r : 16, g > 16 ? g : 16, b > 16 ? b : 16) : RGB(20, 20, 20);
+            disc(px, py, 4, c);
+        }
+    }
+}
+
 static void draw_shapes(void)
 {
+    if (set.fractal == V_PEGS) { draw_pegs(); return; }
     draw_julia();
     for (int i = 0; i < NSHAPE; i++) {
         shape_t *s = &shp[i];
@@ -1169,7 +1334,7 @@ static void draw_view(void)
     }
 }
 
-static int full_now(void) { return set.full && ui.page == PG_HOME; }
+static int full_now(void) { return (set.full || set.fractal == V_PEGS) && ui.page == PG_HOME; }   /* (PEGS: always the whole screen) */
 
 static void draw_header(void)
 {
@@ -1232,7 +1397,7 @@ static void draw_panel_rows(int y0)
     int focus = ui.knob_at && plat_ms() - ui.knob_at < 2500u;
     if (focus) {
         char v[24]; knob_text(pg, ui.last_knob, v);
-        const char *nm = PAGES[pg][ui.last_knob].name;
+        const char *nm = knob_of(pg, ui.last_knob)->name;
         int x = cv_text(6, y0 + 24, &FONT_S, nm, C_SUB);
         cv_text(x + 10, y0 + 20, &FONT_M, v, pc);
     } else {
@@ -1248,7 +1413,7 @@ static void draw_panel_rows(int y0)
     for (int k = 0; k < 4; k++) {
         int cx = 60 * k + 30, y = y0 + 50;
         int hot = focus && k == ui.last_knob;
-        const char *nm = PAGES[pg][k].name;
+        const char *nm = knob_of(pg, k)->name;
         cv_text(cx - text_w(&FONT_XS, nm) / 2, y, &FONT_XS, nm, hot ? pc : C_SUB);
         char v[24]; knob_text(pg, k, v);
         const felucca_font_t *f = text_w(&FONT_M, v) <= 56 ? &FONT_M : text_w(&FONT_B, v) <= 58 ? &FONT_B : &FONT_XS;
@@ -1272,7 +1437,7 @@ static void speak(void)
         for (int k = 0; k < 4; k++) {
             char v[24];
             if (ui.page == PG_HOME) { int_text(set.cur.l[k].level, v); text_cat(t, ". "); text_cat(t, LAYER_NAME[k]); }
-            else { knob_text(ui.page, k, v); text_cat(t, ". "); text_cat(t, PAGES[ui.page][k].name); }
+            else { knob_text(ui.page, k, v); text_cat(t, ". "); text_cat(t, knob_of(ui.page, k)->name); }
             text_cat(t, " "); text_cat(t, v);
         }
         ann_say(t, 0, ANN_NOW);
@@ -1348,7 +1513,8 @@ void app_frame(void)
         if (dt > 0.2f) dt = 0.2f;
         ui.last_view = now; ui.t += dt;
         shapes_step(dt);
-        if (set.full) field_step(dt); else fractal_step(dt);
+        if (set.fractal == V_PEGS) pegs_step(dt);
+        else if (set.full) field_step(dt); else fractal_step(dt);
         draw_view();
     }
     {   /* the load guard: past 85 % of the render's time, fewer notes; back as it eases */

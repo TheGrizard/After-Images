@@ -1,37 +1,48 @@
 # After Images
 
-A generative synth for the M-VAVE FM-1. Press REC for a new piece of ambient music that keeps evolving: four layers
-(GROUND, BODY, LIGHT, DUST), each its own sequencer and sound in its own part of the spectrum, answering each other.
-Everything is in the scale; DRIFT mixes the layers in and out like an ambient mixer, ENTROPY breaks them apart.
+**A generative ambient composer for the M-VAVE FM-1.** Press REC and it writes a new piece: four layers (GROUND,
+BODY, LIGHT, DUST), each with its own sequencer and sound in its own part of the spectrum, answering each other,
+always in key and always evolving. Press REC again and the next piece follows on round the circle of fifths.
 
 ![After Images on the FM-1's screen: the notes as pegs of light, their colours mixing](img/screen.png)
 
-**Version {{VERSION}}** (a test release) · **[Install it](install/)** · [Play it in your browser](emu/) ·
-[Source](https://github.com/TheGrizard/After-Images)
+**Version {{VERSION}}** · **[Install it](install/)** · [Play it in your browser](emu/) ·
+[Source and full manual](https://github.com/TheGrizard/After-Images)
 
-## Installing
+## What it does
 
-Open the [installer](install/) in Chrome or Edge on a computer, plug the FM-1 in by USB and follow the page. It
-installs over M-VAVE's own firmware or another FM-1 firmware, on FM-1s with either flash chip, and can put M-VAVE's
-firmware back. You install it at your own risk. Or [download {{PKG}}](firmware/{{PKG}}) for the command-line
-installer: `python3 tools/fm1_install.py {{PKG}}`.
+- **One button, a whole piece:** a key, a tempo, four sounds, four sequencers, a featured effect, a palette and a name.
+- **Pieces that lead on:** each new key is a fifth away, the relative minor or major, or another mode on the root.
+  Hold REC to stay in key.
+- **Systems, not dice:** eleven sequencers, from Euclidean rings and Markov chains to the Lorenz attractor and
+  Conway's Life, patched so one layer's notes nudge another's.
+- **Nineteen engines:** FM, DX, phase distortion, plucked strings, glass, breath, voices, an 80s string machine and
+  more, with ENTROPY turning their synthesis in on itself.
+- **An ambient mixer:** DRIFT fades the layers in and out, walks them round the stereo field and slowly morphs their
+  effects and character.
+- **Shimmer, reverse echo, grain clouds and tape:** shared effects with a send for each layer.
+- **Three visuals:** MATRIX, RORSCHACH and MOSH, each breeding colour from the music.
+- **Plays with your gear:** follows MIDI clock to the beat and the bar (an Ableton Move, say), sends each layer on its
+  own MIDI channel and records over USB audio.
 
-## Playing
+## Quick start
 
-| Control | What it does |
-|---|---|
-| K1 to K4 | at HOME the four layers' levels (shown while you turn); on the other pages, the page's four macros |
-| HOME held + K1 to K4 | the macros: MOOD, ACTIVITY, EVOLVE, DRIFT |
-| HOME, EDIT, SEQ, ENV, FX, LFO, GLO, ARP | the pages: HOME, SOUND, SEQUENCE, MIX (again: VOICE), SENDS (again: EFFECTS), MOTION, SCALE (again: SCREEN), MIDI OUT (again: MIDI IN, USB AUDIO) |
-| SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play; PRESET its engine |
-| REC | a new piece; held, a new key, scale and tempo too; SEL held + REC, the chosen layer anew |
-| OCT- / OCT+ | back and forward through the pieces REC replaced |
-| SAVE, ALGORITHM | keep the piece (up to 16), step through them |
-| PLAY | stop and start |
-| white keys | the scale's notes; black keys its chords |
+1. Open the [installer](install/) in Chrome or Edge on a computer, plug in the FM-1 by USB and follow the page.
+2. It starts playing. **K1 to K4** set the four layers' levels.
+3. **REC** for a new piece; **held**, a new piece in the same key.
+4. **Hold HOME and turn K1 to K4** for the macros: MOOD, ACTIVITY, EVOLVE and DRIFT.
+5. The **white keys** play the scale and the **black keys** its chords, on the layer SEL picks.
+6. **SAVE** keeps a piece; ALGORITHM steps through your saved ones.
+7. **Stop with PLAY before switching off**: a few seconds later it keeps the piece and your settings.
 
-MIDI out over USB: each layer on its own channel, the keys on another, clock if you want it. MIDI in plays the layers on
-the same channels and can follow a clock. Over USB audio the mix goes out as one stereo pair.
+The [full manual](https://github.com/TheGrizard/After-Images#controls) lists every page and setting.
+
+## Installing and safety
+
+The installer works over M-VAVE's own firmware or another FM-1 firmware, on FM-1s with either flash chip, and can put
+M-VAVE's firmware back at any time. After Images is unofficial: you install it at your own risk. For the command
+line, [download {{PKG}}](firmware/{{PKG}}) and use fm1-base's installer: `python3 tools/fm1_install.py {{PKG}}`.
+Problems and ideas are welcome as [issues](https://github.com/TheGrizard/After-Images/issues).
 
 Made by [TheGrizard](https://github.com/TheGrizard) on [fm1-base](https://github.com/charlesvestal/fm1-base) and
 felucca-bsp. Free software under the MPL-2.0.

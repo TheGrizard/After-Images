@@ -1,106 +1,160 @@
 # After Images
 
-A generative synth for the M-VAVE FM-1. Press REC and it makes a new piece of ambient music that keeps evolving:
-four layers, each its own sequencer driving its own sound in its own part of the spectrum, listening to each other.
-Musical (everything is locked to the scale), but ENTROPY can break it apart. A slow leveller keeps every piece
-at about the same loudness.
+**A generative ambient composer for the M-VAVE FM-1.** Press REC and it writes a new piece of music: four layers in
+four parts of the spectrum, each with its own sequencer and sound, listening and answering each other, always in key,
+always evolving. Press REC again and the next piece follows on from the last, round the circle of fifths.
 
-By [TheGrizard](https://github.com/TheGrizard). Built on [fm1-base](https://github.com/charlesvestal/fm1-base) (MPL-2.0)
-and felucca-bsp. Works on both FM-1 flash chips.
+Free and open source (MPL-2.0). By [TheGrizard](https://github.com/TheGrizard), built on
+[fm1-base](https://github.com/charlesvestal/fm1-base). Works on both FM-1 flash chips.
 
 ![After Images on the FM-1's screen](docs/screen.png)
 
-## The four layers
+**[Install it in your browser](https://TheGrizard.github.io/After-Images/install/)** ·
+[Try it in the emulator](https://TheGrizard.github.io/After-Images/emu/) ·
+[Releases](https://github.com/TheGrizard/After-Images/releases)
 
-| Layer | Colour | Band | Its part |
-|---|---|---|---|
-| GROUND | red | sub and bass, ~30-200 Hz | the root, its fifth and octave: the floor |
-| BODY | blue | low mids, ~150 Hz-1 kHz | the chords (Detroit voicings when MOOD is up) |
-| LIGHT | green | mids, ~500 Hz-4 kHz | the melody |
-| DUST | white | highs, ~2-12 kHz | the air: specks, chimes, breath |
+## What makes it different
 
-Each piece gives every layer one of ten **sequencers**, shuffled: EUCLID (Euclidean rings), TURING (a looping shift
-register that flips bits), MARKOV (a table of chances), LORENZ (the attractor: a note at each loop's peak), BOUNCE
-(bouncing balls), ORBITS (planets with different years), LIFE (a cellular automaton), CHIMES (wind chimes in gusts),
-PHASE (one phrase on two players drifting apart, Steve Reich's way), DRUNK (a Brownian walk) and MELODY (a long
-melody the early-90s Warp way: a motif, its answer, a turn, the motif coming home; looped, changing slowly; LIGHT sings
-one in half the pieces). And one of ten
-**engines** (nineteen): DRIFT SAW, FM, DX (four-operator FM, four algorithms, each modulator fading at its own pace),
-STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an 80s string machine), E.PIANO (an 80s FM electric piano),
-TRIANGLE, SINE, SQUARE, CZ (80s phase distortion), SYNC (a hard-synced saw), SHAPES (unusual waves: rectified, trapezoid,
-sine of a sine, parabola, bent; DRIFT moves through them) and BOARDS (a saw and a square a little apart through a dark
-filter that opens slowly on each note). Every piece has at least one
-heavy layer and one soft one. A piece is a seed: the same piece always starts the same way.
+Most FM-1 firmwares are instruments you play or program. After Images composes.
 
-It is patched like a modular. Every sequencer has a second output, a CV, that shapes each note's sound: the
-attractor's position, the Turing register's upper bits, the ball's speed, the automaton's population. Accents open
-the filter and add weight. Each layer's activity is patched into another layer's filter (which into which is the
-piece's own), and a random voltage, stepping every few beats, moves each one (FLOW).
+- **One button, a whole piece.** REC deals a key, a tempo, four sounds, four sequencers, a featured effect, a colour
+  palette and a name. The same piece always starts the same way, and OCT- and OCT+ step back and forward through them.
+- **Pieces that lead on from each other.** Each new key is a fifth up or down, the relative major or minor, or another
+  mode on the same root, mostly minor and consonant. Hold REC to stay in key.
+- **Layers with roles.** GROUND (red, the bass), BODY (blue, the chords), LIGHT (green, the melody) and DUST (white,
+  the air), each kept to its own part of the spectrum, with a heavy and a soft one in every piece.
+- **Systems, not dice.** Eleven sequencers (Euclidean rings, a Turing machine, Markov chains, the Lorenz attractor,
+  bouncing balls, orbits, Conway's Life, wind chimes, Reich-style phasing, a drunk walk and long early-90s Warp
+  melodies), patched together like a modular: one layer's notes nudge another's system.
+- **An ambient mixer.** DRIFT fades the layers in and out, walks them round the stereo field and morphs each one's
+  effects and character over half-minutes, so the piece never settles.
+- **Three visuals that play along.** MATRIX (a pegboard of light breeding colour mixes), RORSCHACH (a folded inkblot
+  swelling to the beat) and MOSH (shards or pebbles breeding and moulding where the music sits in the stereo field).
+- **Plays with your other gear.** It follows MIDI clock to the beat and the bar (an Ableton Move, say), sends each
+  layer on its own MIDI channel, and records over USB audio.
 
-LINK makes the layers answer each other: a note in one nudges another's system (a ball dropped, a bit flipped, the
-attractor kicked) and now and then moves the harmony on. A heavy GROUND note ducks BODY and DUST, so the low end
-stays clear.
+## Quick start
 
-## Playing it
+1. **Install.** Open the [web installer](https://TheGrizard.github.io/After-Images/install/) in Chrome or Edge on a
+   computer, plug in the FM-1 by USB and follow the page. (Or download the `.fwsc` from
+   [Releases](https://github.com/TheGrizard/After-Images/releases) and use fm1-base's command-line installer,
+   `tools/fm1_install.py`, which needs mido and python-rtmidi: `py -V:3.12 fm1_install.py after-images-X.Y.fwsc` on
+   Windows, `python3 fm1_install.py ...` elsewhere.)
+2. **Listen.** It starts playing. Turn **K1 to K4** to set the four layers' levels.
+3. **Press REC** for a new piece. Hold it for a new piece in the same key.
+4. **Hold HOME and turn K1 to K4** for the macros that steer it: MOOD, ACTIVITY, EVOLVE and DRIFT.
+5. **Play the keys.** White keys play the scale, black keys its chords, on the chosen layer's sound (SEL picks the layer).
+6. **SAVE** keeps a piece you love; ALGORITHM steps through your saved ones.
+7. **Stop with PLAY before switching off**, and wait a few seconds: it then keeps the piece and your settings.
+
+## Controls
+
+### Everywhere
 
 | Control | What it does |
 |---|---|
-| K1 to K4 | at HOME, the four layers' levels: they rise up from the bottom of the screen while you turn; on the other pages, the page's four macros (the one you turn shows big) |
-| HOME held + K1 to K4 | the macros that steer where the music goes: MOOD (a tilt, 12 o'clock as the piece is set: to the left darker, the sub up, to +9 dB; to the right brighter, the upper layers losing their lows until GROUND alone carries the bass; and triads to sevenths to ninths), ACTIVITY, EVOLVE (how much the form changes), DRIFT (an ambient mixer, the way Steve Roach's Immersion Station evolves: the layers' levels wander in and out, sometimes leaving one alone, each walking slowly round the stereo field, the far ones thinning and turning to reverb as if in the distance; and each layer's character morphing over half-minutes, its reverb, echo, grain and dirt sends, TONE, WEIGHT and ENTROPY each wandering at its own pace, so the piece never settles; at 0 everything stays as set) |
-| EDIT | SOUND for the chosen layer: ENGINE, TONE (a DJ's filter: 12 o'clock open, left a low-pass sweeping down, right a high-pass sweeping up), WEIGHT (soft to heavy), ENTROPY (to halfway the engine's own strangeness; past it synthesis turning on itself: a chaos oscillator at each note's pitch blending in, FM feedback growling to a DX's screech, PWM swinging faster and wider, or a sine phase-modulated by the pulse; and each engine its own way, STRING slack and sagging, GLASS's partials drifting apart, E.PIANO's tines bent, VOICE babbling) |
-| SEQ | SEQUENCE for the chosen layer: TYPE, DENSITY, RATE, MUTATE |
-| ENV | MIX for the chosen layer: LEVEL, ATTACK, RELEASE, OCTAVE |
-| ENV again | VOICE for the chosen layer: F.GLIDE (the filter glides after each new note; the pitch never slides), LEGATO (notes join, not started again), SWEEP (the filter opening over each note), RESO |
-| FX | SENDS for the chosen layer: how much of it goes to the REVERB, the ECHO, the GRAIN, and how much DIRT it gets (so GROUND can go only to the reverb while LIGHT is fuzzed and echoed). A send always does something: DIRT's send drives harder into the tape, and a GRAIN send wakes a gentle cloud even with GRAIN's own at 0 |
-| FX again | EFFECTS, shared by the layers: REVERB (to 12 o'clock the room, small to vast; past it the shimmer, an octave up, and by full an octave down too), ECHO (to 12 o'clock a tempo-locked echo with a tape wobble; past it a reversed, smeared wash), GRAIN (a cloud; right up, FREEZE), DIRT (the character, tape pushed: WARM saturation, FUZZ, then BREAK up: hiss, sputter, dropouts) |
-| LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
-| LFO again | WARBLE, Boards of Canada's worn tape in the synth itself: WARBLE (the pitch wandering slowly, the whole piece as one, an LFO on an LFO), FLUTTER (a faster shiver), DETUNE (everything a touch flat), CHORUS (the Juno's) |
-| GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
-| GLO a third time | VISUAL: MATRIX (the pegboard), MOSH (shards or pebbles, SHAPES beside it: each note a shape in its layer's ink where it sits in the stereo field at its pitch, mixes breeding beside them, overlaps mixing, the shapes moulding as they age) or RORSCHACH (a folded inkblot: the layers' inks drifting and swelling by the beat, each note a blot, the colours bleeding where they meet, voids carving black through) |
-| GLO again | SCREEN, the chosen visual's own four. RORSCHACH: SIZE, GAPS (the black through it), MIX (how far the colours bleed), FADE. MOSH: SIZE (the zoom), BREED, MOULD (how far the shapes reshape), FADE. MATRIX, the pegboard: COUNT (8 to 24 pegs across), SIZE (a speck to touching), BREED (how fast mixes come), FADE (how long things linger). REC deals a new colour palette each time, none twice until all nine have come |
-| ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK (INT: its own tempo; IN: following MIDI clock; OUT: sending it) |
-| ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (the same setting as MIDI OUT's: IN follows MIDI clock, its tempo, its beats and bars, start and stop), CC |
-| ARP a third time | USB AUDIO (one stereo pair, the mix): RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1) |
-| SELECT, or tap SEL | the layer the SOUND, SEQUENCE and MIX pages and the keys play |
-| PRESET | the chosen layer's engine |
-| REC | a new piece at a new tempo (65 to 110 BPM) in a new key, round the circle of fifths from the last so the pieces lead on from one another (up a fifth, down a fifth, the relative major or minor, or the same root in another mode; mostly minor and consonant scales), featuring one effect: shimmer, reverse echo, a grain cloud, frozen grains, tape saturation, tape fuzz, wide space or HAZE (warble, chorus, flat, dark, BOARDS), dealt so none comes twice in a row |
+| K1 to K4 | at HOME the layers' levels (shown while you turn); elsewhere the page's four settings |
+| HOME held + K1 to K4 | the macros: **MOOD** (a tilt round 12 o'clock: left darker with more sub, right brighter with GROUND the only bass; triads to sevenths to ninths), **ACTIVITY**, **EVOLVE** (how much the form changes), **DRIFT** (the ambient mixer: 0 keeps everything as set) |
+| REC | a new piece, in a key that follows on from the last |
 | REC held | a new piece in the same key and scale |
 | SEL held + REC | the chosen layer anew: a new sequencer and sound |
 | OCT- / OCT+ | back and forward through the pieces REC replaced |
-| SAVE | keep the piece (up to 16); ALGORITHM steps through them |
-| PLAY | stop and start (it fades) |
-| HOME | back home from any page; tapped at home, the processor's load, the audio drops since power-on, and whether saving works |
-| white keys | the scale's notes, up from the key, on the chosen layer's sound and through its TONE, DIRT and ENTROPY: no wrong notes |
-| black keys | the scale's chords: I to VII, then I to IV an octave up (CHORDS sets triads, sevenths, ninths, sus, spread, fifths) |
+| SAVE / ALGORITHM | keep the piece (up to 16) / step through the saved ones |
+| PLAY | stop (it fades) and start |
+| SELECT, or tap SEL | the layer the SOUND, SEQUENCE, MIX, VOICE and SENDS pages, and the keys, play |
+| PRESET | the chosen layer's engine |
+| white keys | the scale's notes, through the chosen layer's sound: no wrong notes |
+| black keys | the scale's chords, I to VII then I to IV an octave up |
+| HOME (tapped at home) | the processor's load, audio drops since power-on, and whether saving works |
 
-The home screen is a pegboard of light filling the whole screen: each note lights the peg at its pitch (low at the
-bottom) and its place in the stereo field, in its layer's colour, fading as it ends; whenever two colours are lit, a peg
-in their mix appears about halfway between them (red and blue: purple), mixes mix with each other, the board fills,
-and then the oldest fade out as new ones come, each breathing at its own pace. Only lit pegs show; the rest is black.
+### The pages
 
-The knobs reach the notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWEEP or RESO and a held note
-changes with them. SWEEP opens a filter over each note (up to about three seconds), on every engine.
+Press a page's button again for its next page; dots by the page's name show how many it has.
 
-When the FM-1 is working hard it eases off by itself: fewer notes, fewer voices, quiet tails let go sooner; an
-effect turned down, or with nothing sent to it, costs nothing.
+| Button | Page | K1 · K2 · K3 · K4 |
+|---|---|---|
+| EDIT | SOUND (chosen layer) | ENGINE · TONE · WEIGHT · ENTROPY |
+| SEQ | SEQUENCE (chosen layer) | TYPE · DENSITY · RATE · MUTATE |
+| ENV | MIX (chosen layer) | LEVEL · ATTACK · RELEASE · OCTAVE |
+| ENV again | VOICE (chosen layer) | F.GLIDE · LEGATO · SWEEP · RESO |
+| FX | SENDS (chosen layer) | REVERB · ECHO · GRAIN · DIRT |
+| FX again | EFFECTS (shared) | REVERB · ECHO · GRAIN · DIRT |
+| LFO | MOTION | LINK · WARP · FLOW · CHAOS |
+| LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · CHORUS |
+| GLO | SCALE | KEY · SCALE · CHORDS · TEMPO |
+| GLO again | SCREEN | the chosen visual's four (below) |
+| GLO a third time | VISUAL | VISUAL · · SHAPES (MOSH's) · |
+| ARP | MIDI OUT | OUT · CHANNEL · KEYS CH · CLOCK |
+| ARP again | MIDI IN | IN CH · LAYERS · CLOCK · CC |
+| ARP a third time | USB AUDIO | RECORD · COMPUTER |
 
-Each piece gets a name from its seed: two words, one, a made-up one, or one chopped up and numbered (FLS 74,
-QURIDIAN, ZHEIGRO 17).
+### What the settings do
 
-The piece playing and your settings are kept by themselves when you stop with PLAY (never while the music plays: writing
-the flash stops the audio for a moment), so stop before switching off and the FM-1 comes back where you left it.
-SAVE keeps a piece at once, whenever you press it.
+- **TONE** is a DJ's filter: 12 o'clock open, left a low-pass sweeping down, right a high-pass sweeping up.
+- **WEIGHT** goes from soft to heavy.
+- **ENTROPY:** to halfway, the engine's own strangeness. Past it, synthesis turns on itself: a chaos oscillator at each
+  note's pitch (FM feedback, PWM or pulse-driven FM), STRING going slack and sagging, GLASS's partials drifting apart,
+  E.PIANO's tines bending, VOICE babbling.
+- **F.GLIDE** glides the filter after each new note (the pitch never slides). **SWEEP** opens a filter over each
+  note, on every engine.
+- **Sends and effects.** Each layer sends its own amount to the shared effects, so GROUND can go only to the reverb
+  while LIGHT is fuzzed and echoed. **REVERB:** to 12 o'clock a room, small to vast; past it a shimmer an octave up,
+  and by full an octave down too. **ECHO:** a tempo-locked tape echo; past 12 o'clock a reversed, smeared wash.
+  **GRAIN:** a cloud; right up it freezes. **DIRT:** tape pushed hard, from warm saturation to fuzz to breakup with
+  hiss, sputter and dropouts. A send always does something, even with the shared amount at 0.
+- **MOTION:** LINK (layers answering each other), WARP (swing, phrases speeding and slowing), FLOW (slow random
+  movement), CHAOS (ratchets and skips).
+- **WARBLE** puts Boards of Canada's worn tape in the synth itself: the pitch wandering, a faster flutter, everything
+  a touch flat, and the Juno's chorus.
 
-MIDI out (USB): each layer's notes on its own channel (1-4 by default), the keys on another (5), clock if you want it.
-MIDI in (USB or the TRS jack): notes on the layers' channels play those layers, others the chosen layer, all put into
-the scale; CC 20-23 are HOME's macros, 24-27 EFFECTS', 28-31 MOTION's; clock, start and stop followed with CLOCK at IN.
+The knobs reach notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWEEP or RESO and held notes follow.
 
-Following a clock, After Images locks to the leader's beats and bars, not only its tempo: Start puts it at the top of
-the bar with every sequencer's steps on the 16ths, and it stays there through a new piece (REC) or a change of tempo.
-To play along with an Ableton Move: a USB cable from Move's USB-A port to the FM-1, Move's MIDI Sync set to Out, and
-CLOCK at IN (on either MIDI page). The FM-1's TRS jack takes clock too, from anything with a MIDI out.
+## The sounds
 
-Every note lands somewhere new in the stereo field and wanders as it sounds: DRIFT and CHAOS throw them wider.
+Nineteen engines: DRIFT SAW, FM, DX (four-operator FM), STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an
+80s string machine), E.PIANO (80s FM), TRIANGLE, SINE, SQUARE, CZ (phase distortion), SYNC, SHAPES (unusual
+waveforms) and BOARDS (a saw and square drifting apart through a slowly opening dark filter).
+
+Each REC also features one effect: shimmer, reverse echo, a grain cloud, frozen grains, tape saturation, tape fuzz,
+wide space or HAZE (warble, chorus, flat and dark), never the same twice in a row. A slow leveller keeps every piece
+at about the same loudness.
+
+## The visuals
+
+Choose on the VISUAL page (GLO three times); set them on SCREEN (GLO twice). REC deals a new colour palette each time,
+and the four layers always keep four clearly different hues.
+
+- **MATRIX:** a pegboard. Each note lights the peg at its pitch and stereo position, mixes breed between lit colours,
+  the board fills and old ones fade. SCREEN: COUNT, SIZE, BREED, FADE.
+- **RORSCHACH:** a folded inkblot. Each layer's ink swells with the beat and as it sounds, notes drop blots, the colours
+  bleed together and voids carve black through. SCREEN: SIZE, GAPS, MIX, FADE.
+- **MOSH:** shards or pebbles (SHAPES on the VISUAL page). Each note lights a shape where it sits in the stereo field,
+  mixes breed beside them, overlaps mix and the shapes slowly reshape. SCREEN: SIZE (the zoom), BREED, MOULD, FADE.
+
+## MIDI and sync
+
+- **MIDI out** (USB): each layer on its own channel (1 to 4 by default), the keys on another (5), with their chords.
+- **MIDI in** (USB, or the FM-1's TRS jack): notes on the layers' channels play those layers, others the chosen layer,
+  all put into the scale. CC 20-23 move HOME's macros, 24-27 the effects, 28-31 MOTION.
+- **CLOCK** is one setting on both MIDI pages: INT (its own tempo), IN (following) or OUT (sending).
+- **Following a clock**, it locks to the leader's beats and bars, not only its tempo, and stays there through a new
+  piece or a change of tempo. With an **Ableton Move**: a USB cable from Move's USB-A port to the FM-1, Move's MIDI
+  Sync set to Out, and CLOCK at IN.
+- **USB audio:** the mix as one stereo pair (RECORD at MASTER's level or full), and the computer's audio through the
+  FM-1 if you want it.
+
+## Saving
+
+The piece playing and your settings are kept by themselves a few seconds after you stop with PLAY (never while the
+music plays, because writing the flash stops the audio for a moment). So **stop before switching off**. SAVE keeps a
+piece at once, whenever you press it, with a soft dip in the sound while it writes.
+
+## Safety
+
+After Images is unofficial and not affiliated with M-VAVE. Installing any custom firmware is at your own risk. The web
+installer can put M-VAVE's own firmware back at any time, and you can go back to any earlier After Images from
+[Releases](https://github.com/TheGrizard/After-Images/releases). If something sounds wrong, tap HOME to see the load
+and the audio drops, and please [open an issue](https://github.com/TheGrizard/After-Images/issues).
 
 ## Building it
 
@@ -108,32 +162,27 @@ Every note lands somewhere new in the stereo field and wanders as it sounds: DRI
     cd After-Images
     base/tools/setup_toolchain.sh        # JieLi's compiler and the AC79 SDK's three files, checked against a lock
     ./build.sh                           # app/build/after-images.fwsc
+    python3 base/tools/fm1_install.py app/build/after-images.fwsc   # needs mido and python-rtmidi
 
-Install it with the FM-1 plugged in by USB (needs `pip install mido python-rtmidi`; on Windows, Python 3.12):
-
-    python3 base/tools/fm1_install.py app/build/after-images.fwsc
-
-Or from a release: download the `.fwsc` and run `py -V:3.12 fm1_install.py after-images-X.Y.fwsc`, or use the
-[web installer](https://TheGrizard.github.io/After-Images/install/).
-
-### On the computer first
+On the computer first:
 
     ./build.sh --host
-    tests/run_tests.sh                   # the simulator's checks: pages, REC, saving, the keys, the screen reader
+    tests/run_tests.sh                   # the simulator's checks: pages, REC, saving, sync, the keys, the screen
     make -C app/tools && app/tools/render 1234 120 piece.wav all    # a piece to a WAV, without the screen
 
-### Releases
+Pushing a tag such as `v1.0` builds, tests and signs the release on GitHub (`.github/workflows/release.yml`) and
+updates the installer site.
 
-Pushing a tag such as `v0.1` builds the release on GitHub (`.github/workflows/release.yml`, the FM-1 builder shared
-by fm1-base's firmwares), runs the tests and signs the packages.
+## Inspiration and thanks
 
-## Inspiration
+Cyma Forma's RND (one button, four layers, a new idea each press), Mutable Instruments' modules, Steve Roach's slowly
+shifting ambient mixes, Boards of Canada's worn tape, and Autechre's way of working: systems of rules rather than dice,
+layers that trigger each other, and emotional chords under the strangeness. No code from any of them is in here.
 
-Cyma Forma's RND (one button, four layers, a new idea each press), Mutable Instruments' modules, and Autechre's way
-of working: systems of rules rather than dice, layers that trigger each other, rhythm without obvious anchors, and
-emotional chords under the strangeness. No code from any of them is in here.
+Built on [fm1-base](https://github.com/charlesvestal/fm1-base) by Charles Vestal and felucca-bsp; thank you.
 
 ## Licence
 
-MPL-2.0. The screen's font is DejaVu Sans (`app/fonts`, Bitstream Vera's licence: `app/fonts/LICENSE-DejaVu.txt`). See fm1-base's LICENSING.md for the parts it is built from. M-VAVE and FM-1 are trademarks of their owners;
-After Images is not affiliated with M-VAVE.
+MPL-2.0. The screen's font is DejaVu Sans (`app/fonts`, Bitstream Vera's licence: `app/fonts/LICENSE-DejaVu.txt`).
+See fm1-base's LICENSING.md for the parts it is built from. M-VAVE and FM-1 are trademarks of their owners; After
+Images is not affiliated with M-VAVE.

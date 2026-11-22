@@ -517,9 +517,11 @@ static void load_step(int d)
     char nm[32]; piece_name(set.cur.seed, nm); say_text("PIECE", nm);
 }
 
+static uint32_t stopped_at;               /* when PLAY stopped it (the fade's end: the moment to keep the changes) */
 static void play_toggle(void)
 {
     set.playing = (uint8_t)!set.playing;
+    if (!set.playing) stopped_at = plat_ms();
     eng.playing = set.playing;
     if (set.midi_on && set.midi_clock) midi_send(0x0Fu | (set.playing ? 0xFAu : 0xFCu) << 8);
     if (!set.playing) engine_all_off(&eng);
@@ -1119,7 +1121,9 @@ void app_frame(void)
             eng.gov = g < 0.3f ? 0.3f : g > 1.0f ? 1.0f : g;
         }
     }
-    if (autosave_at && (int32_t)(now - autosave_at) >= 0) {
+    /* the piece and settings kept: never while the music plays (erasing the flash stops the audio for tens of ms, a
+     * drop), so when it has stopped and faded out (PLAY) */
+    if (autosave_at && (int32_t)(now - autosave_at) >= 0 && !set.playing && now - stopped_at >= 2500u) {
         autosave_at = 0;
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
     }

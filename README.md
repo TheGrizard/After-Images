@@ -86,7 +86,9 @@ effect turned down, or with nothing sent to it, costs nothing.
 Each piece gets a name from its seed: two words, one, a made-up one, or one chopped up and numbered (FLS 74,
 QURIDIAN, ZHEIGRO 17).
 
-The piece playing is kept by itself a few seconds after your last change, so the FM-1 comes back where you left it.
+The piece playing and your settings are kept by themselves when you stop with PLAY (never while the music plays: writing
+the flash stops the audio for a moment), so stop before switching off and the FM-1 comes back where you left it.
+SAVE keeps a piece at once, whenever you press it.
 
 MIDI out (USB): each layer's notes on its own channel (1-4 by default), the keys on another (5), clock if you want it.
 MIDI in (USB or the TRS jack): notes on the layers' channels play those layers, others the chosen layer, all put into

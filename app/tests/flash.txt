@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
-# saving: a piece kept across a power-off, the piece playing kept by itself, then a flash that refuses saves
+# saving: a piece kept across a power-off; the piece playing kept by itself, but only once PLAY has stopped it (a flash
+# erase while it plays would drop the audio); then a flash that refuses saves
 wait 2500
 tap HOME
 wait 200
@@ -15,6 +16,17 @@ wait 100
 turn K1 2
 wait 9500
 expect key 11
+expect playing 1
+reboot
+wait 2500
+expect key 9
+tap GLO
+wait 100
+turn K1 2
+wait 9500
+tap PLAY
+wait 3500
+expect playing 0
 reboot
 wait 2500
 expect nsaved 1

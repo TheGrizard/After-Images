@@ -39,8 +39,8 @@ typedef struct {
     uint8_t cc_in;                       /* CCs move the macros */
     uint8_t usb_full;                    /* USB recording at full level, not at MASTER */
     uint8_t usb_play;                    /* the computer's audio through the FM-1, 0..100 */
-    uint8_t rsv4;                        /* (v0.2-0.7's STEMS: USB audio is the one stereo mix now) */
-    uint8_t palette, rsv3[3];            /* the screen: the palette (dealt by REC); (v0.5-0.7's VISUAL, FULL, GLOW) */
+    uint8_t visual;                      /* VISUAL: MATRIX (the pegs) or RORSCHACH (the inkblot) (v0.2-0.7: STEMS) */
+    uint8_t palette, ink_gaps, ink_mix, rsv3;   /* the screen: the palette (dealt by REC); RORSCHACH's GAPS and MIX */
     uint8_t breed, fade, pegs_set;       /* PEGS: how fast mixes breed, how long things linger (0..100); pegs_set: 2 once all four are set */
     uint8_t peg_n, peg_size;             /* PEGS: COUNT (an index into PEG_NS), SIZE 0..100 */
 } settings_t;
@@ -61,8 +61,8 @@ static const char *const SYNC_NAME[NSYNC] = { "INT", "IN", "OUT" };
 static void settings_v2(void)             /* what v0.2 added, as it starts */
 {
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
-    set.usb_full = 0; set.usb_play = 100; set.rsv4 = 0;
-    set.palette = 0; memset(set.rsv3, 0, sizeof set.rsv3);
+    set.usb_full = 0; set.usb_play = 100; set.visual = 0;
+    set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.rsv3 = 0;
     set.breed = 50; set.fade = 50; set.pegs_set = 2; set.peg_n = PEG_N_DEF; set.peg_size = 50;
 }
 
@@ -80,7 +80,8 @@ static int settings_ok(void)
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.midi_clock > 1 || set.sync >= NSYNC) return 0;
     if (set.in_ch > 16 || set.layers_in > 1 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
-        || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100) return 0;
+        || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
+        || (set.pegs_set == 3 && (set.visual > 1 || set.ink_gaps > 100 || set.ink_mix > 100))) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -109,7 +110,8 @@ static void settings_load(void)
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
     if (set.pegs_set != 1 && set.pegs_set != 2) { set.breed = 50; set.fade = 50; }   /* (a store from before PEGS) */
-    if (set.pegs_set != 2) { set.peg_n = PEG_N_DEF; set.peg_size = 50; set.pegs_set = 2; memset(set.rsv3, 0, sizeof set.rsv3); }   /* (before COUNT, SIZE) */
+    if (set.pegs_set < 2 || set.pegs_set > 3) { set.peg_n = PEG_N_DEF; set.peg_size = 50; }   /* (before COUNT, SIZE) */
+    if (set.pegs_set != 3) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; set.rsv3 = 0; set.pegs_set = 3; }   /* (before RORSCHACH) */
     if (set.clock_in || set.midi_clock) {    /* (v0.2-0.12's two CLOCK switches: one setting now, IN first if both were on) */
         set.sync = set.clock_in ? SYNC_IN : SYNC_OUT; set.clock_in = set.midi_clock = 0;
     }
@@ -297,14 +299,15 @@ static void int_text(int32_t v, char *b)
 static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 /* ------------------------------------------------------------------ the pages */
-enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_WARBLE, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB, NPAGES };
+enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_WARBLE, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB,
+       PG_VISUAL, NPAGES };   /* (VISUAL last, GLO's third: the pages before keep their numbers) */
 static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "SENDS", "EFFECTS", "MOTION", "WARBLE", "SCALE", "SCREEN",
-                                                "MIDI OUT", "MIDI IN", "USB AUDIO" };
+                                                "MIDI OUT", "MIDI IN", "USB AUDIO", "VISUAL" };
 /* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: SCALE, SCREEN; ARP: MIDI OUT,
  * MIDI IN, USB) */
-static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP };
+static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
+       K_PEGN, K_SYNC, K_VIS, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -327,6 +330,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_SYNC, 2, SO(sync) } },
     { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_SYNC, 2, SO(sync) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
     { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
+    { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
 
@@ -372,6 +376,9 @@ static void settings_apply(void);
 
 static const Knob *knob_of(int pg, int k)
 {
+    static const Knob INK_KNOBS[4] = { { "SIZE", K_PCT, 2, SO(peg_size) }, { "GAPS", K_PCT, 2, SO(ink_gaps) },
+                                       { "MIX", K_PCT, 2, SO(ink_mix) }, { "FADE", K_PCT, 2, SO(fade) } };
+    if (pg == PG_SCREEN && set.visual) return &INK_KNOBS[k];   /* (SCREEN: the chosen visual's own four) */
     return &PAGES[pg][k];
 }
 
@@ -398,6 +405,7 @@ static void knob_text(int pg, int k, char *s)
     case K_GRAIN: if (v < 92) int_text(v, s); else text_cat(s, "FREEZE"); break;
     case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PEGN: int_text(PEG_NS[v % NPEG_NS], s); break;
+    case K_VIS: text_cat(s, v ? "RORSCHACH" : "MATRIX"); break;
     case K_SYNC: text_cat(s, SYNC_NAME[v % NSYNC]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
@@ -423,6 +431,7 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_INCH: return (float)v / 16.0f;
     case K_REC: return v ? 1.0f : 0.0f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
+    case K_VIS: return (float)v;
     case K_SYNC: return (float)v / (NSYNC - 1);
     case K_ENGINE: return (float)v / (NUM_ENGINES - 1);
     case K_SEQ: return (float)v / (NUM_SEQS - 1);
@@ -620,6 +629,7 @@ static void knob_turn(int k, int d)
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
+    case K_VIS: hi = 1; step = 1; break;
     case K_SYNC: hi = NSYNC - 1; step = 1; break;
     case K_ENGINE: hi = NUM_ENGINES - 1; step = 1; wrap = 1; break;
     case K_SEQ: hi = NUM_SEQS - 1; step = 1; wrap = 1; break;
@@ -980,6 +990,170 @@ static void draw_pegs(void)
     }
 }
 
+/* ------------------------------------------------------------------ INKBLOT: a Rorschach, morphing with the music
+ * A folded inkblot: the left half drawn, the right its mirror. Four inks, one a layer, drift and swell, larger as their
+ * layer sounds; each note drops a blot of its layer's ink at its pitch (high at the top) and its place in the stereo field
+ * (centre at the fold), which spreads and fades. Where inks meet their colours bleed into each other's mix; voids drift
+ * through, carving black. Everything moves by the beat (the piece's tempo, or the clock it follows), each ink swelling a
+ * little on the beat. SCREEN: SIZE, GAPS (the black through it), MIX (how far the colours bleed), FADE.
+ * The ink is worked out every 4 pixels, a strip at a time, and smoothed between, so its edges stay round */
+#define INK_MAX 24
+#define INK_VOIDS 5
+#define INK_G 4                                  /* the grid's step, pixels */
+#define INK_GC (120 / INK_G + 1)                 /* its columns over the left half (31) */
+#define INK_GR (60 / INK_G + 2)                  /* its rows over a 60-row strip, with the next strip's first */
+static struct { float x, y, r, born, life, ph; uint8_t layer, on; } ink[INK_MAX];
+static int ink_next = NUM_LAYERS;
+static float ink_rgb[NUM_LAYERS][3], ink_beat, ink_lv[NUM_LAYERS];
+static float ink_f[INK_GR][INK_GC];              /* the ink's depth (1.1 its edge), less the voids */
+static uint8_t ink_c[INK_GR][INK_GC][3];         /* its colour */
+static struct { float x, y, r2, k; } ink_now[INK_MAX];
+static struct { float x, y, r2; } void_now[INK_VOIDS];
+
+static void ink_colours(void)                    /* the palette's four, a near-white one turned to two others' mix, all vivid */
+{
+    for (int l = 0; l < NUM_LAYERS; l++) {
+        uint16_t c = LAYER_C[l];
+        int r = (c >> 11) * 255 / 31, g = ((c >> 5) & 63) * 255 / 63, b = (c & 31) * 255 / 31;
+        int mx = r > g ? (r > b ? r : b) : (g > b ? g : b), mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+        if (mx - mn < 70) {
+            c = rgb_mix(LAYER_C[(l + 1) % NUM_LAYERS], LAYER_C[(l + 2) % NUM_LAYERS]);
+            r = (c >> 11) * 255 / 31; g = ((c >> 5) & 63) * 255 / 63; b = (c & 31) * 255 / 31;
+        }
+        float m = (float)(r + g + b) / 3.0f, v[3] = { (float)r, (float)g, (float)b }, top = 1.0f;
+        for (int k = 0; k < 3; k++) { v[k] = fm_maxf(0.0f, m + (v[k] - m) * 1.8f); top = fm_maxf(top, v[k]); }
+        float s = fm_minf(1.5f, 235.0f / top);
+        for (int k = 0; k < 3; k++) ink_rgb[l][k] = fm_minf(255.0f, v[k] * s);
+    }
+}
+
+static float ink_strength(int i, float t)        /* in beats: in over 2, out over 4 */
+{
+    float a = t - ink[i].born, k = a < 2.0f ? 0.5f - 0.5f * fm_sin_turns(a * 0.25f + 0.25f) : 1.0f;
+    if (a > ink[i].life) { float z = fm_minf(1.0f, (a - ink[i].life) * 0.25f); k *= 0.5f + 0.5f * fm_sin_turns(z * 0.5f + 0.25f); if (z >= 1.0f) ink[i].on = 0; }
+    return k;
+}
+
+static void ink_note(const UiNote *n)
+{
+    int i = ink_next; ink_next = ink_next + 1 >= INK_MAX ? NUM_LAYERS : ink_next + 1;
+    float side = (float)(n->pan < 0 ? -n->pan : n->pan) / 100.0f;
+    ink[i].on = 1; ink[i].layer = n->layer % NUM_LAYERS; ink[i].born = ink_beat; ink[i].ph = (float)(jr() & 1023u) / 1023.0f;
+    ink[i].x = 112.0f - side * 85.0f - (float)(jr() % 14u);
+    ink[i].y = 24.0f + clampf(1.0f - ((float)n->note - 34.0f) / 68.0f, 0.0f, 1.0f) * 192.0f;
+    ink[i].r = 9.0f + (float)n->vel / 127.0f * 9.0f;
+    ink[i].life = 4.0f + (float)set.fade * 0.16f;
+}
+
+static int ink_n; static uint8_t ink_lay[INK_MAX];
+
+static void ink_step(void)
+{
+    uint32_t head = eng.uiq_head;                /* the notes since the last frame */
+    if (head - ui.uiq_tail > UI_Q) ui.uiq_tail = head - UI_Q;
+    while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; ink_note(&n); }
+    float t = ink_beat = eng.beat;
+    ink_colours();
+    float size = 0.6f + (float)set.peg_size * 0.008f, pulse = 1.0f - (t - fm_floorf(t)); pulse = pulse * pulse * pulse;
+    for (int l = 0; l < NUM_LAYERS; l++) {       /* the four inks, one a layer: larger as it sounds */
+        float want = 0.45f + 0.55f * clamp01(eng.meter[l] * 1.4f);
+        ink_lv[l] += (want - ink_lv[l]) * 0.04f;
+        ink[l].on = 1; ink[l].layer = (uint8_t)l; ink[l].ph = 0.23f * (float)l + 0.1f;
+        ink[l].x = 58.0f + 30.0f * fm_sin_turns(t * 0.018f + ink[l].ph);
+        ink[l].y = 120.0f + 78.0f * fm_sin_turns(t * 0.011f + ink[l].ph * 1.7f);
+        ink[l].r = 22.0f * ink_lv[l];
+    }
+    int n = 0;
+    for (int i = 0; i < INK_MAX; i++) {
+        if (!ink[i].on) continue;
+        float k = i < NUM_LAYERS ? 1.0f : ink_strength(i, t);
+        if (!ink[i].on || k < 0.002f) continue;
+        float sw = 0.9f + 0.08f * fm_sin_turns(t * 0.13f + ink[i].ph) + 0.07f * pulse;   /* (a swell on the beat) */
+        float x = ink[i].x, y = ink[i].y;
+        if (i >= NUM_LAYERS) { x += 6.0f * fm_sin_turns(t * 0.07f + ink[i].ph); y += 6.0f * fm_sin_turns(t * 0.055f + ink[i].ph * 1.3f); }
+        float r = ink[i].r * size * sw;
+        ink_now[n].x = x; ink_now[n].y = y; ink_now[n].r2 = r * r; ink_now[n].k = k; ink_lay[n] = ink[i].layer;
+        n++;
+    }
+    ink_n = n;
+    float gap = (float)set.ink_gaps / 50.0f;     /* GAPS: 0 .. 2 */
+    for (int v = 0; v < INK_VOIDS; v++) {
+        float ph = 0.37f * (float)v, sp = 0.6f + 0.2f * (float)v;
+        void_now[v].x = 70.0f + 38.0f * fm_sin_turns(t * 0.019f * sp + ph);
+        void_now[v].y = 120.0f + 85.0f * fm_sin_turns(t * 0.014f * sp + ph * 2.1f);
+        float r = (7.0f + (float)(v % 3) * 3.0f) * size;
+        void_now[v].r2 = r * r * 0.9f * gap;
+    }
+}
+
+/* the ink at one point of the grid: how deep (less the voids), and its colour */
+static uint8_t ink_near[INK_MAX]; static int ink_nn;   /* the inks near the strip being drawn (the rest too far to count) */
+static void ink_sample(float x, float y, float t, float mix, float *f_out, uint8_t *c)
+{
+    float f = 0, w = 0, cr = 0, cg = 0, cb = 0;
+    for (int j = 0; j < ink_nn; j++) {
+        int i = ink_near[j];
+        float dx = x - ink_now[i].x, dy = y - ink_now[i].y, q = ink_now[i].r2 / (dx * dx + dy * dy + 30.0f) * ink_now[i].k;
+        f += q;
+        float qw = q * q * q * (1.0f - mix) + q * mix;   /* MIX: each its own colour near its heart .. all bled together */
+        w += qw; cr += ink_rgb[ink_lay[i]][0] * qw; cg += ink_rgb[ink_lay[i]][1] * qw; cb += ink_rgb[ink_lay[i]][2] * qw;
+    }
+    float hole = 0;
+    for (int v = 0; v < INK_VOIDS; v++) { float dx = x - void_now[v].x, dy = y - void_now[v].y; hole += void_now[v].r2 / (dx * dx + dy * dy + 12.0f); }
+    float wob = (0.9f * fm_sin_turns(x * 0.0143f + t * 0.08f) + 0.8f * fm_sin_turns(y * 0.0111f - t * 0.064f)
+                 + 0.5f * fm_sin_turns((x + y) * 0.027f + t * 0.048f)) * 0.035f * fm_maxf(0.0f, 1.0f - fm_maxf(0.0f, f - 1.0f) * 2.0f);
+    *f_out = f + wob - hole;
+    if (w > 1e-6f) {                             /* the mix pushed back to full colour, as the pegs' are */
+        float r = cr / w, g = cg / w, b = cb / w, m = (r + g + b) / 3.0f;
+        r = fm_maxf(0.0f, m + (r - m) * 1.8f); g = fm_maxf(0.0f, m + (g - m) * 1.8f); b = fm_maxf(0.0f, m + (b - m) * 1.8f);
+        float top = fm_maxf(1.0f, fm_maxf(r, fm_maxf(g, b))), s = fm_minf(1.5f, 235.0f / top);
+        c[0] = (uint8_t)fm_minf(255.0f, r * s); c[1] = (uint8_t)fm_minf(255.0f, g * s); c[2] = (uint8_t)fm_minf(255.0f, b * s);
+    } else c[0] = c[1] = c[2] = 0;
+}
+
+static void draw_ink(void)
+{
+    int v0 = -cv_oy, v1 = -cv_oy + (int)cv_h;    /* the strip's rows, in the view's own */
+    if (v0 < 0) v0 = 0;
+    if (v1 > VIEW_H) v1 = VIEW_H;
+    if (v1 <= v0) return;
+    int g0 = v0 / INK_G, g1 = (v1 - 1) / INK_G + 1;
+    if (g1 - g0 + 1 > INK_GR) g1 = g0 + INK_GR - 1;
+    float t = ink_beat, mix = (float)set.ink_mix / 100.0f;
+    {   /* (an ink farther than 6 radii from the strip adds under 3 %: left out) */
+        float ya = (float)(g0 * INK_G) * 240.0f / (float)VIEW_H, yb = (float)(g1 * INK_G) * 240.0f / (float)VIEW_H;
+        ink_nn = 0;
+        for (int i = 0; i < ink_n; i++) {
+            float reach = 6.0f * fm_sqrtf(ink_now[i].r2);
+            if (ink_now[i].y + reach >= ya && ink_now[i].y - reach <= yb) ink_near[ink_nn++] = (uint8_t)i;
+        }
+    }
+    for (int gy = g0; gy <= g1; gy++)
+        for (int gx = 0; gx < INK_GC; gx++)
+            ink_sample((float)(gx * INK_G), (float)(gy * INK_G) * 240.0f / (float)VIEW_H, t, mix, &ink_f[gy - g0][gx], ink_c[gy - g0][gx]);
+    for (int v = v0; v < v1; v++) {
+        int gy = v / INK_G - g0; float fy = (float)(v % INK_G) * (1.0f / INK_G);
+        for (int x = 0; x < 120; x++) {
+            int gx = x / INK_G; float fx = (float)(x % INK_G) * (1.0f / INK_G);
+            float a = ink_f[gy][gx] + (ink_f[gy][gx + 1] - ink_f[gy][gx]) * fx;
+            float b = ink_f[gy + 1][gx] + (ink_f[gy + 1][gx + 1] - ink_f[gy + 1][gx]) * fx;
+            float f = a + (b - a) * fy, edge = (f - 1.1f) * (1.0f / 0.18f);
+            if (edge <= 0.0f) continue;
+            if (edge > 1.0f) edge = 1.0f;
+            float sh = edge * 0.88f * (0.88f + 0.12f * clamp01((f - 1.1f) * 2.0f));   /* (a slightly deeper rim, as pooled ink) */
+            int col[3];
+            for (int k = 0; k < 3; k++) {
+                float p = (float)ink_c[gy][gx][k] + ((float)ink_c[gy][gx + 1][k] - (float)ink_c[gy][gx][k]) * fx;
+                float q = (float)ink_c[gy + 1][gx][k] + ((float)ink_c[gy + 1][gx + 1][k] - (float)ink_c[gy + 1][gx][k]) * fx;
+                col[k] = (int)((p + (q - p) * fy) * sh);
+            }
+            uint16_t c = RGB(col[0], col[1], col[2]);
+            cv_pset(x, v, c); cv_pset(239 - x, v, c);   /* (folded: the right half the left's mirror) */
+        }
+    }
+}
+
+
 static void frame_box(int x, int y, int w, int h, uint16_t c)
 {
     cv_rect(x, y, w, h, C_BLACK);
@@ -1023,7 +1197,7 @@ static void draw_view(void)
         int h = VIEW_H - top < 60 ? VIEW_H - top : 60;
         cv_begin(240, (uint32_t)h, C_BLACK);
         cv_oy = -top; cv_y0 = 0; cv_y1 = h;
-        draw_pegs();
+        if (set.visual) draw_ink(); else draw_pegs();
         if (!set.playing) { int w = text_w(&FONT_M, "STOPPED"); cv_text(120 - w / 2, (panel ? PANEL_TOP : VIEW_H) / 2 - 12, &FONT_M, "STOPPED", C_SUB); }
         if (panel && top + h > PANEL_TOP) { cv_rect(0, PANEL_TOP, 240, PANEL_H, C_BLACK); draw_panel_rows(PANEL_TOP); }
         if (now < ui.list_until) draw_list();
@@ -1104,8 +1278,8 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "THE LAYERS ON FOUR CHANNELS", "LAYER CHANNELS PLAY THE LAYERS",
-            "RECORDING THE FM-1 OVER USB" };
-        cv_text(6, y0 + 26, &FONT_XS, HINT[pg], dim(C_SUB, 0.8f));
+            "RECORDING THE FM-1 OVER USB", "THE SCREEN: MATRIX OR RORSCHACH" };
+        cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }
     /* four columns: label, value, bar */
     for (int k = 0; k < 4; k++) {
@@ -1114,9 +1288,12 @@ static void draw_panel_rows(int y0)
         const char *nm = knob_of(pg, k)->name;
         cv_text(cx - text_w(&FONT_XS, nm) / 2, y, &FONT_XS, nm, hot ? pc : C_SUB);
         char v[24]; knob_text(pg, k, v);
-        const felucca_font_t *f = text_w(&FONT_M, v) <= 56 ? &FONT_M : text_w(&FONT_B, v) <= 58 ? &FONT_B : &FONT_XS;
-        if (text_w(f, v) > 58) v[9] = 0;
-        cv_text(cx - text_w(f, v) / 2, y + (f == &FONT_M ? 14 : 18), f, v, hot ? C_WHITE : C_TXT);
+        int room = k < 3 && knob_of(pg, k + 1)->kind == K_NONE ? 112 : 56;   /* (the next column empty: its room too) */
+        const felucca_font_t *f = text_w(&FONT_M, v) <= room ? &FONT_M : text_w(&FONT_B, v) <= room + 2 ? &FONT_B : &FONT_XS;
+        if (text_w(f, v) > room + 2) v[9] = 0;
+        int vx = cx - text_w(f, v) / 2;
+        if (vx < 4) vx = 4;
+        cv_text(vx, y + (f == &FONT_M ? 14 : 18), f, v, hot ? C_WHITE : C_TXT);
         int bw = 48, fill = (int)(knob_frac(pg, k) * (float)bw + 0.5f);
         cv_rect(cx - bw / 2, y + 44, bw, 4, C_WELL);
         cv_rect(cx - bw / 2, y + 44, fill, 4, dim(pc, hot ? 1.0f : 0.7f));
@@ -1255,7 +1432,7 @@ void app_frame(void)
         float dt = (float)(now - ui.last_view) / 1000.0f;
         if (dt > 0.2f) dt = 0.2f;
         ui.last_view = now; ui.t += dt;
-        pegs_step(dt);
+        if (set.visual) ink_step(); else pegs_step(dt);
         draw_view();
     }
     {   /* the load guard: past 80 % of the render's time, fewer notes, fewer voices, shorter tails; back slowly as it

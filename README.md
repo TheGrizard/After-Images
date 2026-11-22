@@ -56,7 +56,8 @@ stays clear.
 | LFO | MOTION: LINK, WARP (swing and phrases that speed up and slow down), FLOW (slow random movement), CHAOS (ratchets, skips) |
 | LFO again | WARBLE, Boards of Canada's worn tape in the synth itself: WARBLE (the pitch wandering slowly, the whole piece as one, an LFO on an LFO), FLUTTER (a faster shiver), DETUNE (everything a touch flat), CHORUS (the Juno's) |
 | GLO | SCALE: KEY, SCALE (20 of them), CHORDS (the black keys'), TEMPO |
-| GLO again | SCREEN, the pegboard: COUNT (8 to 24 pegs across), SIZE (a speck to touching), BREED (how fast mixes come), FADE (how long things linger). REC deals a new colour palette each time, none twice until all nine have come |
+| GLO a third time | VISUAL: MATRIX (the pegboard) or RORSCHACH (a folded inkblot: the layers' inks drifting and swelling by the beat, each note a blot, the colours bleeding where they meet, voids carving black through) |
+| GLO again | SCREEN, the chosen visual's own four. RORSCHACH: SIZE, GAPS (the black through it), MIX (how far the colours bleed), FADE. MATRIX, the pegboard: COUNT (8 to 24 pegs across), SIZE (a speck to touching), BREED (how fast mixes come), FADE (how long things linger). REC deals a new colour palette each time, none twice until all nine have come |
 | ARP | (pages with more than one: a dot each by the page's name) MIDI OUT: OUT on or off, CHANNEL (the layers on four in a row, 1-4 at first), KEYS CH, CLOCK (INT: its own tempo; IN: following MIDI clock; OUT: sending it) |
 | ARP again | MIDI IN: IN CH (the chosen layer's notes: any channel, or one), LAYERS (notes on the layers' four channels play those layers), CLOCK (the same setting as MIDI OUT's: IN follows MIDI clock, its tempo, its beats and bars, start and stop), CC |
 | ARP a third time | USB AUDIO (one stereo pair, the mix): RECORD (at MASTER's level or full), COMPUTER (the computer's audio through the FM-1) |

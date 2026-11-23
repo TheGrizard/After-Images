@@ -167,6 +167,13 @@ installer can put M-VAVE's own firmware back at any time, and you can go back to
 [Releases](https://github.com/TheGrizard/After-Images/releases). If something sounds wrong, tap HOME to see the load
 and the audio drops, and please [open an issue](https://github.com/TheGrizard/After-Images/issues).
 
+## Making music with it, and supporting it
+
+The music you make with After Images is yours: release it, sell it, use it however you like. If you do release
+something made with it, a credit ("made with After Images") is appreciated, though never required.
+
+To support After Images, have a listen to my label, [Burnt Ends Records on Bandcamp](https://burntendsrecords.bandcamp.com/).
+
 ## Building it
 
     git clone --recursive https://github.com/TheGrizard/After-Images

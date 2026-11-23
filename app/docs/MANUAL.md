@@ -23,6 +23,7 @@ REC and it writes a piece, then you steer it. This guide starts with a quick ref
 16. MIDI, sync and recording
 17. Ideas to try
 18. When something's not right
+19. Making music with it
 
 ---
 
@@ -376,3 +377,10 @@ stems. The computer always sees all ten channels; the ones OUTPUT doesn't use st
 - **Going back.** The [installer](../install/) can put M-VAVE's firmware back, or any earlier After Images from the
   [releases](https://github.com/TheGrizard/After-Images/releases).
 - **Found a bug or have an idea?** [Open an issue](https://github.com/TheGrizard/After-Images/issues).
+
+## 19. Making music with it
+
+The music you make with After Images is yours: release it, sell it, use it however you like. If you do release
+something made with it, a credit ("made with After Images") is appreciated, though never required.
+
+To support After Images, have a listen to my label, [Burnt Ends Records on Bandcamp](https://burntendsrecords.bandcamp.com/).

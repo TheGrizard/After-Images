@@ -44,6 +44,12 @@ M-VAVE's firmware back at any time. After Images is unofficial: you install it a
 line, [download {{PKG}}](firmware/{{PKG}}) and use fm1-base's installer: `python3 tools/fm1_install.py {{PKG}}`.
 Problems and ideas are welcome as [issues](https://github.com/TheGrizard/After-Images/issues).
 
+## Making music with it
+
+The music you make with After Images is yours to release and sell. A credit ("made with After Images") is appreciated,
+never required. To support After Images, have a listen to my label,
+[Burnt Ends Records on Bandcamp](https://burntendsrecords.bandcamp.com/).
+
 Made by [TheGrizard](https://github.com/TheGrizard) on [fm1-base](https://github.com/charlesvestal/fm1-base) and
 felucca-bsp. Free software under the MPL-2.0.
 

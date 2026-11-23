@@ -1,33 +1,59 @@
 # User guide
 
 After Images turns the M-VAVE FM-1 into a generative ambient composer. You don't program it note by note: you press
-REC and it writes a piece, then you steer it. This guide starts with the first five minutes and works out to the
-details.
+REC and it writes a piece, then you steer it. This guide starts with a quick reference and the first five minutes, then works out to the details.
 
 ## Contents
 
-1. Installing
-2. The first five minutes
-3. The screen
-4. The four layers
-5. Steering a piece: the macros
-6. Shaping a layer
-7. The sounds
-8. The sequencers
-9. Effects
-10. Motion and warble
-11. Key, scale and tempo
-12. The visuals
-13. Playing the keys
-14. Saving your pieces
-15. MIDI, sync and recording
-16. Ideas to try
-17. When something's not right
-18. Quick reference
+1. Quick reference
+2. Installing
+3. The first five minutes
+4. The screen
+5. The four layers
+6. Steering a piece: the macros
+7. Shaping a layer
+8. The sounds
+9. The sequencers
+10. Effects
+11. Motion and warble
+12. Key, scale and tempo
+13. The visuals
+14. Playing the keys
+15. Saving your pieces
+16. MIDI, sync and recording
+17. Ideas to try
+18. When something's not right
 
 ---
 
-## 1. Installing
+## 1. Quick reference
+
+| Control | What it does |
+|---|---|
+| K1 to K4 at home | the four layers' levels |
+| HOME held + K1 to K4 | MOOD, ACTIVITY, EVOLVE, DRIFT |
+| HOME tapped at home | the FM-1's health: CPU, drops, saving |
+| HOME elsewhere | back home |
+| REC | a new piece, following on from the last |
+| REC held | a new piece in the same key and scale |
+| SEL held + REC | the chosen layer dealt afresh |
+| OCT- / OCT+ | back and forward through the pieces REC replaced |
+| SAVE | keep the piece |
+| ALGORITHM knob | step through saved pieces |
+| PLAY | stop (it fades out) and start |
+| SEL, or SELECT knob | choose the layer |
+| PRESET knob | the chosen layer's engine |
+| EDIT | SOUND |
+| SEQ | SEQUENCE |
+| ENV, ENV again | MIX, VOICE |
+| FX, FX again | SENDS, EFFECTS |
+| LFO, LFO again | MOTION, WARBLE |
+| GLO, twice, three, four times | MACROS, SCALE, VISUAL, SCREEN |
+| ARP, twice, three times | MIDI, CHANNELS, USB AUDIO |
+| white keys | the scale's notes |
+| black keys | the scale's chords |
+
+## 2. Installing
 
 You need a computer with **Chrome or Edge** and a USB cable for the FM-1.
 
@@ -38,7 +64,7 @@ After Images is unofficial and not affiliated with M-VAVE: you install it at you
 M-VAVE's own firmware back at any time, and you can go back to any earlier version of After Images from the
 [releases](https://github.com/TheGrizard/After-Images/releases). Want to hear it first? [Play it in your browser](../emu/).
 
-## 2. The first five minutes
+## 3. The first five minutes
 
 1. **Listen.** It starts playing straight away.
 2. **Turn K1 to K4** to set the four layers' levels: GROUND, BODY, LIGHT and DUST. The levels show while you turn.
@@ -52,9 +78,9 @@ M-VAVE's own firmware back at any time, and you can go back to any earlier versi
 
 ![The FM-1's screen at home: the notes as a pegboard of light](img/home.png "At home: the music as light")
 
-## 3. The screen
+## 4. The screen
 
-At home the screen shows the music as a visual (MATRIX, RORSCHACH or MOSH: see 12). On the other pages, the top shows
+At home the screen shows the music as a visual (MATRIX, RORSCHACH or MOSH: see 13). On the other pages, the top shows
 the piece's name, its tempo, its key and scale, and four small squares for the layers, lit as they play. The bottom
 shows the page's four knobs: K1 to K4, left to right.
 
@@ -65,7 +91,7 @@ since you switched on, and whether saving works.
 
 ![The status panel: CPU, cores, drops and saving](img/info.png "Tap HOME at home: the FM-1's health")
 
-## 4. The four layers
+## 5. The four layers
 
 Every piece has four layers, each in its own part of the sound and its own colour:
 
@@ -83,7 +109,7 @@ layer's sequencer (LINK, in MOTION).
 VOICE and SENDS pages change, and the one the keys play. **Hold SEL and press REC** to deal the chosen layer afresh:
 a new sound and sequencer, with the rest of the piece left alone.
 
-## 5. Steering a piece: the macros
+## 6. Steering a piece: the macros
 
 Hold **HOME** and turn the knobs, or press **GLO** for the same four as a page of their own:
 
@@ -98,16 +124,16 @@ Hold **HOME** and turn the knobs, or press **GLO** for the same four as a page o
 
 ![The macros panel](img/macros.png "Hold HOME: the macros")
 
-## 6. Shaping a layer
+## 7. Shaping a layer
 
-These pages change the chosen layer (see 4). Press a page's button to open it; press it again for its next page. The
+These pages change the chosen layer (see 5). Press a page's button to open it; press it again for its next page. The
 dots beside the page's name show how many pages that button has, and which one you're on.
 
 ![The SOUND page for the LIGHT layer](img/sound.png "EDIT: the chosen layer's sound")
 
 **EDIT: SOUND**
 
-- **ENGINE** picks its sound (see 7). The **PRESET** knob does the same from any page.
+- **ENGINE** picks its sound (see 8). The **PRESET** knob does the same from any page.
 - **TONE** works like a DJ's filter: 12 o'clock is open, left sweeps a low-pass down, right sweeps a high-pass up.
 - **WEIGHT** goes from soft to heavy.
 - **ENTROPY** adds strangeness. Up to halfway it's the engine's own; past it the synthesis turns on itself with chaos,
@@ -117,7 +143,7 @@ The knobs reach notes that are already sounding, so a long note changes as you t
 
 **SEQ: SEQUENCE**
 
-- **TYPE** picks the sequencer (see 8).
+- **TYPE** picks the sequencer (see 9).
 - **DENSITY** sets how many notes it plays.
 - **RATE** sets how fast it runs against the tempo, from 1/4 to 3 times.
 - **MUTATE** sets how much it changes as it goes.
@@ -135,39 +161,39 @@ The knobs reach notes that are already sounding, so a long note changes as you t
 - **SWEEP** opens a filter over each note.
 - **RESO** sets the filter's resonance.
 
-## 7. The sounds
+## 8. The sounds
 
 Twenty-five engines. REC picks ones that suit each layer, but any layer can play any of them.
 
 | Engine | What it is |
 |---|---|
-| **DRIFT SAW** | two detuned saws, low-passed: the classic pad |
-| **FM** | two-operator FM with feedback |
-| **STRING** | a plucked string; ENTROPY loosens it |
-| **DX** | four-operator FM with a spectrum that moves over each note |
 | **BLEEP** | a pulse wave, its width moving |
-| **GLASS** | four sine partials, bell-like |
+| **BOWL** | a singing bowl, rubbed or struck, its overtones beating |
 | **BREATH** | noise through a tuned resonance: wind and breath |
-| **VOICE** | a pulse through vowel formants |
-| **FOLD** | a sine folded back on itself |
-| **SUB** | a sine with its octave, driven: deep bass |
-| **STRINGS** | an 80s string machine: soft, dark, wandering |
+| **CHOIR** | three voices singing from "ooh" to "aah" |
+| **CZ** | 80s phase distortion, sine to saw to resonant sweeps |
+| **DRIFT SAW** | two detuned saws, low-passed: the classic pad |
+| **DX** | four-operator FM with a spectrum that moves over each note |
 | **E.PIANO** | an 80s FM electric piano |
-| **TRIANGLE** | soft and round; WEIGHT folds it |
+| **FM** | two-operator FM with feedback |
+| **FOLD** | a sine folded back on itself |
+| **GLASS** | four sine partials, bell-like |
+| **MALLET** | a marimba, vibes or kalimba |
+| **ORGAN** | drawbars with a rotating speaker's swirl |
+| **REESE** | the jungle bass: two saws beating slowly, a deep low-pass, a sub underneath, long and legato |
+| **SHAPES** | unusual waves that DRIFT moves through |
 | **SINE** | pure; WEIGHT warms it |
 | **SQUARE** | plain and warm |
-| **CZ** | 80s phase distortion, sine to saw to resonant sweeps |
+| **STRING** | a plucked string; ENTROPY loosens it |
+| **STRINGS** | an 80s string machine: soft, dark, wandering |
+| **SUB** | a sine with its octave, driven: deep bass |
 | **SYNC** | a hard-synced saw, sweeping down over each note |
-| **SHAPES** | unusual waves that DRIFT moves through |
-| **BOARDS** | a saw and square drifting apart through a slow dark filter: Boards of Canada |
-| **REESE** | the jungle bass: two saws beating slowly, a deep low-pass, a sub underneath, long and legato |
-| **ORGAN** | drawbars with a rotating speaker's swirl |
-| **BOWL** | a singing bowl, rubbed or struck, its overtones beating |
-| **MALLET** | a marimba, vibes or kalimba |
+| **TRIANGLE** | soft and round; WEIGHT folds it |
+| **VHS SYNTH** | a saw and square drifting apart through a slow, dark filter, like an old synth on a worn tape |
+| **VOICE** | a pulse through vowel formants |
 | **WAVES** | a wavetable scanned from dark to bright as each note plays |
-| **CHOIR** | three voices singing from "ooh" to "aah" |
 
-## 8. The sequencers
+## 9. The sequencers
 
 None of them roll dice. Each is a small system with rules, so its patterns have a shape you can hear.
 
@@ -185,7 +211,7 @@ None of them roll dice. Each is a small system with rules, so its patterns have 
 | **DRUNK** | a walk: each note a small step from the last |
 | **MELODY** | a long, looping early-90s Warp melody that slowly changes |
 
-## 9. Effects
+## 10. Effects
 
 Four shared effects. Each layer sends its own amount to each one, so GROUND can stay dry while LIGHT swims in echo.
 
@@ -207,7 +233,7 @@ a little, even with its send at 0.
 Each REC also **features** one effect: shimmer, reverse echo, chorus, ensemble, tape saturation, tape fuzz, wide space
 or HAZE, never the same twice in a row. The panel after REC names it.
 
-## 10. Motion and warble
+## 11. Motion and warble
 
 **LFO: MOTION**
 
@@ -223,7 +249,7 @@ or HAZE, never the same twice in a row. The panel after REC names it.
 - **DETUNE** puts everything a touch flat.
 - **WEAR** makes the whole mix sound like an old tape: duller and narrower, its top end drifting.
 
-## 11. Key, scale and tempo
+## 12. Key, scale and tempo
 
 **GLO again: SCALE**
 
@@ -234,9 +260,9 @@ or HAZE, never the same twice in a row. The panel after REC names it.
 
 Every note stays in the scale, whatever you change.
 
-When it follows a MIDI clock (see 15), TEMPO shows the clock's tempo, marked **IN**.
+When it follows a MIDI clock (see 16), TEMPO shows the clock's tempo, marked **IN**.
 
-## 12. The visuals
+## 13. The visuals
 
 **GLO three times: VISUAL** chooses the visual. **GLO a fourth time: SCREEN** sets it up. Each REC deals a new colour palette,
 and the four layers always keep four clearly different colours.
@@ -253,7 +279,7 @@ and the four layers always keep four clearly different colours.
 
 ![RORSCHACH](img/rorschach.png "RORSCHACH") ![MOSH](img/mosh.png "MOSH")
 
-## 13. Playing the keys
+## 14. Playing the keys
 
 The keys play the chosen layer's sound, always in the scale, so there are no wrong notes.
 
@@ -262,7 +288,7 @@ The keys play the chosen layer's sound, always in the scale, so there are no wro
 
 Your notes ride along with the piece, through its effects.
 
-## 14. Saving your pieces
+## 15. Saving your pieces
 
 - **SAVE** keeps the piece playing, in up to 16 places. Turn **ALGORITHM** to step through them.
 - **Saving over a piece.** If the piece came from ALGORITHM, SAVE updates it in place. If it came from REC, SAVE adds
@@ -273,7 +299,7 @@ Your notes ride along with the piece, through its effects.
   off**.
 - **SAVE while playing** also works: you'll hear a soft dip while it writes.
 
-## 15. MIDI, sync and recording
+## 16. MIDI, sync and recording
 
 **ARP: MIDI**
 
@@ -321,21 +347,21 @@ locks to its beats and bars. It stays locked through a new piece and a change of
 In your DAW, pick the pair you want as each track's input: 1-2 for the mix, 3-4 for CLEAN, or 3-4 to 9-10 for the
 stems. The computer always sees all ten channels; the ones OUTPUT doesn't use stay silent.
 
-## 16. Ideas to try
+## 17. Ideas to try
 
 - **A long drone for sleep or study.** Turn ACTIVITY down, MOOD a little left and DRIFT up. Set REVERB past 12
   o'clock for shimmer, then leave it.
-- **Boards of Canada haze.** Press REC until the panel says HAZE, or set it up yourself: WARBLE up, DETUNE about
-  halfway, WEAR around 50, CHORUS past 12 o'clock, and BOARDS on BODY.
+- **VHS haze.** Press REC until the panel says HAZE, or set it up yourself: WARBLE up, DETUNE about
+  halfway, WEAR around 50, CHORUS past 12 o'clock, and VHS SYNTH on BODY.
 - **Jungle bass under ambient pads.** Put GROUND on REESE and turn LEGATO on (REC does both when it deals a REESE). Bring BODY's ECHO
   past 12 o'clock for the reverse wash.
 - **A slowly evolving set.** Turn EVOLVE and DRIFT up, then hold REC every few minutes: each piece stays in key with the
   last, so a set flows on.
 - **Play over it.** Choose LIGHT with SEL, pick MALLET or BOWL, and play the black keys for chords that always fit.
-- **With a drum machine.** Sync to its clock (see 15). Turn WARP down so the sequencers stay on the grid, and CHAOS up a
+- **With a drum machine.** Sync to its clock (see 16). Turn WARP down so the sequencers stay on the grid, and CHAOS up a
   little for ratchets.
 
-## 17. When something's not right
+## 18. When something's not right
 
 - **No sound.** Check the layer levels at home (K1 to K4) and the FM-1's volume, and that it's playing: the PLAY light
   is green.
@@ -350,30 +376,3 @@ stems. The computer always sees all ten channels; the ones OUTPUT doesn't use st
 - **Going back.** The [installer](../install/) can put M-VAVE's firmware back, or any earlier After Images from the
   [releases](https://github.com/TheGrizard/After-Images/releases).
 - **Found a bug or have an idea?** [Open an issue](https://github.com/TheGrizard/After-Images/issues).
-
-## 18. Quick reference
-
-| Control | What it does |
-|---|---|
-| K1 to K4 at home | the four layers' levels |
-| HOME held + K1 to K4 | MOOD, ACTIVITY, EVOLVE, DRIFT |
-| HOME tapped at home | the FM-1's health: CPU, drops, saving |
-| HOME elsewhere | back home |
-| REC | a new piece, following on from the last |
-| REC held | a new piece in the same key and scale |
-| SEL held + REC | the chosen layer dealt afresh |
-| OCT- / OCT+ | back and forward through the pieces REC replaced |
-| SAVE | keep the piece |
-| ALGORITHM knob | step through saved pieces |
-| PLAY | stop (it fades out) and start |
-| SEL, or SELECT knob | choose the layer |
-| PRESET knob | the chosen layer's engine |
-| EDIT | SOUND |
-| SEQ | SEQUENCE |
-| ENV, ENV again | MIX, VOICE |
-| FX, FX again | SENDS, EFFECTS |
-| LFO, LFO again | MOTION, WARBLE |
-| GLO, twice, three, four times | MACROS, SCALE, VISUAL, SCREEN |
-| ARP, twice, three times | MIDI, CHANNELS, USB AUDIO |
-| white keys | the scale's notes |
-| black keys | the scale's chords |

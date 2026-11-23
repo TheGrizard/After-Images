@@ -5,7 +5,7 @@
 
 const char *const ENGINE_NAME[NUM_ENGINES] = {
     "DRIFT SAW", "FM", "STRING", "DX", "BLEEP", "GLASS", "BREATH", "VOICE", "FOLD", "SUB", "STRINGS", "E.PIANO",
-    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "BOARDS", "REESE", "ORGAN", "BOWL", "MALLET", "WAVES", "CHOIR"
+    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "VHS SYNTH", "REESE", "ORGAN", "BOWL", "MALLET", "WAVES", "CHOIR"
 };
 
 float g_sine[SINE_SIZE + 1];

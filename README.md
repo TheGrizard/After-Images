@@ -108,7 +108,7 @@ Press a page's button again for its next page; dots by the page's name show how 
   layer a little, even with its send at 0.
 - **MOTION:** LINK (layers answering each other), WARP (swing, phrases speeding and slowing), FLOW (slow random
   movement), CHAOS (ratchets and skips).
-- **WARBLE** puts Boards of Canada's worn tape in the synth itself: the pitch wandering, a faster flutter, everything
+- **WARBLE** puts worn tape in the synth itself: the pitch wandering, a faster flutter, everything
   a touch flat, and WEAR: the whole mix dulling and narrowing like an old tape, its top end wandering.
 
 The knobs reach notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWEEP or RESO and held notes follow.
@@ -117,7 +117,7 @@ The knobs reach notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWE
 
 Twenty-five engines: DRIFT SAW, FM, DX (four-operator FM), STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an
 80s string machine), E.PIANO (80s FM), TRIANGLE, SINE, SQUARE, CZ (phase distortion), SYNC, SHAPES (unusual
-waveforms) and BOARDS (a saw and square drifting apart through a slowly opening dark filter) and REESE (two saws beating
+waveforms), VHS SYNTH (a saw and square drifting apart through a slowly opening dark filter), REESE (two saws beating
 slowly against each other, driven into a deep low-pass with a sub under it, legato with a long tail), ORGAN (drawbars and a rotary speaker's swirl), BOWL (a singing bowl, its partials
 beating), MALLET (marimba, vibes or kalimba), WAVES (a wavetable scanned dark to bright) and CHOIR (three voices, ooh to
 aah).
@@ -187,7 +187,7 @@ updates the installer site.
 ## Inspiration and thanks
 
 Cyma Forma's RND (one button, four layers, a new idea each press), Mutable Instruments' modules, Steve Roach's slowly
-shifting ambient mixes, Boards of Canada's worn tape, and Autechre's way of working: systems of rules rather than dice,
+shifting ambient mixes, old synths on worn VHS tape, and Autechre's way of working: systems of rules rather than dice,
 layers that trigger each other, and emotional chords under the strangeness. No code from any of them is in here.
 
 Built on [fm1-base](https://github.com/charlesvestal/fm1-base) by Charles Vestal and felucca-bsp; thank you.

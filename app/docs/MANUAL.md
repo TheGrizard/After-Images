@@ -38,7 +38,7 @@ REC and it writes a piece, then you steer it. This guide starts with a quick ref
 | REC | a new piece, following on from the last |
 | REC held | a new piece in the same key and scale |
 | SEL held + REC | the chosen layer dealt afresh |
-| OCT- / OCT+ | back and forward through the pieces REC replaced |
+| OCT- / OCT+ | the keys' octave down or up; on a GLO page, back and forward through the pieces REC replaced |
 | SAVE | keep the piece |
 | ALGORITHM knob | step through saved pieces |
 | PLAY | stop (it fades out) and start |
@@ -73,7 +73,7 @@ M-VAVE's own firmware back at any time, and you can go back to any earlier versi
    it follows on from the last one round the circle of fifths.
 4. **Hold REC** (about a second) for a new piece in the same key and scale.
 5. **Hold HOME and turn K1 to K4** to steer the piece: MOOD, ACTIVITY, EVOLVE and DRIFT.
-6. **Liked an earlier piece?** OCT- steps back through the pieces REC replaced, OCT+ forward again.
+6. **Liked an earlier piece?** Press GLO, then OCT- to step back through the pieces REC replaced, OCT+ forward again.
 7. **Press SAVE** to keep a piece. Turn the ALGORITHM knob to step through the ones you've saved.
 8. **Stop with PLAY before you switch off,** and wait a few seconds. It keeps the piece and your settings by itself.
 
@@ -286,6 +286,8 @@ The keys play the chosen layer's sound, always in the scale, so there are no wro
 
 - The **white keys** play the scale's notes.
 - The **black keys** play its chords: I to VII, then I to IV an octave up.
+- **OCT- and OCT+** move the keys down or up an octave at a time (three each way). The button stays lit while
+  you're shifted. On a GLO page they step through earlier pieces instead.
 
 Your notes ride along with the piece, through its effects.
 

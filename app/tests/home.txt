@@ -125,9 +125,12 @@ expect hist 1
 shot rec.png
 wait 6000
 shot rec_after.png
+tap GLO
 tap OCT-
 wait 300
 expect hist 2
+tap HOME
+wait 100
 tap SAVE
 wait 300
 expect nsaved 1

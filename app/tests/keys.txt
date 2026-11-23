@@ -20,6 +20,21 @@ key w7 down 100
 wait 100
 expect lastnote 81
 key w7 up
+tap OCT+
+wait 100
+key w0 down 100
+wait 100
+expect lastnote 81
+key w0 up
+tap OCT-
+tap OCT-
+wait 100
+key w0 down 100
+wait 100
+expect lastnote 57
+key w0 up
+tap OCT+
+wait 100
 key b0 down
 wait 100
 expect lastnote 69

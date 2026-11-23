@@ -19,7 +19,8 @@ Free and open source (MPL-2.0). By [TheGrizard](https://github.com/TheGrizard), 
 Most FM-1 firmwares are instruments you play or program. After Images composes.
 
 - **One button, a whole piece.** REC deals a key, a tempo, four sounds, four sequencers, a featured effect, a colour
-  palette and a name. The same piece always starts the same way, and OCT- and OCT+ step back and forward through them.
+  palette and a name. The same piece always starts the same way, and on GLO's pages OCT- and OCT+ step back and forward
+  through them.
 - **Pieces that lead on from each other.** Each new key is a fifth up or down, the relative major or minor, or another
   mode on the same root, mostly minor and consonant. Hold REC to stay in key.
 - **Layers with roles.** GROUND (red, the bass), BODY (blue, the chords), LIGHT (green, the melody) and DUST (white,
@@ -59,7 +60,7 @@ Most FM-1 firmwares are instruments you play or program. After Images composes.
 | REC | a new piece, in a key that follows on from the last |
 | REC held | a new piece in the same key and scale |
 | SEL held + REC | the chosen layer anew: a new sequencer and sound |
-| OCT- / OCT+ | back and forward through the pieces REC replaced |
+| OCT- / OCT+ | the keys' octave, down or up (lit while shifted); on GLO's pages, back and forward through the pieces REC replaced |
 | SAVE / ALGORITHM | keep the piece (up to 16) / step through the saved ones |
 | PLAY | stop (it fades) and start |
 | SELECT, or tap SEL | the layer the SOUND, SEQUENCE, MIX, VOICE and SENDS pages, and the keys, play |

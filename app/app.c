@@ -396,6 +396,7 @@ static uint16_t LAYER_C[NUM_LAYERS + 1] = { RGB(255, 72, 64), RGB(70, 140, 255),
 static void palette_apply(void) { for (int l = 0; l < NUM_LAYERS; l++) LAYER_C[l] = LPAL[set.palette % NPAL][l]; }
 
 static struct {
+    int8_t key_oct;                      /* OCT- / OCT+ (away from GLO): the keys' octave, -3 .. +3 */
     uint32_t btn, keys;
     int page, sel;
     int last_knob; uint32_t knob_at;      /* the knob turned last: its name and value, big */
@@ -747,7 +748,7 @@ static void keys_input(uint32_t keys)
 {
     static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
     const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
-    int base = ROLES[ui.sel].base + set.cur.key + 12 * set.cur.l[ui.sel].octave;
+    int base = ROLES[ui.sel].base + set.cur.key + 12 * (set.cur.l[ui.sel].octave + ui.key_oct);
     for (int i = 0; i < 16; i++) {
         int kk = WK[i]; uint32_t b = 1u << kk;
         if (kk >= NKEYS) continue;
@@ -813,8 +814,18 @@ static void input(void)
     if (ui.rec_t && (up >> B_REC & 1u)) { if (!ui.rec_used) new_piece(0); ui.rec_t = 0; }
     if (down >> B_SAVE & 1u) save_piece();
     if (down >> B_PLAY & 1u) play_toggle();
-    if (down >> B_OCTDN & 1u) hist_step(-1);
-    if (down >> B_OCTUP & 1u) hist_step(1);
+    /* OCT- / OCT+: on GLO's pages, back and forward through the pieces REC replaced; anywhere else, the keys' octave */
+    for (int dir = -1; dir <= 1; dir += 2) {
+        if (!(down >> (dir < 0 ? B_OCTDN : B_OCTUP) & 1u)) continue;
+        if (PAGE_BTN[ui.page] == B_GLO) hist_step(dir);
+        else {
+            int o = ui.key_oct + dir; ui.key_oct = (int8_t)(o < -3 ? -3 : o > 3 ? 3 : o);
+            char t[12] = "OCTAVE ", n[4];
+            if (ui.key_oct > 0) text_cat(t, "+");
+            int_text(ui.key_oct, n); text_cat(t, n);
+            pop("KEYS", t, LAYER_C[ui.sel]);
+        }
+    }
     keys_input(keys);
 
     for (int k = 0; k < 4; k++) {
@@ -836,7 +847,8 @@ static void input(void)
     {
         uint32_t used = 1u << B_SEL | 1u << B_REC | 1u << B_SAVE | 1u << B_OCTDN | 1u << B_OCTUP | 1u << B_PLAY;
         for (int pg = 0; pg < NPAGES; pg++) used |= 1u << PAGE_BTN[pg];
-        uint32_t lit = (btn & used) | 1u << PAGE_BTN[ui.page] | (set_dirty ? 1u << B_SAVE : 0u) | (set.playing ? LED_PLAY_GREEN : 0u);
+        uint32_t lit = (btn & used) | 1u << PAGE_BTN[ui.page] | (set_dirty ? 1u << B_SAVE : 0u) | (set.playing ? LED_PLAY_GREEN : 0u)
+                 | (ui.key_oct > 0 ? 1u << B_OCTUP : 0u) | (ui.key_oct < 0 ? 1u << B_OCTDN : 0u);   /* (the keys' octave shifted: its button lit) */
         plat_lights(lit, keys, used | LED_PLAY_GREEN, 0x7FFFFFFu, 1);
     }
 }

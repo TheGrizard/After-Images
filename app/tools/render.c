@@ -28,6 +28,10 @@ int main(int argc, char **argv)
     dsp_init();
     piece_default(&pc);
     if (strcmp(argv[1], "default")) piece_roll(&pc, (uint32_t)strtoul(argv[1], 0, 0), argc > 4 && !strcmp(argv[4], "all"), argc > 5 ? atoi(argv[5]) : -1);
+    if (getenv("DUMP"))
+        for (int l = 0; l < NUM_LAYERS; l++)
+            fprintf(stderr, "layer %d: tone %d weight %d weird %d density %d rate %d level %d att %d rel %d oct %d\n", l, pc.l[l].tone,
+                    pc.l[l].weight, pc.l[l].weird, pc.l[l].density, pc.l[l].rate, pc.l[l].level, pc.l[l].attack, pc.l[l].release, pc.l[l].octave);
     if (getenv("ENG")) {                         /* ENG=NAME: that engine on layer LAYER (or SOLO's) */
         int l = getenv("LAYER") ? atoi(getenv("LAYER")) : getenv("SOLO") ? atoi(getenv("SOLO")) : 1;
         for (int e = 0; e < NUM_ENGINES; e++) if (!strcmp(ENGINE_NAME[e], getenv("ENG"))) pc.l[l].engine = (uint8_t)e;

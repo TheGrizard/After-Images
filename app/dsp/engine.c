@@ -264,7 +264,7 @@ static void next_section(Engine *e)
 {
     float ev = u(e->p->evolve);
     int m = 0;
-    for (int l = 0; l < NUM_LAYERS; l++) if (rng_chance(&e->rng, l == L_BODY ? 0.85f : l == L_GROUND ? 0.75f : 0.65f)) m |= 1 << l;
+    for (int l = 0; l < NUM_LAYERS; l++) if (rng_chance(&e->rng, l == L_BODY ? 0.85f : l == L_GROUND ? 0.9f : 0.65f)) m |= 1 << l;
     if (((m & 1) + (m >> 1 & 1) + (m >> 2 & 1) + (m >> 3 & 1)) < 2) m |= 1 << L_BODY | 1 << (rng_chance(&e->rng, 0.5f) ? L_LIGHT : L_DUST);
     e->mask = ev < 0.05f ? 0xF : m;
     for (int l = 0; l < NUM_LAYERS; l++) {
@@ -356,6 +356,7 @@ static void immerse(Engine *e)
         for (int l = 0; l < NUM_LAYERS; l++) {
             float t = solo >= 0 ? (l == solo ? 1.0f : 0.05f + 0.25f * rng_f(&e->rng)) : 0.15f + 0.85f * rng_f(&e->rng);
             e->L[l].im_t = l == top && solo < 0 ? 1.0f : t;   /* (one layer near full, always) */
+            if (l == L_GROUND) e->L[l].im_t = fm_maxf(e->L[l].im_t, 0.65f);   /* (the bass never far off: the ground under it all) */
         }
     }
     for (int l = 0; l < NUM_LAYERS; l++) {
@@ -638,6 +639,35 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
             float l = dl[i] + vl[i] * 0.55f, r = dr[i] + vr[i] * 0.55f;
             e->dc[0] += 0.0035f * (l - e->dc[0]); e->dc[1] += 0.0035f * (r - e->dc[1]);
             L[i] = l - e->dc[0]; R[i] = r - e->dc[1];
+        }
+        /* the balance: every piece's top and bottom about as most pieces have them. The lows (under 200 Hz) and the
+         * highs (over 2.5 kHz) are weighed over seconds; where the highs stand more than the pieces' middle over the
+         * lows (15 dB under them), the mix tilts darker round 700 Hz, and brighter where less: up to 6 dB, slowly,
+         * held while stopped. So a bass-less, glassy piece comes out warmer, a murky one clearer; MOOD, WEAR and the
+         * knobs still have their say on top */
+        {
+            const float alo = 1.0f - 0.9719f, ahi = 1.0f - 0.7003f, at = 1.0f - 0.9051f;   /* (one-poles: 200 Hz, 2.5 kHz, 700 Hz) */
+            float slo = 0, shi = 0;
+            for (int i = 0; i < BLK; i++) {
+                float m = 0.5f * (L[i] + R[i]);
+                e->tl_lo += alo * (m - e->tl_lo); e->tl_hi += ahi * (m - e->tl_hi);
+                float h = m - e->tl_hi; slo += e->tl_lo * e->tl_lo; shi += h * h;
+            }
+            if (e->playing) {
+                e->tl_elo += (slo / BLK - e->tl_elo) * (BLK_S / 5.0f); e->tl_ehi += (shi / BLK - e->tl_ehi) * (BLK_S / 5.0f);
+                if (e->tl_elo > 1e-9f && e->tl_ehi > 1e-9f) {
+                    float now_db = 10.0f * fm_log2f(e->tl_ehi / e->tl_elo) * 0.30103f;
+                    float want = clampf(0.6f * (-15.0f - now_db), -6.0f, 6.0f);
+                    e->tl_db += (want - e->tl_db) * (BLK_S / 4.0f);
+                }
+            }
+            float g = fm_exp2f(-e->tl_db * (3.3219f / 40.0f)), gi = 1.0f / g;   /* (lows times g, highs over g: tl_db between them) */
+            if (fm_fabsf(e->tl_db) > 0.05f)
+                for (int i = 0; i < BLK; i++) {
+                    e->tl_s[0] += at * (L[i] - e->tl_s[0]); e->tl_s[1] += at * (R[i] - e->tl_s[1]);
+                    L[i] = e->tl_s[0] * g + (L[i] - e->tl_s[0]) * gi; R[i] = e->tl_s[1] * g + (R[i] - e->tl_s[1]) * gi;
+                }
+            else { e->tl_s[0] = L[BLK - 1]; e->tl_s[1] = R[BLK - 1]; }
         }
         wear_run(&e->wear, u(p->wear), L, R, BLK);        /* WEAR: the whole of it, the reverb's tails too */
         if (shelf > 0.001f)

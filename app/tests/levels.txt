@@ -9,6 +9,6 @@ tap PLAY
 wait 11000
 reboot
 wait 3500
-expect level0 70
-expect level1 72
-expect level2 62
+expect level0 82
+expect level1 66
+expect level2 56

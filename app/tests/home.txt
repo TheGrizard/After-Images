@@ -4,11 +4,11 @@ wav home.wav
 expect page 0
 wait 8000
 shot home.png
-expect level3 48
+expect level3 40
 turn K4 5
 wait 200
 expect page 0
-expect level3 58
+expect level3 50
 shot levels.png
 wait 2500
 press HOME

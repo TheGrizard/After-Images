@@ -20,6 +20,8 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
     LayerP *lp = &p->l[l];
     lp->engine = POOL[l][rng_int(r, POOL_N[l])];
     lp->tone = rng_chance(r, 0.8f) ? pick(r, 42, 58) : rng_chance(r, 0.6f) ? pick(r, 18, 38) : pick(r, 62, 80);   /* (TONE: 50 open)*/
+    if (l == L_GROUND && lp->tone < 34) lp->tone = (uint8_t)(34 + lp->tone % 8);   /* (the bass never filtered to a murmur) */
+    if (l >= L_LIGHT && lp->tone > 70) lp->tone = (uint8_t)(64 + lp->tone % 7);    /* (nor the top thinned to a hiss) */
     lp->weight = (uint8_t)weight;
     lp->weird = rng_chance(r, 0.25f) ? pick(r, 40, 85) : pick(r, 0, 35);
     lp->density = pick(r, 30, 70);
@@ -27,7 +29,7 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
     lp->mutate = pick(r, 10, 60);
     lp->attack = pick(r, ENV_R[l][0], ENV_R[l][1]);
     lp->release = pick(r, ENV_R[l][2], ENV_R[l][3]);
-    lp->level = l == L_GROUND ? 70 : l == L_BODY ? 72 : l == L_LIGHT ? 62 : 48;
+    lp->level = l == L_GROUND ? 82 : l == L_BODY ? 66 : l == L_LIGHT ? 56 : 40;
     lp->octave = 0;
     lp->salt = (uint16_t)rng_u32(r);
 }
@@ -102,6 +104,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     for (int i = NUM_SEQS - 1; i > 0; i--) { int j = rng_int(&r, i + 1); uint8_t t = s[i]; s[i] = s[j]; s[j] = t; }
     /* contrast: one layer heavy, one soft, always */
     int heavy = rng_chance(&r, 0.5f) ? L_GROUND : rng_int(&r, NUM_LAYERS), soft = (heavy + 1 + rng_int(&r, NUM_LAYERS - 1)) % NUM_LAYERS;
+    if (soft == L_GROUND) soft = heavy == L_DUST ? L_LIGHT : L_DUST;   /* (never the bass: a soft one is a thin, bright piece) */
     /* the long melodies: LIGHT sings one in half the pieces (the early-90s Warp way); now and then GROUND does instead,
      * a melody down in the bass */
     if (rng_chance(&r, 0.5f)) {
@@ -109,6 +112,11 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
         int to = rng_chance(&r, 0.2f) ? L_GROUND : L_LIGHT;
         if (at < NUM_SEQS) { uint8_t t = s[to]; s[to] = s[at]; s[at] = t; }
     }
+    /* the bass not on the sparse ones: CHIMES and BOUNCE leave the ground near silent (whole pieces with no bass, thin
+     * and bright); swapped with the first layer above that has neither */
+    if (s[L_GROUND] == S_CHIMES || s[L_GROUND] == S_BOUNCE)
+        for (int l = 1; l < NUM_LAYERS; l++)
+            if (s[l] != S_CHIMES && s[l] != S_BOUNCE && !(s[l] == S_MELODY && l == L_LIGHT)) { uint8_t t = s[l]; s[l] = s[L_GROUND]; s[L_GROUND] = t; break; }
     for (int l = 0; l < NUM_LAYERS; l++) {
         int w = l == heavy ? pick(&r, 65, 95) : l == soft ? pick(&r, 0, 25) : pick(&r, 20, 65);
         roll_layer(p, l, &r, w);

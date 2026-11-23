@@ -133,6 +133,7 @@ struct Engine {
     float clock_acc; float t;
     /* costs, for the balance between the cores (ticks an app block) */
     uint32_t (*clock)(void);
+    uint32_t sounding;                   /* the layers made sound last block (bits) */
     float cost[NBUS + 1]; float cost_rv; float rv_size, rv_damp; float shim_env;   /* (shim_env: the shimmer loop's level, its limiter's) */  /* (cost_rv: the reverb stage's, which the second core may take beside its layers) */
     /* the screen's */
     UiNote uiq[UI_Q]; volatile uint32_t uiq_head;

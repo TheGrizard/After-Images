@@ -61,6 +61,7 @@ int main(int argc, char **argv)
     clock_t t0 = clock();
     for (long done = 0; done < frames; done += ENGINE_SUB * BLK) {
         engine_block_begin(&eng, ENGINE_SUB);
+        eng.gov += (1.0f - eng.gov) * 0.01f;   /* (the app's load guard easing back, as on the FM-1 with room to spare) */
         for (int b = 0; b < NBUS; b++) engine_block_layer(&eng, b);
         engine_block_mix(&eng, L, R);
         for (int i = 0; i < ENGINE_SUB * BLK && done + i < frames; i++) {

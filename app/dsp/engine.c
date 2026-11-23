@@ -415,6 +415,7 @@ void engine_block_begin(Engine *e, int nsub)
         }
     }
     g_voice_floor = 0.001f + 0.014f * (1.0f - e->gov);   /* -60 dB; under load up to -37 */
+    int back = 0; uint32_t now_on = 0;
     for (int k = 0; k < e->nsub; k++) {
         control(e, k);
         for (int l = 0; l < NUM_LAYERS; l++) {
@@ -422,9 +423,15 @@ void engine_block_begin(Engine *e, int nsub)
             if (l == L_BODY || l == L_DUST) g *= 1.0f - e->duck;
             if (l == L_GROUND) g *= 1.0f + 0.4f * clamp01((0.5f - u(p->mood)) * 2.0f);   /* (MOOD dark: the bass up) */
             e->gains[k][l] = g;
+            if (k == 0) back += g >= 1e-4f && !(e->sounding >> l & 1u);
+            if (k == 0) now_on |= (uint32_t)(g >= 1e-4f) << l;
         }
         e->gains[k][KEYS] = e->fade * 1.2f + 0.3f;
     }
+    /* layers coming back in (DRIFT, EVOLVE's sections): all their voices sounding again at once, the load jumping, so
+     * room made before it lands: fewer new notes and the faintest tails let go, the load guard easing back as it settles */
+    if (back) e->gov = fm_minf(e->gov, back >= 2 ? 0.6f : 0.75f);
+    e->sounding = now_on;
     /* the bands: each layer's filters, from its role; TONE a DJ's filter on them, at 12 o'clock open, to the left a
      * low-pass sweeping down to a thud, to the right a high-pass sweeping up to air, a little resonance towards the ends */
     for (int l = 0; l < NUM_LAYERS; l++) {
@@ -482,6 +489,8 @@ static void apply(VoiceEv *q, int nq, Voice *v, Voice *ghost, int sub)
 void engine_block_layer(Engine *e, int b)
 {
     uint32_t t0 = now(e);
+    int made = 0;                        /* (any sound made: a layer faded right out keeps its cost as it last was, so the
+                                          * cores' split is ready for it coming back) */
     float wg = 0.0f;                     /* (the piece's ring modulator: gone; each layer's EXTREME has its own strangeness) */
     for (int k = 0; k < e->nsub; k++) {
         float *Lb = e->bus[k][b][0], *Rb = e->bus[k][b][1];
@@ -510,7 +519,7 @@ void engine_block_layer(Engine *e, int b)
             g_ghost[b].on = 0;
             continue;
         }
-        int any = 0;
+        int any = 0; made = 1;
         if (g_ghost[b].on) { g_ghost[b].pm = e->pm[b]; voice_render(&g_ghost[b], Lb, Rb, BLK); any = 1; }
         for (int i = 0; i < L->nv; i++) if (L->v[i].on) { L->v[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; L->v[i].pm = e->pm[b]; voice_render(&L->v[i], Lb, Rb, BLK); any = 1; }
         if (!any) continue;
@@ -522,7 +531,7 @@ void engine_block_layer(Engine *e, int b)
         dirt_run(&L->dirt, u(e->p->dirt), fm_maxf(mo(e, b, MW_DIRT, e->p->s_dirt[b], 0.45f), 0.4f * u(e->p->dirt)), Lb, Rb, BLK);   /* its own DIRT, its send's amount (DRIFT morphing it); the shared DIRT reaching every layer a little */
         /* (ENTROPY is in the voices: synthesis turning on itself, not distortion; DIRT is the tape) */
     }
-    cost_add(e, b, t0);
+    if (made || b == KEYS) cost_add(e, b, t0);
 }
 
 void engine_overload(Engine *e) { e->shed++; }

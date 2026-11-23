@@ -1258,7 +1258,7 @@ static void draw_ink(void)
  * Its cost is bounded whatever SIZE: blocks no bigger than the screen, at most MOSH_BUDGET screens' worth of
  * pixels drawn a frame (the oldest left out past it), and a run over the same colour mixed once */
 #define MOSH_MAX 64
-#define MOSH_BUDGET 3.5f                         /* screens of block drawn a frame, at most */
+#define MOSH_BUDGET 2.5f                         /* screens of block drawn a frame, at most */
 typedef struct {
     float cx, cy, w, h, born, life, dw, dh;      /* centre; half width and height (at 240 lines); their moulding */
     uint8_t on, ph; float col[3];
@@ -1480,8 +1480,8 @@ static void draw_view(void)
         cv_blit(0, (uint32_t)(VIEW_Y + top));
     }
     if (set.visual == 2) {                       /* (MOSH: a long frame draws less next time, so the buttons stay quick) */
-        if (took > 30u) msh_scale = fm_maxf(0.25f, msh_scale * 0.7f);
-        else if (took < 15u) msh_scale = fm_minf(1.0f, msh_scale * 1.05f);
+        if (took > 22u) msh_scale = fm_maxf(0.25f, msh_scale * 0.7f);
+        else if (took < 12u) msh_scale = fm_minf(1.0f, msh_scale * 1.05f);
     }
 }
 
@@ -1716,14 +1716,14 @@ void app_frame(void)
         if (set.visual == 2) mosh_step(); else if (set.visual) ink_step(); else pegs_step(dt);
         draw_view();
     }
-    {   /* the load guard: past 72 % of the render's time, fewer notes, fewer voices, shorter tails; back slowly as it
+    {   /* the load guard: past 66 % of the render's time, fewer notes, fewer voices, shorter tails; back slowly as it
          * eases (a block that nearly overruns sheds at once: app_overload) */
         static uint32_t last_g;
         if (now - last_g >= 20u) {
             last_g = now;
             uint32_t cpu = plat_cpu_pct();
             float g = eng.gov;
-            if (cpu > 72u) g -= 0.03f; else if (cpu < 60u) g += 0.004f;   /* (room left for a burst: the keys, a chord) */
+            if (cpu > 66u) g -= 0.04f; else if (cpu < 55u) g += 0.004f;   /* (room left for a burst: the keys, a chord, layers coming back) */
             eng.gov = g < 0.3f ? 0.3f : g > 1.0f ? 1.0f : g;
         }
     }

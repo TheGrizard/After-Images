@@ -47,6 +47,7 @@ typedef struct {
     uint8_t peg_n, peg_size;             /* PEGS: COUNT (an index into PEG_NS), SIZE 0..100 */
 } settings_t;
 static settings_t set;
+static uint32_t xr_seen, xr_saves, save_end;   /* (HOME's DROPS: the saves' kept apart; see store_save) */
 #define NPAL 9
 #define NPEG_NS 6
 static const uint8_t PEG_NS[NPEG_NS] = { 8, 10, 12, 15, 20, 24 };   /* COUNT: pegs across (each divides 240) */
@@ -617,7 +618,6 @@ static void hist_step(int d)
 static int save_pending; static uint32_t save_t;   /* the slot (+1) waiting for the fade, since when */
 /* the drops a save makes: writing the flash holds the interrupts off with the sound silenced, so the audio's next half
  * comes late and the platform counts a drop no one hears. Those are kept apart, so HOME's DROPS counts only the music's */
-static uint32_t xr_seen, xr_saves, save_end;
 static int store_save(void)
 {
     int ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;

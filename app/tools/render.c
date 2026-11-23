@@ -32,6 +32,22 @@ int main(int argc, char **argv)
         for (int l = 0; l < NUM_LAYERS; l++)
             fprintf(stderr, "layer %d: tone %d weight %d weird %d density %d rate %d level %d att %d rel %d oct %d\n", l, pc.l[l].tone,
                     pc.l[l].weight, pc.l[l].weird, pc.l[l].density, pc.l[l].rate, pc.l[l].level, pc.l[l].attack, pc.l[l].release, pc.l[l].octave);
+    if (getenv("ENGS")) {                        /* ENGS=A,B,C,D: each layer's engine */
+        char buf[128]; strncpy(buf, getenv("ENGS"), sizeof buf - 1); buf[sizeof buf - 1] = 0;
+        int l = 0; for (char *t = strtok(buf, ","); t && l < NUM_LAYERS; t = strtok(NULL, ","), l++)
+            for (int e = 0; e < NUM_ENGINES; e++) if (!strcmp(ENGINE_NAME[e], t)) pc.l[l].engine = (uint8_t)e;
+    }
+    if (getenv("SEQS"))                          /* SEQS=NAME: every layer's sequencer */
+        for (int l = 0; l < NUM_LAYERS; l++) for (int q = 0; q < NUM_SEQS; q++) if (!strcmp(SEQ_NAME[q], getenv("SEQS"))) pc.l[l].seq = (uint8_t)q;
+    if (getenv("BPM")) pc.tempo = (uint8_t)(atoi(getenv("BPM")) - 40);
+    if (getenv("ACT")) pc.motion = (uint8_t)atoi(getenv("ACT"));
+    if (getenv("LINK")) pc.link = (uint8_t)atoi(getenv("LINK"));
+    if (getenv("ATT")) for (int l = 0; l < NUM_LAYERS; l++) pc.l[l].attack = (uint8_t)atoi(getenv("ATT"));
+    if (getenv("REL")) for (int l = 0; l < NUM_LAYERS; l++) pc.l[l].release = (uint8_t)atoi(getenv("REL"));
+    if (getenv("TONE")) for (int l = 0; l < NUM_LAYERS; l++) pc.l[l].tone = (uint8_t)atoi(getenv("TONE"));
+    if (getenv("WARP")) pc.warp = (uint8_t)atoi(getenv("WARP"));
+    if (getenv("FLOW")) pc.drift = (uint8_t)atoi(getenv("FLOW"));
+    if (getenv("CHAOS")) pc.chaos = (uint8_t)atoi(getenv("CHAOS"));
     if (getenv("ENG")) {                         /* ENG=NAME: that engine on layer LAYER (or SOLO's) */
         int l = getenv("LAYER") ? atoi(getenv("LAYER")) : getenv("SOLO") ? atoi(getenv("SOLO")) : 1;
         for (int e = 0; e < NUM_ENGINES; e++) if (!strcmp(ENGINE_NAME[e], getenv("ENG"))) pc.l[l].engine = (uint8_t)e;
@@ -39,6 +55,8 @@ int main(int argc, char **argv)
     if (getenv("GRAIN")) pc.grain = (uint8_t)atoi(getenv("GRAIN"));   /* GRAIN=0..100: the shared GRAIN */
     if (getenv("DIRT")) pc.dirt = (uint8_t)atoi(getenv("DIRT"));
     if (getenv("WEAR")) pc.wear = (uint8_t)atoi(getenv("WEAR"));
+    if (getenv("MUTE")) for (int l = 0; l < NUM_LAYERS; l++) if (atoi(getenv("MUTE")) & (1 << l)) pc.l[l].level = 0;   /* MUTE=bitmask */
+    if (getenv("DRIFT")) pc.weird = (uint8_t)atoi(getenv("DRIFT"));   /* DRIFT=0..100 */
     if (getenv("SOLO")) {                        /* SOLO=0..3: that layer alone */
         int k = atoi(getenv("SOLO"));
         for (int l = 0; l < NUM_LAYERS; l++) if (l != k) pc.l[l].level = 0;
@@ -62,10 +80,11 @@ int main(int argc, char **argv)
     for (long done = 0; done < frames; done += ENGINE_SUB * BLK) {
         engine_block_begin(&eng, ENGINE_SUB);
         eng.gov += (1.0f - eng.gov) * 0.01f;   /* (the app's load guard easing back, as on the FM-1 with room to spare) */
+        if (getenv("GOV1")) eng.gov = 1.0f;
         for (int b = 0; b < NBUS; b++) engine_block_layer(&eng, b);
         engine_block_mix(&eng, L, R);
         for (int i = 0; i < ENGINE_SUB * BLK && done + i < frames; i++) {
-            float l = soft(L[i] * 1.0f), r = soft(R[i] * 1.0f);
+            float og = getenv("OUTG") ? (float)atof(getenv("OUTG")) : 1.0f, l = soft(L[i] * og), r = soft(R[i] * og);
             if (fm_fabsf(L[i]) > peak) peak = fm_fabsf(L[i]);
             ss += L[i] * L[i];
             w16(f, (uint32_t)(int16_t)(l * 32000.0f)); w16(f, (uint32_t)(int16_t)(r * 32000.0f));

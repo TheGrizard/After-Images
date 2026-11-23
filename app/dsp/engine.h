@@ -86,6 +86,7 @@ typedef struct {
     int next_v;
     int8_t last_v[5]; float last_hz[5]; int last_n;   /* the last note's (or chord's) voices and pitches: glide, legato */
     float lp_hz, hp_hz;                  /* its band's filters now (TONE, gliding there) */
+    int idle;                            /* control steps since its bus last had a note: its filters ring out, then rest */
     float im, im_t, im_g, im_far, im_pan, im_l, im_r;   /* DRIFT's: its wandering level, where it's going, its gain, how far off, its walk's pan and gains */
     Drift dwalk;
     Drift mwalk[NMORPH]; float mw[NMORPH];   /* DRIFT's morphing: each of its sends, TONE, WEIGHT, ENTROPY wandering (mw: -1..1, DRIFT's share) */
@@ -98,6 +99,11 @@ struct Engine {
     const Piece *p;                      /* the settings it follows (the app's) */
     Layer L[NUM_LAYERS];
     Voice kv[KEY_POLY]; VoiceEv kq[EVQ]; int nkq; int key_next;
+    /* a note taken while it sounds (every voice busy) fades out here over ~15 ms while the new one starts afresh: four
+     * a bus, as a busy pattern's chord can take several at once (one, as it was, left the rest cut: a click each) */
+    Voice ghost[NBUS][4];
+    float mx_g[NBUS][5];                 /* each bus's last gains into the mix (dry L, R, reverb, echo, chorus): glided from */
+    int kidle;                           /* the keys' bus: as Layer's idle */
     int8_t kv_lay[KEY_POLY];             /* each key voice's layer (whose knobs it follows) */
     uint8_t kv_own[KEY_POLY];            /* and who played it (a key, or a MIDI channel): its note-off lets go of its own alone */
     Svf khp[2], klp[2]; Dirt kdirt;      /* the keys through their layer's chain: its TONE and DIRT (ENTROPY: in the voices) */
@@ -115,7 +121,7 @@ struct Engine {
     float ext_bpm;                       /* MIDI clock's tempo, followed (0: the piece's own) */
     int bar, root, chord_bars, chord_left, sec_left, mask;
     int want_change;                     /* LINK asked for a new chord at the next bar */
-    float duck, gov, fade;
+    float duck, duck_to, gov, fade;
     int playing;
     /* effects */
     Reverb rv; Echo echo; Ens ens; float shim_prev[BLK]; Wear wear;   /* (the shimmer's shifter: in engine.c, out of the pool) */
@@ -126,7 +132,7 @@ struct Engine {
     int stems_on;                        /* a computer records the clean mix or the stems (USB channels 3-10): fill stem[] */
     float stem[NBUS][2][ENGINE_SUB * BLK];   /* each bus before any of FX's effects (DIRT too): then, in engine_mix_sends, each
                                           * layer at its level and pan, the keys added into the chosen layer's */
-    Svf de[2]; float de_band, de_all, de_cut;      /* the softener: 2-5 kHz turned down when it pokes out */   /* the balance: the mix tilted toward the pieces' middle (see engine_mix_finish) */
+    Svf de[2]; float de_band, de_all, de_cut, de_c, tl_g;      /* the softener: 2-5 kHz turned down when it pokes out */   /* the balance: the mix tilted toward the pieces' middle (see engine_mix_finish) */
     float sub[2];                        /* MOOD's low shelf: the mix's lows (below ~110 Hz), added back darker it goes */
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */

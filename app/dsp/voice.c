@@ -259,13 +259,11 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
 void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float pan, float from_hz, uint32_t seed)
 {
     float wt = clamp01(s->weight);
-    int warm = v->on && v->env > 0.002f;         /* a voice taken while it still sounds: its level, phases and filters
-                                                  * carried on into the new note, not cut (a cut is a click) */
     v->on = 1; v->rel = 0; v->engine = s->engine; v->note = (int8_t)note; v->seed = seed;
-    v->freq = mtof((float)note); v->vel = vel; v->pan = clampf(pan, -1.0f, 1.0f); v->age = 0;
+    v->freq = mtof((float)note); v->vel = vel; v->g_last = vel * 0.32f; v->pan = clampf(pan, -1.0f, 1.0f); v->age = 0;
     {
         float t = (v->pan + 1.0f) * 0.25f * PI_F;
-        v->gl = fm_cosf(t); v->gr = fm_sinf(t);
+        v->gl = fm_cosf(t); v->gr = fm_sinf(t); v->gl_last = v->gl; v->gr_last = v->gr;
     }
     v->noise = seed | 1u;
     v->freq_t = v->freq;                         /* the pitch: always at once (no portamento) */
@@ -275,15 +273,13 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
     v->sw = 0;
     v->pan_ph = (float)(seed >> 20 & 255u) / 256.0f;
     v->pan_dp = (0.04f + 0.3f * (float)(seed >> 4 & 255u) / 255.0f) * BLK_S;   /* once every 3 to 25 s */
-    if (!warm) v->env = 0;
+    v->env = 0;                                  /* (a note taken while it sounded fades out in the engine's ghost) */
     v->hold = dur;
     float att = s->attack * (1.15f - 0.9f * wt);                 /* heavy: sharper */
     v->a_k = k_of(att * 0.33f + 0.0008f);
-    if (!warm) {
-        for (int i = 0; i < 4; i++) v->ph[i] = (float)((seed >> (i * 8)) & 255u) * (1.0f / 256.0f);
-        v->fb = 0; v->lp.z = 0; v->sl[0].z = v->sl[1].z = 0;
-        memset(&v->f, 0, sizeof v->f); memset(&v->f2, 0, sizeof v->f2);
-    }
+    for (int i = 0; i < 4; i++) v->ph[i] = (float)((seed >> (i * 8)) & 255u) * (1.0f / 256.0f);
+    v->fb = 0; v->lp.z = 0; v->sl[0].z = v->sl[1].z = 0;
+    memset(&v->f, 0, sizeof v->f); memset(&v->f2, 0, sizeof v->f2);
     v->z1 = v->z2 = 0; v->lfo = 0; v->ix = 0;
     voice_params(v, s, seed, 1);
     v->ws = 0;                                   /* (the piece's DRIFT ring modulator: set by the engine each block) */
@@ -352,7 +348,10 @@ void voice_render(Voice *v, float *L, float *R, int n)
         out[i] = env;
     }
     v->hold -= (float)n / SR; v->age += (float)n / SR;
-    if (v->hold <= 0 && env < g_voice_floor) { v->on = 0; v->env = 0; return; }
+    int last = v->hold <= 0 && env < g_voice_floor;   /* faded under the floor: this block its last, faded the rest of the way
+                                                  * to nothing (cut, it stepped from its level to silence: a tiny click
+                                                  * each, a crackle under a busy pattern) */
+    if (last) for (int i = 0; i < n; i++) out[i] *= 1.0f - (float)(i + 1) / (float)n;
     v->env = env;
     float envs[BLK];                             /* (the envelope, kept for ENTROPY's chaos oscillator) */
     if (v->ent > 0.001f) for (int i = 0; i < n; i++) envs[i] = out[i];
@@ -771,8 +770,16 @@ void voice_render(Voice *v, float *L, float *R, int n)
             out[i] *= 1.0f - ws + ws * sine_c(v->ph[3]) * 1.3f;
         }
     }
+    /* the gain and the pan ramped over the block from where they were, not stepped there: a legato's new velocity, and the
+     * pan wandering (FLOW, CHAOS) or swirling (ORGAN), moved a block at a time, were a step in level every 0.7 ms, a
+     * fine crackle under a busy pattern */
+    float a0 = v->g_last * v->gl_last, b0 = v->g_last * v->gr_last, a1 = gain * v->gl, b1 = gain * v->gr;
+    float da = (a1 - a0) / (float)n, db = (b1 - b0) / (float)n;
     for (int i = 0; i < n; i++) {
-        float x = soft_clip(out[i] * d) * norm * gain;
-        L[i] += x * v->gl; R[i] += x * v->gr;
+        a0 += da; b0 += db;
+        float x = soft_clip(out[i] * d) * norm;
+        L[i] += x * a0; R[i] += x * b0;
     }
+    v->g_last = gain; v->gl_last = v->gl; v->gr_last = v->gr;
+    if (last) { v->on = 0; v->env = 0; }
 }

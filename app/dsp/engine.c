@@ -49,7 +49,6 @@ static void midi_due(Engine *e)
 
 /* each bus's ghost: a note whose voice a new one took, fading out over ~80 ms, not cut off (in the RAM beside the
  * engine's, not the pool's: the pool keeps its headroom) */
-static Voice g_ghost[NBUS];
 static Shifter g_shim;                           /* the shimmer's pitch shifter (8 KB: beside the engine, not in the pool) */
 
 /* the mix's buffers, a block's (engine_mix_*: the stages two cores share) */
@@ -105,7 +104,7 @@ void engine_init(Engine *e, const Piece *p)
     memset(e, 0, sizeof *e);
     memset(mx_rl, 0, sizeof mx_rl); memset(mx_rr, 0, sizeof mx_rr); memset(mx_el, 0, sizeof mx_el); memset(mx_er, 0, sizeof mx_er);
     memset(mx_gm, 0, sizeof mx_gm); mx_nsub = 0;
-    memset(g_ghost, 0, sizeof g_ghost); memset(&g_shim, 0, sizeof g_shim);
+    memset(e->ghost, 0, sizeof e->ghost); memset(&g_shim, 0, sizeof g_shim);
     e->p = p;
     e->gov = 1.0f; e->playing = 1; e->fade = 0.0f;
     for (int l = 0; l < NUM_LAYERS; l++) {
@@ -214,7 +213,7 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
     L->last_n = nn;
     e->events[l]++;
     L->cv = fm_maxf(L->cv, sn->vel);
-    if (l == L_GROUND) e->duck = fm_maxf(e->duck, vel * u(lp->weight) * 0.45f);
+    if (l == L_GROUND) e->duck_to = fm_maxf(e->duck_to, vel * u(lp->weight) * 0.45f);
     /* LINK: a note nudges another layer's system; now and then it asks the harmony to move */
     float link = u(p->link);
     if (link > 0.01f && rng_chance(&e->rng, link * 0.22f)) {
@@ -325,7 +324,9 @@ static void control(Engine *e, int sub)
     float prev = e->beat;
     e->beat += beats;
     if ((int)(e->beat * 0.25f) != (int)(prev * 0.25f)) bar(e);
-    e->duck -= e->duck * (BLK_S / 0.12f);
+    /* the duck: GROUND's notes pull BODY and DUST down, let go over 120 ms; eased in over ~10 ms, never a step */
+    e->duck_to -= e->duck_to * (BLK_S / 0.12f);
+    e->duck += (e->duck_to - e->duck) * (BLK_S / 0.01f);
     float motion = u(p->motion);
     for (int l = 0; l < NUM_LAYERS; l++) {
         Layer *L = &e->L[l]; const LayerP *lp = &p->l[l];
@@ -482,8 +483,11 @@ static void apply(VoiceEv *q, int nq, Voice *v, Voice *ghost, int sub)
         if (q[i].rel == 1) voice_release(x);
         else if (q[i].rel == 2) voice_legato(x, q[i].note, q[i].vel, q[i].dur);
         else {
-            if (x->on && x->env > 0.002f && (!ghost->on || ghost->env < x->env)) {   /* a sounding note taken: it fades, no click */
-                *ghost = *x; ghost->hold = 0; ghost->r_k = 0.0015f;
+            if (x->on && x->env > 0.002f) {      /* a sounding note taken: it fades in a ghost, no click (the quietest
+                                                  * ghost given up if all four are fading) */
+                Voice *g = &ghost[0];
+                for (int j = 0; j < 4; j++) { if (!ghost[j].on) { g = &ghost[j]; break; } if (ghost[j].env < g->env) g = &ghost[j]; }
+                if (!g->on || g->env < x->env) { *g = *x; g->hold = 0; g->r_k = 0.0015f; }
             }
             voice_start(x, &q[i].snd, q[i].note, q[i].vel, q[i].dur, q[i].pan, q[i].from_hz, q[i].seed);
         }
@@ -502,11 +506,14 @@ void engine_block_layer(Engine *e, int b)
         float *sl = e->stem[b][0] + k * BLK, *sr = e->stem[b][1] + k * BLK;   /* (the stem: before DIRT) */
         if (e->stems_on) { memset(sl, 0, sizeof(float) * BLK); memset(sr, 0, sizeof(float) * BLK); }
         if (b == KEYS) {
-            apply(e->kq, e->nkq, e->kv, &g_ghost[KEYS], k);
+            apply(e->kq, e->nkq, e->kv, e->ghost[KEYS], k);
             int any = 0;
-            if (g_ghost[KEYS].on) { g_ghost[KEYS].pm = e->pm[KEYS]; voice_render(&g_ghost[KEYS], Lb, Rb, BLK); any = 1; }
+            for (int j = 0; j < 4; j++) if (e->ghost[KEYS][j].on) { e->ghost[KEYS][j].pm = e->pm[KEYS]; voice_render(&e->ghost[KEYS][j], Lb, Rb, BLK); any = 1; }
             for (int i = 0; i < KEY_POLY; i++) if (e->kv[i].on) { e->kv[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; e->kv[i].pm = e->pm[KEYS]; voice_render(&e->kv[i], Lb, Rb, BLK); any = 1; }
-            if (!any) continue;
+            /* no note sounding: the filters still ring out what they hold (not left mid-swing, to jump when the next note
+             * comes: a click at each), then rest at zero */
+            if (!any && e->kidle >= 64) { for (int c = 0; c < 2; c++) { e->klp[c].ic1 = e->klp[c].ic2 = e->khp[c].ic1 = e->khp[c].ic2 = 0; } continue; }
+            e->kidle = any ? 0 : e->kidle + 1;
             int kl = e->key_layer;               /* through the chosen layer's chain, as its own notes go */
             for (int i = 0; i < BLK; i++) {
                 Lb[i] = svf_lp(&e->klp[0], svf_hp(&e->khp[0], Lb[i]));
@@ -517,16 +524,20 @@ void engine_block_layer(Engine *e, int b)
             continue;
         }
         Layer *L = &e->L[b];
-        apply(L->q, L->nq, L->v, &g_ghost[b], k);
+        apply(L->q, L->nq, L->v, e->ghost[b], k);
         if (e->gains[k][b] < 1e-4f) {            /* faded right out (DRIFT, LEVEL): its voices go on unheard, no sound made */
             for (int i = 0; i < L->nv; i++) voice_skip(&L->v[i], BLK);
-            g_ghost[b].on = 0;
+            for (int j = 0; j < 4; j++) e->ghost[b][j].on = 0;
+            for (int c = 0; c < 2; c++) { L->lp[c].ic1 = L->lp[c].ic2 = L->hp[c].ic1 = L->hp[c].ic2 = 0; }   /* (unheard: back from rest) */
             continue;
         }
         int any = 0; made = 1;
-        if (g_ghost[b].on) { g_ghost[b].pm = e->pm[b]; voice_render(&g_ghost[b], Lb, Rb, BLK); any = 1; }
+        for (int j = 0; j < 4; j++) if (e->ghost[b][j].on) { e->ghost[b][j].pm = e->pm[b]; voice_render(&e->ghost[b][j], Lb, Rb, BLK); any = 1; }
         for (int i = 0; i < L->nv; i++) if (L->v[i].on) { L->v[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; L->v[i].pm = e->pm[b]; voice_render(&L->v[i], Lb, Rb, BLK); any = 1; }
-        if (!any) continue;
+        /* no note sounding: the band's filters still ring out what they hold, then rest at zero. (They stopped mid-swing,
+         * held there, and jumped out when the next note came: a click on the control step, loud with a dark TONE) */
+        if (!any && L->idle >= 64) { for (int c = 0; c < 2; c++) { L->lp[c].ic1 = L->lp[c].ic2 = L->hp[c].ic1 = L->hp[c].ic2 = 0; } continue; }
+        L->idle = any ? 0 : L->idle + 1;
         for (int i = 0; i < BLK; i++) {
             Lb[i] = svf_lp(&L->lp[0], svf_hp(&L->hp[0], Lb[i]));
             Rb[i] = svf_lp(&L->lp[1], svf_hp(&L->hp[1], Rb[i]));
@@ -584,19 +595,24 @@ void engine_mix_sends(Engine *e)
             float es = mo(e, sl, MW_ECHO, p->s_echo[sl], 0.5f) * eck * 1.4f * g;
             float gs = fm_maxf(mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f), 0.8f * u(p->grain)) * g;   /* (the shared CHORUS: every layer into it a little) */
             float ss = 0;
+            /* every gain glided sample by sample from the last block's: a duck, a fade or a send moving never steps */
+            float *m = e->mx_g[b], to[5] = { g * pl, g * pr, rs, es, gs }, a[5], d[5];
+            for (int j = 0; j < 5; j++) { a[j] = m[j]; d[j] = (to[j] - m[j]) * (1.0f / BLK); m[j] = to[j]; }
             int st = b < NUM_LAYERS ? b : e->key_layer;
             if (e->stems_on && st >= 0 && st < NUM_LAYERS) {   /* the stems: each layer with no effects (DIRT neither), at its
                                                                  * level and pan; the keys (the last bus) into the chosen one's */
                 float *xl = e->stem[st][0] + k * BLK, *xr = e->stem[st][1] + k * BLK, *ql = e->stem[b][0] + k * BLK, *qr = e->stem[b][1] + k * BLK;
-                if (b < NUM_LAYERS) for (int i = 0; i < BLK; i++) { xl[i] = ql[i] * g * pl; xr[i] = qr[i] * g * pr; }
-                else for (int i = 0; i < BLK; i++) { xl[i] += ql[i] * g * pl; xr[i] += qr[i] * g * pr; }
+                float x0 = a[0], x1 = a[1];
+                if (b < NUM_LAYERS) for (int i = 0; i < BLK; i++) { x0 += d[0]; x1 += d[1]; xl[i] = ql[i] * x0; xr[i] = qr[i] * x1; }
+                else for (int i = 0; i < BLK; i++) { x0 += d[0]; x1 += d[1]; xl[i] += ql[i] * x0; xr[i] += qr[i] * x1; }
             }
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];
-                dl[i] += l * g * pl; dr[i] += r * g * pr;
-                rl[i] += l * rs; rr[i] += r * rs;
-                el[i] += l * es; er[i] += r * es;
-                gm[i] += (l + r) * 0.5f * gs;
+                a[0] += d[0]; a[1] += d[1]; a[2] += d[2]; a[3] += d[3]; a[4] += d[4];
+                dl[i] += l * a[0]; dr[i] += r * a[1];
+                rl[i] += l * a[2]; rr[i] += r * a[2];
+                el[i] += l * a[3]; er[i] += r * a[3];
+                gm[i] += (l + r) * 0.5f * a[4];
                 ss += l * l + r * r;
             }
             if (b < NUM_LAYERS) {
@@ -687,13 +703,16 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
                     e->tl_db += (want - e->tl_db) * (BLK_S / 4.0f);
                 }
             }
-            float g = fm_exp2f(-e->tl_db * (3.3219f / 40.0f)), gi = 1.0f / g;   /* (lows times g, highs over g: tl_db between them) */
-            if (fm_fabsf(e->tl_db) > 0.05f)
-                for (int i = 0; i < BLK; i++) {
-                    e->tl_s[0] += at * (L[i] - e->tl_s[0]); e->tl_s[1] += at * (R[i] - e->tl_s[1]);
-                    L[i] = e->tl_s[0] * g + (L[i] - e->tl_s[0]) * gi; R[i] = e->tl_s[1] * g + (R[i] - e->tl_s[1]) * gi;
-                }
-            else { e->tl_s[0] = L[BLK - 1]; e->tl_s[1] = R[BLK - 1]; }
+            /* (lows times g, highs over g: tl_db between them). Always run, and g glided sample by sample from the
+             * last block's, so the tilt never steps on a block edge */
+            float g1 = fm_exp2f(-e->tl_db * (3.3219f / 40.0f)), g = e->tl_g > 0 ? e->tl_g : g1, gi = 1.0f / g;
+            float dg = (g1 - g) / (float)BLK, dgi = (1.0f / g1 - gi) / (float)BLK;
+            for (int i = 0; i < BLK; i++) {
+                g += dg; gi += dgi;
+                e->tl_s[0] += at * (L[i] - e->tl_s[0]); e->tl_s[1] += at * (R[i] - e->tl_s[1]);
+                L[i] = e->tl_s[0] * g + (L[i] - e->tl_s[0]) * gi; R[i] = e->tl_s[1] * g + (R[i] - e->tl_s[1]) * gi;
+            }
+            e->tl_g = g1;
         }
         /* the softener: a dynamic EQ on the presence band (3.2 kHz, two octaves wide), where resonances and bright
          * engines turn harsh on monitors. When the band stands more than 9 dB under the whole (where most of the time it
@@ -709,11 +728,14 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
             e->de_all += (sa - e->de_all) * 0.02f;
             float over = e->de_all > 1e-9f && e->de_band > 1e-12f ? 10.0f * 0.30103f * fm_log2f(e->de_band / e->de_all) + 9.0f : -1.0f;
             float want = clampf(over, 0.0f, 8.0f);       /* dB to take off */
-            e->de_cut += (want - e->de_cut) * (want > e->de_cut ? 0.25f : 0.02f);
-            if (e->de_cut > 0.05f) {
-                float c = 1.0f - fm_exp2f(-e->de_cut * (3.3219f / 20.0f));
-                for (int i = 0; i < BLK; i++) { L[i] -= c * bl[i]; R[i] -= c * br[i]; }
+            e->de_cut += (want - e->de_cut) * (want > e->de_cut ? 0.08f : 0.02f);
+            /* the cut glided sample by sample from the last block's, so it never steps on a block edge */
+            float c1 = e->de_cut > 0.05f ? 1.0f - fm_exp2f(-e->de_cut * (3.3219f / 20.0f)) : 0.0f, c = e->de_c;
+            if (c1 > 0.0f || c > 0.0f) {
+                float dc = (c1 - c) / (float)BLK;
+                for (int i = 0; i < BLK; i++) { c += dc; L[i] -= c * bl[i]; R[i] -= c * br[i]; }
             }
+            e->de_c = c1;
         }
         wear_run(&e->wear, u(p->wear), L, R, BLK);        /* WEAR: the whole of it, the reverb's tails too */
         if (shelf > 0.001f)

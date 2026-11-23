@@ -22,7 +22,7 @@ typedef struct {
 typedef struct {
     uint32_t seed;
     uint8_t mood, motion, evolve, weird;          /* HOME (weird: DRIFT, the layers' wandering levels and pans) */
-    uint8_t reverb, echo, grain, chorus;          /* EFFECTS (grain: CHORUS, the send's, since v0.29; it was GRAIN); chorus: WARBLE's JUNO (in v0.1 this byte was SHIMMER) */
+    uint8_t reverb, echo, grain, wear;            /* EFFECTS (grain: CHORUS, the send's, since v0.29; it was GRAIN); chorus: WARBLE's WEAR since v0.29, its chorus before (in v0.1 SHIMMER) */
     uint8_t link, warp, drift, chaos;             /* MOTION (the LFO button) */
     uint8_t key, scale, chord, tempo;             /* SCALE (the GLO button): tempo is BPM - 40 */
     uint8_t dirt, warble, flutter, detune;        /* EFFECTS' DIRT; WARBLE's (LFO again): in v0.1 the tape's, zeroed at the upgrade */
@@ -115,7 +115,7 @@ struct Engine {
     float duck, gov, fade;
     int playing;
     /* effects */
-    Reverb rv; Echo echo; Ens ens; float shim_prev[BLK]; Chorus ch;   /* (the shimmer's shifter: in engine.c, out of the pool) */
+    Reverb rv; Echo echo; Ens ens; float shim_prev[BLK]; Wear wear;   /* (the shimmer's shifter: in engine.c, out of the pool) */
     float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];
     float im_left;                       /* DRIFT: seconds until the levels choose where to wander next */   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];

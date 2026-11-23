@@ -244,24 +244,23 @@ void shifter_run(Shifter *s, const float *in, float *up, float *down, int n)
     }
 }
 
-/* ------------------------------------------------------------------ chorus */
-void chorus_run(Chorus *c, float amt, float *L, float *R, int n)
+/* ------------------------------------------------------------------ WEAR: the whole mix as on an old, worn tape
+ * The top dulling (two poles, 20 kHz down to about 2 kHz by full), wandering a little as a worn tape's azimuth does,
+ * and the stereo narrowing, its sides darker still */
+void wear_run(Wear *w, float amt, float *L, float *R, int n)
 {
-    if (amt < 0.005f) { for (int i = 0; i < n; i++) { c->buf[c->pos] = to16(0.5f * (L[i] + R[i])); c->pos = (c->pos + 1) & (CH_LINE - 1); } return; }
-    float rate = (0.35f + 0.5f * amt) / SR, depth = 60.0f + 90.0f * amt;   /* (around 7 ms, swinging 1.5 to 3.5 ms) */
+    if (amt < 0.005f) { w->l1 = w->l2 = w->r1 = w->r2 = w->s1 = 0; return; }
+    w->ph += (float)n * (0.11f / SR); if (w->ph >= 1.0f) w->ph -= 1.0f;
+    w->ph2 += (float)n * (0.37f / SR); if (w->ph2 >= 1.0f) w->ph2 -= 1.0f;
+    float wob = 1.0f + amt * (0.18f * sine_c(w->ph) + 0.07f * sine_c(w->ph2));   /* (the azimuth wandering) */
+    float fc = 20000.0f * fm_exp2f(-3.2f * amt) * wob;          /* (20 kHz, 2.2 kHz by full) */
+    float a = 1.0f - fm_expf(-2.0f * PI_F * fm_minf(fc, 16000.0f) / SR);
+    float as = 1.0f - fm_expf(-2.0f * PI_F * fm_minf(fc * 0.5f, 12000.0f) / SR), width = 1.0f - 0.7f * amt;
     for (int i = 0; i < n; i++) {
-        c->buf[c->pos] = to16(0.5f * (L[i] + R[i]));
-        c->ph += rate; if (c->ph >= 1.0f) c->ph -= 1.0f;
-        float tri = c->ph < 0.5f ? 4.0f * c->ph - 1.0f : 3.0f - 4.0f * c->ph;
-        float o[2];
-        for (int k = 0; k < 2; k++) {               /* (the delay's whole samples back from here, then between two) */
-            float d = 310.0f + depth * (k ? -tri : tri); int di = (int)d; float f = d - (float)di;
-            int a = (c->pos - di) & (CH_LINE - 1), b = (a - 1) & (CH_LINE - 1);
-            o[k] = ((float)c->buf[a] + ((float)c->buf[b] - (float)c->buf[a]) * f) * (1.0f / 16384.0f);
-        }
-        c->pos = (c->pos + 1) & (CH_LINE - 1);
-        float w = 0.45f * amt + 0.25f;
-        L[i] = L[i] * (1.0f - 0.35f * amt) + o[0] * w;
-        R[i] = R[i] * (1.0f - 0.35f * amt) + o[1] * w;
+        w->l1 += a * (L[i] - w->l1); w->l2 += a * (w->l1 - w->l2);
+        w->r1 += a * (R[i] - w->r1); w->r2 += a * (w->r1 - w->r2);
+        float m = 0.5f * (w->l2 + w->r2), sd = 0.5f * (w->l2 - w->r2);
+        w->s1 += as * (sd - w->s1);
+        L[i] = m + w->s1 * width; R[i] = m - w->s1 * width;
     }
 }

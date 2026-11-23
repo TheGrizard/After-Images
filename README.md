@@ -80,7 +80,7 @@ Press a page's button again for its next page; dots by the page's name show how 
 | FX | SENDS (chosen layer) | REVERB · ECHO · CHORUS · DIRT |
 | FX again | EFFECTS (shared) | REVERB · ECHO · CHORUS · DIRT |
 | LFO | MOTION | LINK · WARP · FLOW · CHAOS |
-| LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · JUNO |
+| LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · WEAR |
 | GLO | SCALE | KEY · SCALE · CHORDS · TEMPO |
 | GLO again | VISUAL | VISUAL · · SHAPES (MOSH's) · |
 | GLO a third time | SCREEN | the chosen visual's four (below) |
@@ -107,7 +107,7 @@ Press a page's button again for its next page; dots by the page's name show how 
 - **MOTION:** LINK (layers answering each other), WARP (swing, phrases speeding and slowing), FLOW (slow random
   movement), CHAOS (ratchets and skips).
 - **WARBLE** puts Boards of Canada's worn tape in the synth itself: the pitch wandering, a faster flutter, everything
-  a touch flat, and JUNO, the Juno's chorus on the whole mix.
+  a touch flat, and WEAR: the whole mix dulling and narrowing like an old tape, its top end wandering.
 
 The knobs reach notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWEEP or RESO and held notes follow.
 
@@ -121,7 +121,7 @@ beating), MALLET (marimba, vibes or kalimba), WAVES (a wavetable scanned dark to
 aah).
 
 Each REC also features one effect: shimmer, reverse echo, chorus, ensemble, tape saturation, tape fuzz,
-wide space or HAZE (warble, chorus, flat and dark), never the same twice in a row. A slow leveller keeps every piece
+wide space or HAZE (warble, wear, chorus, flat and dark), never the same twice in a row. A slow leveller keeps every piece
 at about the same loudness.
 
 ## The visuals

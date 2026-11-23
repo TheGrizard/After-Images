@@ -121,7 +121,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     p->reverb = pick(&r, 25, 48); p->echo = pick(&r, 8, 40); p->grain = rng_chance(&r, 0.4f) ? pick(&r, 10, 35) : 0;
     /* WARBLE: a little of the worn-tape wander in most pieces, a lot in HAZE's */
     p->warble = rng_chance(&r, 0.6f) ? pick(&r, 5, 35) : 0; p->flutter = rng_chance(&r, 0.3f) ? pick(&r, 5, 25) : 0;
-    p->detune = rng_chance(&r, 0.35f) ? pick(&r, 10, 45) : 0; p->chorus = rng_chance(&r, 0.45f) ? pick(&r, 15, 55) : 0;
+    p->detune = rng_chance(&r, 0.35f) ? pick(&r, 10, 45) : 0; p->wear = rng_chance(&r, 0.3f) ? pick(&r, 10, 40) : 0;
     p->dirt = 0;
     if (fx < 0 || fx >= NUM_FX) fx = rng_int(&r, NUM_FX);
     switch (fx) {
@@ -131,8 +131,10 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     case FX_ENSEMBLE: p->grain = pick(&r, 65, 95); break;
     case FX_FOLD:    p->dirt = pick(&r, 5, 32); break;
     case FX_CRUSH:   p->dirt = pick(&r, 40, 64); break;
-    case FX_HAZE:    /* Boards of Canada's: the pitch wandering, the chorus, a touch flat, dark, echoed */
-        p->warble = pick(&r, 45, 85); p->flutter = pick(&r, 10, 35); p->detune = pick(&r, 30, 65); p->chorus = pick(&r, 50, 90);
+    case FX_HAZE:    /* Boards of Canada's: the pitch wandering, worn, chorused, a touch flat, dark, echoed */
+        p->warble = pick(&r, 45, 85); p->flutter = pick(&r, 10, 35); p->detune = pick(&r, 30, 65); p->wear = pick(&r, 35, 70);
+        p->grain = pick(&r, 30, 50);                 /* (the chorus on all but the bass) */
+        for (int l = 0; l < NUM_LAYERS; l++) p->s_grain[l] = l == L_GROUND ? 0 : pick(&r, 45, 85);
         p->echo = pick(&r, 25, 45);
         for (int l = 0; l < NUM_LAYERS; l++) p->l[l].tone = (uint8_t)clampi_(p->l[l].tone - 8, 0, 100);
         if (rng_chance(&r, 0.6f)) p->l[L_BODY].engine = E_BOARDS;
@@ -203,7 +205,7 @@ void piece_default(Piece *p)
 int piece_ok(const Piece *p)
 {
     if (p->scale >= NUM_SCALES || p->key >= 12 || p->chord >= NUM_CHORDS || p->tempo > 140 || p->dirt > 100) return 0;
-    if (p->warble > 100 || p->flutter > 100 || p->detune > 100 || p->chorus > 100) return 0;
+    if (p->warble > 100 || p->flutter > 100 || p->detune > 100 || p->wear > 100) return 0;
     const uint8_t *v = &p->mood;
     for (int i = 0; i < 12; i++) if (v[i] > 100) return 0;
     for (int l = 0; l < NUM_LAYERS; l++) {

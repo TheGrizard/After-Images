@@ -338,7 +338,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "REVERB", K_PCT, 3, PO(s_rv) }, { "ECHO", K_PCT, 3, PO(s_echo) }, { "CHORUS", K_PCT, 3, PO(s_grain) }, { "DIRT", K_PCT, 3, PO(s_dirt) } },
     { { "REVERB", K_RVB, 0, PO(reverb) }, { "ECHO", K_ECHO, 0, PO(echo) }, { "CHORUS", K_GRAIN, 0, PO(grain) }, { "DIRT", K_DIRT, 0, PO(dirt) } },
     { { "LINK", K_PCT, 0, PO(link) }, { "WARP", K_PCT, 0, PO(warp) }, { "FLOW", K_PCT, 0, PO(drift) }, { "CHAOS", K_PCT, 0, PO(chaos) } },
-    { { "WARBLE", K_PCT, 0, PO(warble) }, { "FLUTTER", K_PCT, 0, PO(flutter) }, { "DETUNE", K_PCT, 0, PO(detune) }, { "JUNO", K_PCT, 0, PO(chorus) } },
+    { { "WARBLE", K_PCT, 0, PO(warble) }, { "FLUTTER", K_PCT, 0, PO(flutter) }, { "DETUNE", K_PCT, 0, PO(detune) }, { "WEAR", K_PCT, 0, PO(wear) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
     { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_SYNC, 2, SO(sync) } },

@@ -617,14 +617,14 @@ void engine_mix_reverb(Engine *e)                /* the wet effects (the second 
     if (e->clock) e->cost_rv += ((float)(now(e) - t0) - e->cost_rv) * 0.05f;
 }
 
-void engine_mix_echo(Engine *e)                  /* the wet added to the dry, and the chorus on it */
+void engine_mix_echo(Engine *e)                  /* the wet added to the dry */
 {
     const Piece *p = e->p;
     for (int k = 0; k < e->nsub; k++) {
         float *dl = mx_dl + k * BLK, *dr = mx_dr + k * BLK, *wl = mx_wl + k * BLK, *wr = mx_wr + k * BLK;
         for (int i = 0; i < BLK; i++) { dl[i] += wl[i]; dr[i] += wr[i]; }
-        chorus_run(&e->ch, u(p->chorus), dl, dr, BLK);  /* the chorus on the dry sound (the reverb's sends taken before it) */
     }
+    (void)p;
 }
 
 void engine_mix_finish(Engine *e, float *outL, float *outR)
@@ -639,6 +639,7 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
             e->dc[0] += 0.0035f * (l - e->dc[0]); e->dc[1] += 0.0035f * (r - e->dc[1]);
             L[i] = l - e->dc[0]; R[i] = r - e->dc[1];
         }
+        wear_run(&e->wear, u(p->wear), L, R, BLK);        /* WEAR: the whole of it, the reverb's tails too */
         if (shelf > 0.001f)
             for (int i = 0; i < BLK; i++) {
                 e->sub[0] += 0.0156f * (L[i] - e->sub[0]); e->sub[1] += 0.0156f * (R[i] - e->sub[1]);

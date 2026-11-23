@@ -34,6 +34,7 @@ int main(int argc, char **argv)
     }
     if (getenv("GRAIN")) pc.grain = (uint8_t)atoi(getenv("GRAIN"));   /* GRAIN=0..100: the shared GRAIN */
     if (getenv("DIRT")) pc.dirt = (uint8_t)atoi(getenv("DIRT"));
+    if (getenv("WEAR")) pc.wear = (uint8_t)atoi(getenv("WEAR"));
     if (getenv("SOLO")) {                        /* SOLO=0..3: that layer alone */
         int k = atoi(getenv("SOLO"));
         for (int l = 0; l < NUM_LAYERS; l++) if (l != k) pc.l[l].level = 0;

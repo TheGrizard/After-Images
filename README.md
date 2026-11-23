@@ -150,8 +150,8 @@ and the four layers always keep four clearly different hues.
 - **Following a clock**, it locks to the leader's beats and bars, not only its tempo, and stays there through a new
   piece or a change of tempo. With an **Ableton Move**: a USB cable from Move's USB-A port to the FM-1, Move's MIDI
   Sync set to Out, and CLOCK at IN.
-- **USB audio** (ARP a third time): ten channels to the computer. OUTPUT: MIX (the mix on 1-2), CLEAN (and the mix
-  without effects on 3-4) or STEMS (and each layer without effects on 3-4, 5-6, 7-8, 9-10). LEVEL: as the volume knob
+- **USB audio** (ARP a third time): ten channels to the computer. OUTPUT: MIX (the mix on 1-2, the mix without
+  effects on 3-4) or STEMS (the mix on 1-2, each layer without effects on 3-4, 5-6, 7-8, 9-10). LEVEL: as the volume knob
   (VOLUME) or always full (FULL).
 
 ## Saving

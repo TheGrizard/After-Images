@@ -37,9 +37,9 @@ typedef struct {
     uint8_t layers_in;                   /* NOTES IN: 0 CHOSEN (every note the chosen layer), 1 LAYERS (the layers' channels theirs), 2 OFF */
     uint8_t clock_in;                    /* MOSH's SHAPES: 0 shards, 1 pebbles (v0.2-0.12: CLOCK in, moved into sync) */
     uint8_t cc_in;                       /* CCs move the macros */
-    uint8_t usb_full;                    /* bit 0, TO COMP: the USB recording at full level, not at the volume knob's; bits 1-2,
-                                          * OUTPUT (since v2.0): 0 MIX (1-2 alone), 1 CLEAN (the mix without effects on 3-4),
-                                          * 2 STEMS (each layer without effects on 3-10) */
+    uint8_t usb_full;                    /* bit 0, LEVEL: the USB recording at full level, not at the volume knob's; bit 1,
+                                          * OUTPUT: 0 MIX (the mix on 1-2, the mix without effects on 3-4), 1 STEMS (each
+                                          * layer without effects on 3-10). (v0.31: bits 1-2, MIX, CLEAN, STEMS) */
     uint8_t usb_play;                    /* the computer's audio through the FM-1, 0..100 */
     uint8_t visual;                      /* VISUAL: MATRIX (the pegs), RORSCHACH (the inkblot), MOSH (v0.2-0.7: STEMS) */
     uint8_t palette, ink_gaps, ink_mix, mosh_size;   /* the screen: the palette (dealt by REC); RORSCHACH's GAPS, MIX; MOSH's SIZE */
@@ -65,7 +65,7 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
     set.usb_full = 0; set.usb_play = 100; set.visual = 0;
     set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.mosh_size = 50;
-    set.breed = 100; set.fade = 100; set.pegs_set = 5; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
+    set.breed = 100; set.fade = 100; set.pegs_set = 6; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
 }
 
 static void settings_defaults(void)
@@ -81,7 +81,7 @@ static int settings_ok(void)
 {
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.mosh_mould > 100 || set.sync >= NSYNC) return 0;
-    if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 5 || set.usb_play > 100
+    if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 3 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
         || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))) return 0;
     if (!piece_ok(&set.cur)) return 0;
@@ -112,11 +112,15 @@ static void settings_load(void)
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
     int was = set.pegs_set;                      /* (the store's version of these) */
-    if (was < 3 || was > 5) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
-    if (was < 4 || was > 5) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
-    if (was < 5 || was > 5) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
+    if (was < 3 || was > 6) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
+    if (was < 4 || was > 6) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
+    if (was < 5 || was > 6) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
         if (set.clock_in || set.mosh_mould) set.sync = set.clock_in ? SYNC_IN : SYNC_OUT;   /* (v0.2-0.12's two: one setting, IN first) */
         set.clock_in = 0; set.mosh_mould = 50; set.mosh_size = 50; set.pegs_set = 5;
+    }
+    if (was < 6 || was > 6) {                    /* (v0.31's OUTPUT, MIX CLEAN STEMS: its STEMS STEMS, the others MIX) */
+        set.usb_full = (uint8_t)((set.usb_full & 1) | ((set.usb_full >> 1) == 2 ? 2 : 0));
+        set.pegs_set = 6;
     }
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
@@ -269,7 +273,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     }
     {   /* the stems (USB channels 3-10), filled only while a computer records */
         uint32_t run = 0;
-        eng.stems_on = PLAT_USB_CH >= 2 * NUM_LAYERS && (set.usb_full >> 1) && plat_usb_ch(0, &run) != 0;
+        eng.stems_on = PLAT_USB_CH >= 2 * NUM_LAYERS && plat_usb_ch(0, &run) != 0;
     }
     engine_block_begin(&eng, nsub);
     /* the second core: some layers and the reverb (the last block's sends); this one the rest, the keys, then the mix */
@@ -291,11 +295,11 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         lr[2 * i] = (int32_t)(soft(L[i] * gain_now) * 8388000.0f);
         lr[2 * i + 1] = (int32_t)(soft(R[i] * gain_now) * 8388000.0f);
     }
-    if (eng.stems_on) {                          /* OUTPUT: CLEAN, the mix without effects on 3-4; STEMS, GROUND on 3-4, BODY 5-6,
+    if (eng.stems_on) {                          /* OUTPUT: MIX, the mix without effects on 3-4; STEMS, GROUND on 3-4, BODY 5-6,
                                                   * LIGHT 7-8, DUST 9-10; at the mix's level (its gain, the leveller's) as the mix
                                                   * goes out on 1-2 */
         float gs = g0, lev = eng.lev_g > 0 ? eng.lev_g : 1.0f;
-        int clean = (set.usb_full >> 1) == 1;
+        int clean = !(set.usb_full >> 1);
         for (uint32_t i = 0; i < frames; ) {
             uint32_t run = 0; int16_t *p = plat_usb_ch(i, &run);
             if (!p || !run) break;
@@ -458,7 +462,7 @@ static void knob_text(int pg, int k, char *s)
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
     case K_REC: text_cat(s, v ? "FULL" : "VOLUME"); break;   /* (VOLUME: as the FM-1's volume knob has it) */
     case K_PLAYIN: if (v) int_text(v, s); else text_cat(s, "OFF"); break;
-    case K_ROUTE: text_cat(s, v == 2 ? "STEMS" : v == 1 ? "CLEAN" : "MIX"); break;
+    case K_ROUTE: text_cat(s, v ? "STEMS" : "MIX"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_DIRT: text_cat(s, v < 34 ? "WARM " : v < 67 ? "FUZZ " : "BREAK "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
@@ -488,7 +492,7 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     const Knob *kn = knob_of(pg, k); uint8_t v = (uint8_t)knob_get(kn, knob_ptr(pg, k));
     switch (kn->kind) {
     case K_NONE: return 0.0f;
-    case K_ROUTE: return (float)v / 2.0f;
+    case K_ROUTE: return (float)v;
     case K_INCH: return (float)v / 16.0f;
     case K_REC: return v ? 1.0f : 0.0f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
@@ -692,7 +696,7 @@ static void knob_turn(int k, int d)
     switch (kn->kind) {
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
-    case K_ROUTE: hi = 2; step = 1; break;
+    case K_ROUTE: hi = 1; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
     case K_VIS: hi = 2; step = 1; break;
     case K_SHAPE: hi = 1; step = 1; break;

@@ -334,8 +334,7 @@ locks to its beats and bars. It stays locked through a new piece and a change of
 
   | OUTPUT | 1-2 | 3-4 | 5-6 | 7-8 | 9-10 |
   |---|---|---|---|---|---|
-  | **MIX** | the mix | | | | |
-  | **CLEAN** | the mix | the mix without effects | | | |
+  | **MIX** | the mix | the mix without effects | | | |
   | **STEMS** | the mix | GROUND | BODY | LIGHT | DUST |
 
   "Without effects" means none of the FX page's four (reverb, echo, chorus, DIRT), nor the mix's balance or WEAR, so
@@ -345,8 +344,8 @@ locks to its beats and bars. It stays locked through a new piece and a change of
   recording down too. **FULL** always sends full level, so you can turn the speaker or headphones down (or off) while
   you record.
 
-In your DAW, pick the pair you want as each track's input: 1-2 for the mix, 3-4 for CLEAN, or 3-4 to 9-10 for the
-stems. The computer always sees all ten channels; the ones OUTPUT doesn't use stay silent.
+In your DAW, pick the pair you want as each track's input: 1-2 for the mix, 3-4 for the mix without effects (MIX), or
+3-4 to 9-10 for the stems (STEMS). The computer always sees all ten channels; the ones OUTPUT doesn't use stay silent.
 
 ## 17. Ideas to try
 

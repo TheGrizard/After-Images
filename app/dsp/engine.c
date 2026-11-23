@@ -486,6 +486,8 @@ void engine_block_layer(Engine *e, int b)
     for (int k = 0; k < e->nsub; k++) {
         float *Lb = e->bus[k][b][0], *Rb = e->bus[k][b][1];
         memset(Lb, 0, sizeof(float) * BLK); memset(Rb, 0, sizeof(float) * BLK);
+        float *sl = e->stem[b][0] + k * BLK, *sr = e->stem[b][1] + k * BLK;   /* (the stem: before DIRT) */
+        if (e->stems_on) { memset(sl, 0, sizeof(float) * BLK); memset(sr, 0, sizeof(float) * BLK); }
         if (b == KEYS) {
             apply(e->kq, e->nkq, e->kv, &g_ghost[KEYS], k);
             int any = 0;
@@ -497,6 +499,7 @@ void engine_block_layer(Engine *e, int b)
                 Lb[i] = svf_lp(&e->klp[0], svf_hp(&e->khp[0], Lb[i]));
                 Rb[i] = svf_lp(&e->klp[1], svf_hp(&e->khp[1], Rb[i]));
             }
+            if (e->stems_on) { memcpy(sl, Lb, sizeof(float) * BLK); memcpy(sr, Rb, sizeof(float) * BLK); }
             dirt_run(&e->kdirt, u(e->p->dirt), fm_maxf(mo(e, kl, MW_DIRT, e->p->s_dirt[kl], 0.45f), 0.4f * u(e->p->dirt)), Lb, Rb, BLK);
             continue;
         }
@@ -515,6 +518,7 @@ void engine_block_layer(Engine *e, int b)
             Lb[i] = svf_lp(&L->lp[0], svf_hp(&L->hp[0], Lb[i]));
             Rb[i] = svf_lp(&L->lp[1], svf_hp(&L->hp[1], Rb[i]));
         }
+        if (e->stems_on) { memcpy(sl, Lb, sizeof(float) * BLK); memcpy(sr, Rb, sizeof(float) * BLK); }
         dirt_run(&L->dirt, u(e->p->dirt), fm_maxf(mo(e, b, MW_DIRT, e->p->s_dirt[b], 0.45f), 0.4f * u(e->p->dirt)), Lb, Rb, BLK);   /* its own DIRT, its send's amount (DRIFT morphing it); the shared DIRT reaching every layer a little */
         /* (ENTROPY is in the voices: synthesis turning on itself, not distortion; DIRT is the tape) */
     }
@@ -568,10 +572,11 @@ void engine_mix_sends(Engine *e)
             float gs = fm_maxf(mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f), 0.8f * u(p->grain)) * g;   /* (the shared CHORUS: every layer into it a little) */
             float ss = 0;
             int st = b < NUM_LAYERS ? b : e->key_layer;
-            if (e->stems_on && st >= 0 && st < NUM_LAYERS) {   /* the stems: each layer's dry, as it goes into the mix */
-                float *xl = e->stem[st][0] + k * BLK, *xr = e->stem[st][1] + k * BLK;
-                if (b < NUM_LAYERS) for (int i = 0; i < BLK; i++) { xl[i] = Lb[i] * g * pl; xr[i] = Rb[i] * g * pr; }
-                else for (int i = 0; i < BLK; i++) { xl[i] += Lb[i] * g * pl; xr[i] += Rb[i] * g * pr; }
+            if (e->stems_on && st >= 0 && st < NUM_LAYERS) {   /* the stems: each layer with no effects (DIRT neither), at its
+                                                                 * level and pan; the keys (the last bus) into the chosen one's */
+                float *xl = e->stem[st][0] + k * BLK, *xr = e->stem[st][1] + k * BLK, *ql = e->stem[b][0] + k * BLK, *qr = e->stem[b][1] + k * BLK;
+                if (b < NUM_LAYERS) for (int i = 0; i < BLK; i++) { xl[i] = ql[i] * g * pl; xr[i] = qr[i] * g * pr; }
+                else for (int i = 0; i < BLK; i++) { xl[i] += ql[i] * g * pl; xr[i] += qr[i] * g * pr; }
             }
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];

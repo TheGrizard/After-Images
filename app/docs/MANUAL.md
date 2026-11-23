@@ -311,9 +311,9 @@ locks to its beats and bars. It stays locked through a new piece and a change of
   | **CLEAN** | the mix | the mix without effects | | | |
   | **STEMS** | the mix | GROUND | BODY | LIGHT | DUST |
 
-  "Without effects" means without the reverb, echo and chorus, and without the mix's balance and WEAR, so you can add
-  your own. Each layer keeps its level, pan and DIRT (DIRT is part of a layer's sound), and the notes you play go in
-  the chosen layer's stem. Channels 1-2 always carry the full mix, the same as the speaker.
+  "Without effects" means none of the FX page's four (reverb, echo, chorus, DIRT), nor the mix's balance or WEAR, so
+  you can add your own when you mix. Each layer keeps its level and pan, and the notes you play go in the chosen
+  layer's stem. Channels 1-2 always carry the full mix, the same as the speaker.
 - **LEVEL** sets the level the computer gets. **VOLUME** follows the FM-1's volume knob, so turning it down turns the
   recording down too. **FULL** always sends full level, so you can turn the speaker or headphones down (or off) while
   you record.

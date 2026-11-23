@@ -6,8 +6,8 @@ always in key and always evolving. Press REC again and the next piece follows on
 
 ![After Images on the FM-1's screen: the notes as pegs of light, their colours mixing](img/screen.png)
 
-**Version {{VERSION}}** · **[Install it](install/)** · [Play it in your browser](emu/) ·
-[Source and full manual](https://github.com/TheGrizard/After-Images)
+**Version {{VERSION}}** · **[Install it](install/)** · **[User guide](manual/)** · [Play it in your browser](emu/) ·
+[Source](https://github.com/TheGrizard/After-Images)
 
 ## What it does
 
@@ -35,7 +35,7 @@ always in key and always evolving. Press REC again and the next piece follows on
 6. **SAVE** keeps a piece; ALGORITHM steps through your saved ones.
 7. **Stop with PLAY before switching off**: a few seconds later it keeps the piece and your settings.
 
-The [full manual](https://github.com/TheGrizard/After-Images#controls) lists every page and setting.
+The [user guide](manual/) covers every page and setting, with ideas to try.
 
 ## Installing and safety
 

@@ -10,6 +10,7 @@ Free and open source (MPL-2.0). By [TheGrizard](https://github.com/TheGrizard), 
 ![After Images on the FM-1's screen](docs/screen.png)
 
 **[Install it in your browser](https://TheGrizard.github.io/After-Images/install/)** ·
+**[User guide](https://TheGrizard.github.io/After-Images/manual/)** ·
 [Try it in the emulator](https://TheGrizard.github.io/After-Images/emu/) ·
 [Releases](https://github.com/TheGrizard/After-Images/releases)
 

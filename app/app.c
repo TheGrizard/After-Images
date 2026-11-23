@@ -33,8 +33,8 @@ typedef struct {
     Piece cur;
     Piece saved[NSAVED];
     /* v0.2 */
-    uint8_t in_ch;                       /* MIDI in: notes on this channel play the chosen layer (0: any) */
-    uint8_t layers_in;                   /* notes on the layers' channels (CHANNEL's four) play those layers */
+    uint8_t in_ch;                       /* PLAY CH: notes on this channel play the chosen layer (0: any) */
+    uint8_t layers_in;                   /* NOTES IN: 0 CHOSEN (every note the chosen layer), 1 LAYERS (the layers' channels theirs), 2 OFF */
     uint8_t clock_in;                    /* MOSH's SHAPES: 0 shards, 1 pebbles (v0.2-0.12: CLOCK in, moved into sync) */
     uint8_t cc_in;                       /* CCs move the macros */
     uint8_t usb_full;                    /* USB recording at full level, not at MASTER */
@@ -79,7 +79,7 @@ static int settings_ok(void)
 {
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.mosh_mould > 100 || set.sync >= NSYNC) return 0;
-    if (set.in_ch > 16 || set.layers_in > 1 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
+    if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
         || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))) return 0;
     if (!piece_ok(&set.cur)) return 0;
@@ -214,7 +214,8 @@ static void midi_in(void)
         else if (st == 0xFCu && CLK_IN) { eng.playing = set.playing = 0; engine_all_off(&eng); }
         else if (ty == 0x90u || ty == 0x80u) {
             int note = deg_note(sc, set.cur.key, note_deg(sc, set.cur.key, (int)d1)), layer = -1;
-            if (set.layers_in && ch >= set.midi_ch && ch < set.midi_ch + 4u) layer = (int)(ch - set.midi_ch);
+            if (set.layers_in == 2) continue;            /* NOTES IN: OFF */
+            if (set.layers_in == 1 && ch >= set.midi_ch && ch < set.midi_ch + 4u) layer = (int)(ch - set.midi_ch);
             else if (set.in_ch && ch != set.in_ch - 1u) continue;
             engine_key(&eng, ty == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64), layer);
         } else if (ty == 0xB0u && set.cc_in) {
@@ -257,7 +258,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     midi_in();
     eng.midi_on = set.midi_on; eng.midi_ch = set.midi_ch; eng.midi_keys_ch = set.midi_keys; eng.midi_clock = CLK_OUT;
     {   /* CLOCK turned to OUT while playing: a Start now, from the top of the bar; turned from it: a Stop */
-        static int was_out = -1; int out = CLK_OUT && set.midi_on;
+        static int was_out = -1; int out = CLK_OUT;
         if (was_out >= 0 && out != was_out && set.playing) {
             if (out) eng.sync_req = 1;
             plat_midi_send(0x0Fu | (out ? 0xFAu : 0xFCu) << 8, TO_USB);
@@ -311,17 +312,18 @@ static void int_text(int32_t v, char *b)
 static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
 /* ------------------------------------------------------------------ the pages */
-enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_WARBLE, PG_SCALE, PG_SCREEN, PG_MIDI_OUT, PG_MIDI_IN, PG_USB,
-       PG_VISUAL, NPAGES };   /* (VISUAL last, GLO's third: the pages before keep their numbers) */
+enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_WARBLE, PG_SCALE, PG_SCREEN, PG_MIDI, PG_CHAN, PG_USB,
+       PG_VISUAL, PG_MACROS, NPAGES };   /* (VISUAL and MACROS last: the pages before keep their numbers) */
 static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "SENDS", "EFFECTS", "MOTION", "WARBLE", "SCALE", "SCREEN",
-                                                "MIDI OUT", "MIDI IN", "USB AUDIO", "VISUAL" };
-/* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: SCALE, SCREEN; ARP: MIDI OUT,
- * MIDI IN, USB) */
-static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO };
-/* the order a button steps through its pages: GLO's SCALE, VISUAL (which), then SCREEN (its settings) */
-static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 10 };
+                                                "MIDI", "CHANNELS", "USB AUDIO", "VISUAL", "MACROS" };
+/* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: MACROS, SCALE, VISUAL,
+ * SCREEN; ARP: MIDI, CHANNELS, USB AUDIO) */
+static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO, B_GLO };
+/* the order a button steps through its pages: GLO's MACROS (HOME held's, as a page), SCALE, VISUAL (which), then SCREEN
+ * (its settings) */
+static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE };
+       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -341,10 +343,11 @@ static const Knob PAGES[NPAGES][4] = {
     { { "WARBLE", K_PCT, 0, PO(warble) }, { "FLUTTER", K_PCT, 0, PO(flutter) }, { "DETUNE", K_PCT, 0, PO(detune) }, { "WEAR", K_PCT, 0, PO(wear) } },
     { { "KEY", K_KEY, 0, PO(key) }, { "SCALE", K_SCALE, 0, PO(scale) }, { "CHORDS", K_CHORD, 0, PO(chord) }, { "TEMPO", K_TEMPO, 0, PO(tempo) } },
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
-    { { "OUT", K_ONOFF, 2, SO(midi_on) }, { "CHANNEL", K_CH, 2, SO(midi_ch) }, { "KEYS CH", K_CH, 2, SO(midi_keys) }, { "CLOCK", K_SYNC, 2, SO(sync) } },
-    { { "IN CH", K_INCH, 2, SO(in_ch) }, { "LAYERS", K_ONOFF, 2, SO(layers_in) }, { "CLOCK", K_SYNC, 2, SO(sync) }, { "CC", K_ONOFF, 2, SO(cc_in) } },
+    { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
+    { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
     { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
     { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "SHAPES", K_SHAPE, 2, SO(clock_in) }, { "", K_NONE, 2, 0 } },
+    { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
 
@@ -435,10 +438,9 @@ static void knob_text(int pg, int k, char *s)
     case K_CHORD: text_cat(s, CHORD_NAME[v % NUM_CHORDS]); break;
     case K_TEMPO: if (eng.ext_bpm > 20.0f) { int_text(shown_bpm(), s); text_cat(s, " IN"); } else int_text(40 + v, s); break;
     case K_ONOFF: text_cat(s, v ? "ON" : "OFF"); break;
-    case K_CH:
-        if (k == 1) { int_text(v + 1, s); text_cat(s, "-"); char n[4]; int_text(v + 4, n); text_cat(s, n); }   /* the four layers' */
-        else int_text(v + 1, s);
-        break;
+    case K_LCH: { int_text(v + 1, s); text_cat(s, "-"); char n[4]; int_text(v + 4, n); text_cat(s, n); break; }   /* the four layers' */
+    case K_CH: int_text(v + 1, s); break;
+    case K_NIN: text_cat(s, v == 1 ? "LAYERS" : v == 2 ? "OFF" : "CHOSEN"); break;
     default: int_text(v, s); break;
     }
 }
@@ -462,7 +464,9 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_CHORD: return (float)v / (NUM_CHORDS - 1);
     case K_TEMPO: return (float)v / 140.0f;
     case K_ONOFF: return v ? 1.0f : 0.0f;
-    case K_CH: return (float)v / (k == 1 ? 12.0f : 15.0f);
+    case K_CH: return (float)v / 15.0f;
+    case K_LCH: return (float)v / 12.0f;
+    case K_NIN: return (float)v / 2.0f;
     default: return (float)v / 100.0f;
     }
 }
@@ -612,7 +616,7 @@ static void play_toggle(void)
     set.playing = (uint8_t)!set.playing;
     if (!set.playing) stopped_at = plat_ms();
     eng.playing = set.playing;
-    if (set.midi_on && CLK_OUT) {            /* leading: Start from the top of the bar, so the follower's 1 is ours */
+    if (CLK_OUT) {                           /* leading: Start from the top of the bar, so the follower's 1 is ours */
         if (set.playing) eng.sync_req = 1;
         midi_send(0x0Fu | (set.playing ? 0xFAu : 0xFCu) << 8);
     }
@@ -661,7 +665,9 @@ static void knob_turn(int k, int d)
     case K_CHORD: hi = NUM_CHORDS - 1; step = 1; wrap = 1; break;
     case K_TEMPO: hi = 140; step = 1; break;
     case K_ONOFF: hi = 1; step = 1; break;
-    case K_CH: hi = k == 1 ? 12 : 15; step = 1; break;
+    case K_CH: hi = 15; step = 1; break;
+    case K_LCH: hi = 12; step = 1; break;
+    case K_NIN: hi = 2; step = 1; break;
     default: break;
     }
     v += d * step;
@@ -1494,8 +1500,8 @@ static void draw_panel_rows(int y0)
             "WHERE THE MUSIC GOES", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER", "SELECT CHOOSES THE LAYER",
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
-            "THE PEGBOARD OF LIGHT", "THE LAYERS ON FOUR CHANNELS", "LAYER CHANNELS PLAY THE LAYERS",
-            "RECORDING THE FM-1 OVER USB", "MATRIX, RORSCHACH OR MOSH" };
+            "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
+            "RECORDING THE FM-1 OVER USB", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }

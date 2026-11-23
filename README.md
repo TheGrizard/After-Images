@@ -82,11 +82,12 @@ Press a page's button again for its next page; dots by the page's name show how 
 | FX again | EFFECTS (shared) | REVERB · ECHO · CHORUS · DIRT |
 | LFO | MOTION | LINK · WARP · FLOW · CHAOS |
 | LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · WEAR |
-| GLO | SCALE | KEY · SCALE · CHORDS · TEMPO |
-| GLO again | VISUAL | VISUAL · · SHAPES (MOSH's) · |
-| GLO a third time | SCREEN | the chosen visual's four (below) |
-| ARP | MIDI OUT | OUT · CHANNEL · KEYS CH · CLOCK |
-| ARP again | MIDI IN | IN CH · LAYERS · CLOCK · CC |
+| GLO | MACROS | MOOD · ACTIVITY · EVOLVE · DRIFT (as HOME held) |
+| GLO again | SCALE | KEY · SCALE · CHORDS · TEMPO |
+| GLO a third time | VISUAL | VISUAL · · SHAPES (MOSH's) · |
+| GLO a fourth time | SCREEN | the chosen visual's four (below) |
+| ARP | MIDI | CLOCK · NOTES OUT · NOTES IN · CC IN |
+| ARP again | CHANNELS | LAYERS · KEYS · PLAY CH · |
 | ARP a third time | USB AUDIO | RECORD · COMPUTER |
 
 ### What the settings do
@@ -127,7 +128,7 @@ at about the same loudness.
 
 ## The visuals
 
-Choose on the VISUAL page (GLO twice); set them on SCREEN, the page after (GLO three times). REC deals a new colour palette each time,
+Choose on the VISUAL page (GLO three times); set them on SCREEN, the page after (GLO four times). REC deals a new colour palette each time,
 and the four layers always keep four clearly different hues.
 
 - **MATRIX:** a pegboard. Each note lights the peg at its pitch and stereo position, mixes breed between lit colours,
@@ -140,10 +141,12 @@ and the four layers always keep four clearly different hues.
 
 ## MIDI and sync
 
-- **MIDI out** (USB): each layer on its own channel (1 to 4 by default), the keys on another (5), with their chords.
-- **MIDI in** (USB, or the FM-1's TRS jack): notes on the layers' channels play those layers, others the chosen layer,
-  all put into the scale. CC 20-23 move HOME's macros, 24-27 the effects, 28-31 MOTION.
-- **CLOCK** is one setting on both MIDI pages: INT (its own tempo), IN (following) or OUT (sending).
+- **CLOCK** (ARP): INT (its own tempo), IN (following) or OUT (sending clock, start and stop).
+- **NOTES OUT** (USB): each layer on its own channel (1 to 4 by default), the keys on another (5), with their chords.
+- **NOTES IN** (USB, or the FM-1's TRS jack): LAYERS (notes on a layer's channel play that layer, others the chosen
+  layer), CHOSEN (all the chosen layer) or OFF; all put into the scale. **CC IN:** 20-23 move HOME's macros, 24-27 the
+  effects, 28-31 MOTION.
+- **CHANNELS** (ARP again): the layers' four, the keys', and PLAY CH, the channel that plays the chosen layer.
 - **Following a clock**, it locks to the leader's beats and bars, not only its tempo, and stays there through a new
   piece or a change of tempo. With an **Ableton Move**: a USB cable from Move's USB-A port to the FM-1, Move's MIDI
   Sync set to Out, and CLOCK at IN.

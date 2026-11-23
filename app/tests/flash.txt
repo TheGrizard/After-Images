@@ -15,6 +15,7 @@ tap SAVE
 wait 300
 expect nsaved 1
 tap GLO
+tap GLO
 wait 100
 turn K1 2
 wait 9500
@@ -23,6 +24,7 @@ expect playing 1
 reboot
 wait 2500
 expect key 9
+tap GLO
 tap GLO
 wait 100
 turn K1 2

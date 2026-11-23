@@ -85,7 +85,7 @@ a new sound and sequencer, with the rest of the piece left alone.
 
 ## 5. Steering a piece: the macros
 
-Hold **HOME** and turn:
+Hold **HOME** and turn the knobs, or press **GLO** for the same four as a page of their own:
 
 - **K1, MOOD.** Darker to the left, brighter to the right, with 12 o'clock as REC dealt it. Darker brings in more sub
   bass and plainer chords (triads). Brighter opens the upper layers, colours the chords (sevenths, then ninths), and
@@ -225,7 +225,7 @@ or HAZE, never the same twice in a row. The panel after REC names it.
 
 ## 11. Key, scale and tempo
 
-**GLO: SCALE**
+**GLO again: SCALE**
 
 - **KEY** sets the root note.
 - **SCALE** picks from 20 scales, from major and minor through the modes to pentatonics, Hirajoshi and whole tone.
@@ -238,10 +238,10 @@ When it follows a MIDI clock (see 15), TEMPO shows the clock's tempo, marked **I
 
 ## 12. The visuals
 
-**GLO twice: VISUAL** chooses the visual. **GLO a third time: SCREEN** sets it up. Each REC deals a new colour palette,
+**GLO three times: VISUAL** chooses the visual. **GLO a fourth time: SCREEN** sets it up. Each REC deals a new colour palette,
 and the four layers always keep four clearly different colours.
 
-![The VISUAL page](img/visual.png "GLO twice: choose the visual")
+![The VISUAL page](img/visual.png "GLO three times: choose the visual")
 
 - **MATRIX.** A pegboard of light. Each note lights a peg by its pitch and its place in the stereo field. Mixed colours breed between lit pegs and the old ones fade. SCREEN: **COUNT, SIZE, BREED,
   FADE**.
@@ -275,27 +275,29 @@ Your notes ride along with the piece, through its effects.
 
 ## 15. MIDI, sync and recording
 
-**ARP: MIDI OUT**
+**ARP: MIDI**
 
-- **OUT** turns sending on or off.
-- **CHANNEL** sets the four layers' channels (1 to 4 by default).
-- **KEYS CH** sets the channel for the notes you play (5).
-- **CLOCK** sets the tempo: **INT** (its own), **IN** (following a clock) or **OUT** (sending one).
-
-Each layer goes out on its own channel, so you can double the piece on other synths.
-
-**ARP again: MIDI IN**
-
-- **IN CH** sets which channel plays the chosen layer.
-- **LAYERS** lets notes on the four layer channels play those layers.
-- **CLOCK** is the same setting as on MIDI OUT.
-- **CC** lets other gear move the knobs. CC 20 to 23 move the macros (MOOD, ACTIVITY, EVOLVE, DRIFT), 24 to 27 the
+- **CLOCK** sets where the tempo comes from: **INT** (its own), **IN** (following another device's clock) or **OUT**
+  (leading: sending its clock, start and stop).
+- **NOTES OUT** sends every layer's notes, each on its own channel, and the notes you play, so you can double the
+  piece on other synths. It doesn't affect the clock.
+- **NOTES IN** decides what incoming notes play:
+  - **LAYERS:** notes on a layer's channel play that layer; others play the chosen layer.
+  - **CHOSEN:** every note plays the chosen layer.
+  - **OFF:** incoming notes are ignored.
+- **CC IN** lets other gear move the knobs. CC 20 to 23 move the macros (MOOD, ACTIVITY, EVOLVE, DRIFT), 24 to 27 the
   effects (REVERB, ECHO, CHORUS, DIRT), and 28 to 31 MOTION (LINK, WARP, FLOW, CHAOS).
 
-Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS jack.
+**ARP again: CHANNELS** (the same channels in and out)
+
+- **LAYERS** sets the four layers' channels: 1–4 by default, or any four in a row.
+- **KEYS** sets the channel the notes you play go out on (5).
+- **PLAY CH** sets which incoming channel plays the chosen layer. ANY means every channel that isn't a layer's.
+
+Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS jack, and goes out over USB.
 
 **Syncing to an Ableton Move.** Connect Move's USB-A port to the FM-1. On Move, set MIDI Sync to Out. On the FM-1, set
-CLOCK to IN. Press play on Move: the FM-1 starts with it, follows its tempo (the screen shows, say, 116 BPM IN), and
+CLOCK (ARP) to IN. Press play on Move: the FM-1 starts with it, follows its tempo (the screen shows, say, 116 BPM IN), and
 locks to its beats and bars. It stays locked through a new piece and a change of tempo.
 
 **ARP a third time: USB AUDIO.** The FM-1 is also a USB audio interface: plug it into a computer and record it as a
@@ -328,7 +330,7 @@ stereo input.
   shows it in the layer's colour).
 - **It didn't remember my changes.** It saves a few seconds after you stop with PLAY. Switching off while it plays
   loses what changed since the last save.
-- **Not following the clock.** Check CLOCK is set to IN, and that the other device sends clock as well as start and
+- **Not following the clock.** Check CLOCK (ARP) is set to IN, and that the other device sends clock as well as start and
   stop. The tempo shows "IN" while it follows.
 - **Going back.** The [installer](../install/) can put M-VAVE's firmware back, or any earlier After Images from the
   [releases](https://github.com/TheGrizard/After-Images/releases).
@@ -356,7 +358,7 @@ stereo input.
 | ENV, ENV again | MIX, VOICE |
 | FX, FX again | SENDS, EFFECTS |
 | LFO, LFO again | MOTION, WARBLE |
-| GLO, twice, three times | SCALE, VISUAL, SCREEN |
-| ARP, twice, three times | MIDI OUT, MIDI IN, USB AUDIO |
+| GLO, twice, three, four times | MACROS, SCALE, VISUAL, SCREEN |
+| ARP, twice, three times | MIDI, CHANNELS, USB AUDIO |
 | white keys | the scale's notes |
 | black keys | the scale's chords |

@@ -314,7 +314,7 @@ static void control(Engine *e, int sub)
     midi_due(e);
     e->fade += ((e->playing ? 1.0f : 0.0f) - e->fade) * (BLK_S / 1.2f);
     if (!e->playing && e->fade < 0.01f) return;
-    if (e->midi && e->midi_on && e->midi_clock && e->playing) {   /* MIDI clock: 24 a beat (none in the fade after STOP) */
+    if (e->midi && e->midi_clock && e->playing) {   /* (whether notes go out or not) */   /* MIDI clock: 24 a beat (none in the fade after STOP) */
         e->clock_acc += beats * 24.0f;
         while (e->clock_acc >= 1.0f) { e->clock_acc -= 1.0f; e->midi(0x0Fu | 0xF8u << 8); }
     }

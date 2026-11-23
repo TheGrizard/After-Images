@@ -37,6 +37,7 @@ midi 90 3D 64
 wait 50
 expect_out USB 94 3C 64
 tap GLO
+tap GLO
 turn K2 1
 wait 100
 expect scale 2

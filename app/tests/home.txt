@@ -68,6 +68,9 @@ shot warble.png
 shot motion.png
 tap GLO
 wait 200
+expect page 15
+tap GLO
+wait 200
 expect page 9
 turn K2 1
 wait 300
@@ -161,6 +164,7 @@ wait 5000
 tap GLO
 tap GLO
 tap GLO
+tap GLO
 wait 100
 expect page 10
 turn K3 1
@@ -168,6 +172,7 @@ wait 100
 tap HOME
 wait 3000
 shot full.png
+tap GLO
 tap GLO
 tap GLO
 tap GLO

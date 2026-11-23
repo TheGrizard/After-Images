@@ -3,10 +3,9 @@
 # (REC) and a change of tempo; Start puts us at the top of the bar
 wait 2500
 tap ARP
-tap ARP
 wait 100
-expect page 12
-turn K3 1
+expect page 11
+turn K1 1
 wait 100
 midi FA 00 00
 clock 240 21

@@ -300,11 +300,17 @@ Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS 
 CLOCK (ARP) to IN. Press play on Move: the FM-1 starts with it, follows its tempo (the screen shows, say, 116 BPM IN), and
 locks to its beats and bars. It stays locked through a new piece and a change of tempo.
 
-**ARP a third time: USB AUDIO.** The FM-1 is also a USB audio interface: plug it into a computer and record it as a
-stereo input.
+**ARP a third time: USB AUDIO.** Plugged into a computer, the FM-1 is also its soundcard, both ways at once: the
+computer can record the FM-1, and play its own sound out of the FM-1's speaker and headphones.
 
-- **RECORD** sets what the computer gets: at the master volume's level, or always at full level.
-- **COMPUTER** sets how loud the computer's own audio plays through the FM-1.
+- **TO COMP** sets the level the computer gets. **VOLUME** follows the FM-1's volume knob, so turning it down turns the
+  recording down too. **FULL** always sends full level, so you can turn the speaker or headphones down (or off) while
+  you record.
+- **FROM COMP** sets how loud the computer's own sound plays through the FM-1; **OFF** silences it. Your recording
+  never includes it either way.
+
+The connection always goes both ways (that's fixed when the FM-1 plugs in), so there's no switch for one direction:
+nothing records the FM-1 unless you choose it as an input, and FROM COMP at OFF stops the other direction.
 
 ## 16. Ideas to try
 

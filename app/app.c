@@ -323,7 +323,7 @@ static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B
  * (its settings) */
 static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH };
+       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -345,7 +345,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
     { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
     { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
-    { { "RECORD", K_REC, 2, SO(usb_full) }, { "COMPUTER", K_PCT, 2, SO(usb_play) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
+    { { "TO COMP", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "FROM COMP", K_PLAYIN, 2, SO(usb_play) }, { "", K_NONE, 2, 0 } },
     { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "SHAPES", K_SHAPE, 2, SO(clock_in) }, { "", K_NONE, 2, 0 } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
@@ -419,7 +419,8 @@ static void knob_text(int pg, int k, char *s)
     switch (kn->kind) {
     case K_NONE: break;
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
-    case K_REC: text_cat(s, v ? "FULL" : "MASTER"); break;
+    case K_REC: text_cat(s, v ? "FULL" : "VOLUME"); break;   /* (VOLUME: as the FM-1's volume knob has it) */
+    case K_PLAYIN: if (v) int_text(v, s); else text_cat(s, "OFF"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_DIRT: text_cat(s, v < 34 ? "WARM " : v < 67 ? "FUZZ " : "BREAK "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
@@ -1501,7 +1502,7 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
-            "RECORDING THE FM-1 OVER USB", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
+            "THE FM-1 AS A COMPUTER'S SOUNDCARD", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }

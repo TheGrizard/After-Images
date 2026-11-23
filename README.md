@@ -88,7 +88,7 @@ Press a page's button again for its next page; dots by the page's name show how 
 | GLO a fourth time | SCREEN | the chosen visual's four (below) |
 | ARP | MIDI | CLOCK · NOTES OUT · NOTES IN · CC IN |
 | ARP again | CHANNELS | LAYERS · KEYS · PLAY CH · |
-| ARP a third time | USB AUDIO | RECORD · COMPUTER |
+| ARP a third time | USB AUDIO | TO COMP · · FROM COMP · |
 
 ### What the settings do
 
@@ -150,8 +150,8 @@ and the four layers always keep four clearly different hues.
 - **Following a clock**, it locks to the leader's beats and bars, not only its tempo, and stays there through a new
   piece or a change of tempo. With an **Ableton Move**: a USB cable from Move's USB-A port to the FM-1, Move's MIDI
   Sync set to Out, and CLOCK at IN.
-- **USB audio:** the mix as one stereo pair (RECORD at MASTER's level or full), and the computer's audio through the
-  FM-1 if you want it.
+- **USB audio** (ARP a third time): the FM-1 as the computer's soundcard. TO COMP: the mix as one stereo pair, at the
+  volume knob's level (VOLUME) or always full (FULL); FROM COMP: the computer's sound through the FM-1, or OFF.
 
 ## Saving
 

@@ -298,8 +298,9 @@ Your notes ride along with the piece, through its effects.
   a new one.
 - **The SAVE light** stays lit while the piece has changes you haven't saved.
 - **Saving by itself.** A few seconds after you stop with PLAY, it keeps the piece and all your settings. It never does
-  this while the music plays, because writing to memory stops the audio for a moment. So **stop before switching
-  off**.
+  this while the music plays, because writing to memory stops the audio for a moment. Nor while you're auditioning:
+  it waits until you haven't played the keys (or MIDI in) for 8 seconds and the sound has died away. So **stop, and
+  give it a few seconds, before switching off**. It never changes your SAVE slots.
 - **SAVE while playing** also works: you'll hear a soft dip while it writes.
 
 ## 16. MIDI, sync and recording

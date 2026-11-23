@@ -58,6 +58,7 @@ static const uint8_t PEG_NS[NPEG_NS] = { 8, 10, 12, 15, 20, 24 };   /* COUNT: pe
 static uint8_t set_dirty;
 static int store_ok = 1;
 static uint32_t autosave_at;
+static volatile uint32_t key_events;      /* (notes played, keys or MIDI in: the autosave waits till they have been still a while) */
 #define AUTOSAVE_MS 8000u
 enum { SYNC_INT, SYNC_IN, SYNC_OUT, NSYNC };   /* CLOCK: our own tempo; following MIDI clock; sending it */
 static const char *const SYNC_NAME[NSYNC] = { "INT", "IN", "OUT" };
@@ -227,7 +228,7 @@ static void midi_in(void)
             if (set.layers_in == 2) continue;            /* NOTES IN: OFF */
             if (set.layers_in == 1 && ch >= set.midi_ch && ch < set.midi_ch + 4u) layer = (int)(ch - set.midi_ch);
             else if (set.in_ch && ch != set.in_ch - 1u) continue;
-            engine_key(&eng, 1, 64 + (int)ch, ty == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64), layer);   /* (from the render: MIDI's ring; a channel its owner) */
+            engine_key(&eng, 1, 64 + (int)ch, ty == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64), layer); key_events++;   /* (from the render: MIDI's ring; a channel its owner) */
         } else if (ty == 0xB0u && set.cc_in) {
             uint8_t *g[12] = { &set.cur.mood, &set.cur.motion, &set.cur.evolve, &set.cur.weird, &set.cur.reverb, &set.cur.echo,
                                &set.cur.grain, &set.cur.dirt, &set.cur.link, &set.cur.warp, &set.cur.drift, &set.cur.chaos };
@@ -772,7 +773,7 @@ static void keys_input(uint32_t keys)
         if ((keys & b) && !(ui.keys & b)) {
             int note = deg_note(sc, base, i), v = touch_vel((uint32_t)kk);
             ui.key_notes[kk][0] = (uint8_t)note; ui.key_n[kk] = 1; ui.last_note = note;
-            engine_key(&eng, 0, kk + 1, 1, note, v ? v : 100, -1);
+            engine_key(&eng, 0, kk + 1, 1, note, v ? v : 100, -1); key_events++;
         }
     }
     for (int j = 0; j < 11; j++) {
@@ -781,7 +782,7 @@ static void keys_input(uint32_t keys)
         if ((keys & b) && !(ui.keys & b)) {
             int d[5], n = chord_degs(set.cur.chord, j, d), v = touch_vel((uint32_t)kk);
             if (ui.sel == L_GROUND) base += 12;      /* (chords down there would be mud) */
-            for (int c = 0; c < n; c++) { int note = deg_note(sc, base, d[c]); ui.key_notes[kk][c] = (uint8_t)note; engine_key(&eng, 0, kk + 1, 1, note, (v ? v : 100) * 3 / 4, -1); }
+            for (int c = 0; c < n; c++) { int note = deg_note(sc, base, d[c]); ui.key_notes[kk][c] = (uint8_t)note; engine_key(&eng, 0, kk + 1, 1, note, (v ? v : 100) * 3 / 4, -1); } key_events++;
             ui.last_note = ui.key_notes[kk][0]; ui.last_chord = n;
             ui.key_n[kk] = (uint8_t)n;
             if (ui.sel == L_GROUND) base -= 12;
@@ -1778,8 +1779,12 @@ void app_frame(void)
     /* (and only once its tails have died away, or after 6 s; then the output faded to nothing first, as SAVE's) */
     static int auto_fading;
     if (auto_fading && set.playing) { auto_fading = 0; save_hold = 0; }   /* (PLAY again meanwhile: the sound back, kept later) */
+    /* stopped and auditioning (the keys, MIDI in): kept only once they've been still 8 s and the sound has died away, a
+     * note played as it fades calling it off */
+    static uint32_t key_seen, key_at;
+    if (key_events != key_seen) { key_seen = key_events; key_at = now; if (auto_fading) { auto_fading = 0; save_hold = 0; } }
     if (autosave_at && (int32_t)(now - autosave_at) >= 0 && !set.playing && now - stopped_at >= 2500u && !save_pending
-        && (out_lvl < 0.002f || now - stopped_at >= 6000u)
+        && now - key_at >= 8000u && (out_lvl < 0.002f || (now - stopped_at >= 6000u && now - key_at >= 15000u))
         && (auto_fading || (save_hold = 1, auto_fading = 1, save_t = now, 0)) && (gain_now <= 0.004f || now - save_t >= 250u)) {
         autosave_at = 0; auto_fading = 0;
         store_ok = store_save();

@@ -99,9 +99,12 @@ struct Engine {
     Layer L[NUM_LAYERS];
     Voice kv[KEY_POLY]; VoiceEv kq[EVQ]; int nkq; int key_next;
     int8_t kv_lay[KEY_POLY];             /* each key voice's layer (whose knobs it follows) */
+    uint8_t kv_own[KEY_POLY];            /* and who played it (a key, or a MIDI channel): its note-off lets go of its own alone */
     Svf khp[2], klp[2]; Dirt kdirt;      /* the keys through their layer's chain: its TONE and DIRT (ENTROPY: in the voices) */
     int key_layer;                       /* the layer whose sound the keys play (SELECT) */
-    volatile uint32_t key_in[16]; volatile uint32_t key_w, key_r;   /* keys and MIDI notes in: (on, note, vel) */
+    /* notes in, two rings so neither writer can tread on the other: [0] the FM-1's keys (the UI loop), [1] MIDI in (the
+     * render). Each (on, owner, note, vel, layer) */
+    volatile uint32_t key_in[2][32]; volatile uint32_t key_w[2], key_r[2];
     float bus[ENGINE_SUB][NBUS][2][BLK];
     float gains[ENGINE_SUB][NBUS];
     int nsub;
@@ -148,7 +151,9 @@ struct Engine {
 };
 
 void engine_init(Engine *e, const Piece *p);
-void engine_key(Engine *e, int on, int note, int vel, int layer);   /* the keys and MIDI in: a note on a layer's sound (-1: the chosen layer's) */
+/* a note on a layer's sound (-1: the chosen layer's). src: 0 the FM-1's keys (from the UI loop), 1 MIDI in (from the
+ * render); owner (1-127): who played it, a key or a MIDI channel, so a note-off lets go of that one's note alone */
+void engine_key(Engine *e, int src, int owner, int on, int note, int vel, int layer);
 /* an app block of nsub control steps in three parts, as The Outside Inside's: control (one core: the sequencers, the
  * conductor, MIDI out), the layers (any layer on either core), the mix and the effects (one core, after both) */
 void engine_block_begin(Engine *e, int nsub);

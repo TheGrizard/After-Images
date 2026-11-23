@@ -199,6 +199,10 @@ layers that trigger each other, and emotional chords under the strangeness. No c
 
 Built on [fm1-base](https://github.com/charlesvestal/fm1-base) by Charles Vestal and felucca-bsp; thank you.
 
+Thanks to Theo ([Rastapopolix](https://github.com/Rastapopolix)) for a code review that found and fixed several bugs
+(issue #1): the VISUAL page's indicator, PRESET lighting the wrong knob, notes in from MIDI and the keys treading on
+each other, a chord's note-off cutting a held key's, SAVE going over a full set unannounced, and MATRIX's hidden rows.
+
 ## Licence
 
 MPL-2.0. The screen's font is DejaVu Sans (`app/fonts`, Bitstream Vera's licence: `app/fonts/LICENSE-DejaVu.txt`).

@@ -127,12 +127,14 @@ void engine_init(Engine *e, const Piece *p)
     e->seed_now = p->seed;
 }
 
-void engine_key(Engine *e, int on, int note, int vel, int layer)
+void engine_key(Engine *e, int src, int owner, int on, int note, int vel, int layer)
 {
-    uint32_t w = e->key_w;
-    if (w - e->key_r >= 16u) return;
-    e->key_in[w % 16u] = (uint32_t)(on & 1) | (uint32_t)(note & 127) << 8 | (uint32_t)(vel & 127) << 16 | (uint32_t)(layer + 1) << 24;
-    e->key_w = w + 1;
+    src &= 1;
+    uint32_t w = e->key_w[src];
+    if (w - e->key_r[src] >= 32u) return;
+    e->key_in[src][w % 32u] = (uint32_t)(on & 1) | (uint32_t)(owner & 127) << 1 | (uint32_t)(note & 127) << 8
+                            | (uint32_t)(vel & 127) << 16 | (uint32_t)(layer + 1) << 24;
+    e->key_w[src] = w + 1;
 }
 
 /* ------------------------------------------------------------------ notes: a sequencer's degree becomes notes */
@@ -224,20 +226,22 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
 
 static void keys_in(Engine *e, int sub)
 {
-    while (e->key_r != e->key_w) {
-        uint32_t k = e->key_in[e->key_r % 16u]; e->key_r++;
-        int on = (int)(k & 1u), note = (int)(k >> 8 & 127u), lay = (int)(k >> 24 & 7u) - 1; float vel = (float)(k >> 16 & 127u) / 127.0f;
+    for (int src = 0; src < 2; src++)
+    while (e->key_r[src] != e->key_w[src]) {
+        uint32_t k = e->key_in[src][e->key_r[src] % 32u]; e->key_r[src]++;
+        int on = (int)(k & 1u), own = (int)(k >> 1 & 127u), note = (int)(k >> 8 & 127u), lay = (int)(k >> 24 & 7u) - 1;
+        float vel = (float)(k >> 16 & 127u) / 127.0f;
         if (lay < 0 || lay >= NUM_LAYERS) lay = e->key_layer;
         if (on) {
             Sound snd; layer_sound(e, lay, &snd);
             int vi = pick_voice(e->kv, KEY_POLY, &e->key_next);
-            e->kv_lay[vi] = (int8_t)lay;
+            e->kv_lay[vi] = (int8_t)lay; e->kv_own[vi] = (uint8_t)own;
             queue(e->kq, &e->nkq, sub, vi, note, vel, 600.0f, rng_bi(&e->rng) * 0.3f, &snd, rng_u32(&e->rng));
             post(e, lay, note, vel, 0, 1.5f);
             if (e->midi && e->midi_on) e->midi(0x09u | (0x90u | e->midi_keys_ch) << 8 | (uint32_t)note << 16 | (uint32_t)(vel * 127.0f) << 24);
         } else {
             for (int i = 0; i < KEY_POLY; i++)          /* (a key's voice: the one playing its note, held) */
-                if (e->kv[i].on && e->kv[i].note == note && e->kv[i].hold > 0 && e->nkq < EVQ) {
+                if (e->kv[i].on && e->kv[i].note == note && e->kv_own[i] == own && e->kv[i].hold > 0 && e->nkq < EVQ) {
                     VoiceEv *v = &e->kq[e->nkq++]; v->sub = (uint8_t)sub; v->voice = (uint8_t)i; v->rel = 1;
                 }
             if (e->midi && e->midi_on) e->midi(0x08u | (0x80u | e->midi_keys_ch) << 8 | (uint32_t)note << 16);

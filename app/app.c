@@ -6,14 +6,16 @@
  * Controls
  *   K1-K4              at HOME the layers' levels (shown while they turn); HOME held + K1-K4 the macros (MOOD,
  *                      ACTIVITY, EVOLVE, DRIFT); on the other pages, their four macros
- *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, EFFECTS, MOTION, SCALE, MIDI OUT;
- *                      pressed again ENV: VOICE; GLO: SCREEN; ARP: MIDI IN, then USB AUDIO
+ *   HOME EDIT SEQ ENV FX LFO GLO ARP   the pages: HOME, SOUND, SEQUENCE, MIX, SENDS, MOTION, MACROS, MIDI;
+ *                      pressed again ENV: VOICE; FX: EFFECTS; LFO: WARBLE; GLO: SCALE, VISUAL, SCREEN;
+ *                      ARP: CHANNELS, USB AUDIO
  *   HOME tapped at HOME   the processor's load, and whether saving works
  *   SELECT, SEL        the layer the SOUND, SEQUENCE and MIX pages (and the keys) play
  *   PRESET             the chosen layer's engine
  *   ALGORITHM          your saved pieces
- *   REC                a new piece (held: a new key, scale and tempo too); SEL held + REC: the chosen layer anew
- *   SAVE               keep the piece; PLAY start / stop; OCT- / OCT+ the pieces before and after
+ *   REC                a new piece (held: in the same key and scale); SEL held + REC: the chosen layer anew
+ *   SAVE               keep the piece; PLAY start / stop
+ *   OCT- / OCT+        the keys' octave; on GLO's pages, back and forward through the pieces REC replaced
  *   white keys         the scale's notes, up from the key; black keys: the scale's chords, I to VII then I to IV */
 #include "fastmath.h"
 #include "dsp/engine.h"
@@ -47,6 +49,7 @@ typedef struct {
     uint8_t peg_n, peg_size;             /* PEGS: COUNT (an index into PEG_NS), SIZE 0..100 */
 } settings_t;
 static settings_t set;
+static uint8_t save_over;                /* the last SAVE went over a piece (every slot full): said so */
 static uint32_t xr_seen, xr_saves, save_end;   /* (HOME's DROPS: the saves' kept apart; see store_save) */
 #define NPAL 9
 #define NPEG_NS 6
@@ -224,7 +227,7 @@ static void midi_in(void)
             if (set.layers_in == 2) continue;            /* NOTES IN: OFF */
             if (set.layers_in == 1 && ch >= set.midi_ch && ch < set.midi_ch + 4u) layer = (int)(ch - set.midi_ch);
             else if (set.in_ch && ch != set.in_ch - 1u) continue;
-            engine_key(&eng, ty == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64), layer);
+            engine_key(&eng, 1, 64 + (int)ch, ty == 0x90u && d2 > 0, note, (int)(d2 ? d2 : 64), layer);   /* (from the render: MIDI's ring; a channel its owner) */
         } else if (ty == 0xB0u && set.cc_in) {
             uint8_t *g[12] = { &set.cur.mood, &set.cur.motion, &set.cur.evolve, &set.cur.weird, &set.cur.reverb, &set.cur.echo,
                                &set.cur.grain, &set.cur.dirt, &set.cur.link, &set.cur.warp, &set.cur.drift, &set.cur.chaos };
@@ -630,12 +633,14 @@ static void store_now(int slot)
 {
     store_ok = store_save();
     char s[12] = "SLOT ", n[4]; int_text(slot + 1, n); text_cat(s, n);
-    if (store_ok) pop("SAVED", s, C_TXT);
+    if (store_ok && save_over) { save_over = 0; text_cat(s, ": OVER IT"); pop("ALL 16 FULL", s, C_RED); }
+    else if (store_ok) pop("SAVED", s, C_TXT);
     else pop("NOT SAVED", "UNTIL POWER OFF", C_RED);
 }
 
 static void save_piece(void)
 {
+    save_over = set.slot == 255 && set.nsaved >= NSAVED;   /* (all 16 full, a new piece: it goes over the last) */
     int slot = set.slot != 255 ? set.slot : set.nsaved < NSAVED ? set.nsaved++ : NSAVED - 1;
     set.saved[slot] = set.cur; set.slot = (uint8_t)slot;
     set_dirty = 0; autosave_at = 0;
@@ -767,7 +772,7 @@ static void keys_input(uint32_t keys)
         if ((keys & b) && !(ui.keys & b)) {
             int note = deg_note(sc, base, i), v = touch_vel((uint32_t)kk);
             ui.key_notes[kk][0] = (uint8_t)note; ui.key_n[kk] = 1; ui.last_note = note;
-            engine_key(&eng, 1, note, v ? v : 100, -1);
+            engine_key(&eng, 0, kk + 1, 1, note, v ? v : 100, -1);
         }
     }
     for (int j = 0; j < 11; j++) {
@@ -776,7 +781,7 @@ static void keys_input(uint32_t keys)
         if ((keys & b) && !(ui.keys & b)) {
             int d[5], n = chord_degs(set.cur.chord, j, d), v = touch_vel((uint32_t)kk);
             if (ui.sel == L_GROUND) base += 12;      /* (chords down there would be mud) */
-            for (int c = 0; c < n; c++) { int note = deg_note(sc, base, d[c]); ui.key_notes[kk][c] = (uint8_t)note; engine_key(&eng, 1, note, (v ? v : 100) * 3 / 4, -1); }
+            for (int c = 0; c < n; c++) { int note = deg_note(sc, base, d[c]); ui.key_notes[kk][c] = (uint8_t)note; engine_key(&eng, 0, kk + 1, 1, note, (v ? v : 100) * 3 / 4, -1); }
             ui.last_note = ui.key_notes[kk][0]; ui.last_chord = n;
             ui.key_n[kk] = (uint8_t)n;
             if (ui.sel == L_GROUND) base -= 12;
@@ -784,7 +789,7 @@ static void keys_input(uint32_t keys)
     }
     for (int k = 0; k < NKEYS; k++)
         if (!(keys >> k & 1u) && (ui.keys >> k & 1u)) {
-            for (int c = 0; c < ui.key_n[k]; c++) engine_key(&eng, 0, ui.key_notes[k][c], 0, -1);
+            for (int c = 0; c < ui.key_n[k]; c++) engine_key(&eng, 0, k + 1, 0, ui.key_notes[k][c], 0, -1);
             ui.key_n[k] = 0;
         }
 }
@@ -850,8 +855,12 @@ static void input(void)
     if ((d = enc(EN_SELECT)) != 0) select_layer(ui.sel + (int)d);
     if ((d = enc(EN_ALGO)) != 0) load_step((int)d);
     if ((d = enc(EN_PRESET)) != 0) {
-        int pg = ui.page; ui.page = PG_SOUND; knob_turn(0, (int)d); ui.page = pg;
-        if (pg != PG_SOUND) { char s[24]; knob_text(PG_SOUND, 0, s); pop(LAYER_NAME[ui.sel], s, LAYER_C[ui.sel]); }
+        int pg = ui.page, lk = ui.last_knob; uint32_t ka = ui.knob_at;
+        ui.page = PG_SOUND; knob_turn(0, (int)d); ui.page = pg;
+        if (pg != PG_SOUND) {                    /* (this page's own knobs left as they were: K1 not shown as turned) */
+            ui.last_knob = lk; ui.knob_at = ka;
+            char s[24]; knob_text(PG_SOUND, 0, s); pop(LAYER_NAME[ui.sel], s, LAYER_C[ui.sel]);
+        }
     }
 
     ui.btn = btn; ui.keys = keys;
@@ -906,6 +915,7 @@ static float pegs_gain = 1.0f;            /* (the splash's fade out at its end) 
 static int peg_cols(void) { return splash_pegs ? 8 : PEG_NS[set.peg_n % NPEG_NS]; }
 static int peg_cell(void) { return 240 / peg_cols(); }
 static int peg_rows(void) { int r = VIEW_H / peg_cell(); return r > PG_MAX ? PG_MAX : r; }
+static int peg_rows_all(void) { int r = 240 / peg_cell(); return r > PG_MAX ? PG_MAX : r; }   /* (HOME's: the most there are) */
 static float fade_k(void) { return 0.4f + (float)(splash_pegs ? 100 : set.fade) * 0.016f; }   /* FADE: 0.4 .. 2 */
 
 static float pn_level(int i)                     /* a note's peg: lit as it sounds, fading after */
@@ -1005,7 +1015,7 @@ static void pegs_step(float dt)
     pg_tick += dt * 20.0f;
     int ticks = (int)pg_tick; pg_tick -= (float)ticks;
     pg_t = (uint16_t)(pg_t + ticks);
-    int rows = peg_rows(), cols = peg_cols();
+    int rows = peg_rows_all(), cols = peg_cols();   /* (every row ages, under the page's panel too: none frozen to come back stale at HOME) */
     for (int y = 0; y < rows; y++)
         for (int x = 0; x < cols; x++) {
             mixpeg_t *m = &mp[y][x];
@@ -1598,6 +1608,12 @@ static void draw_panel_rows(int y0)
         int vx = cx - text_w(f, v) / 2;
         if (vx < 4) vx = 4;
         cv_text(vx, y + (f == &FONT_M ? 14 : 18), f, v, hot ? C_WHITE : C_TXT);
+        if (knob_of(pg, k)->kind == K_NONE) continue;          /* (an empty column: no bar) */
+        if (knob_of(pg, k)->kind == K_VIS) {                    /* the three visuals: a square each, the chosen one lit */
+            for (int s = 0; s < 3; s++)
+                cv_rect(cx - 22 + s * 16, y + 42, 12, 6, s == set.visual ? dim(pc, hot ? 1.0f : 0.7f) : C_WELL);
+            continue;
+        }
         int bw = 48, fill = (int)(knob_frac(pg, k) * (float)bw + 0.5f);
         cv_rect(cx - bw / 2, y + 44, bw, 4, C_WELL);
         cv_rect(cx - bw / 2, y + 44, fill, 4, dim(pc, hot ? 1.0f : 0.7f));

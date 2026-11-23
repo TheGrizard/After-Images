@@ -660,6 +660,8 @@ static void play_toggle(void)
     set.playing = (uint8_t)!set.playing;
     if (!set.playing) stopped_at = plat_ms();
     eng.playing = set.playing;
+    if (set.playing && eng.gov > 0.75f) eng.gov = 0.75f;   /* (starting: every layer at once, so a little room kept; the
+                                                             * load guard lets it back up as it settles) */
     if (CLK_OUT) {                           /* leading: Start from the top of the bar, so the follower's 1 is ours */
         if (set.playing) eng.sync_req = 1;
         midi_send(0x0Fu | (set.playing ? 0xFAu : 0xFCu) << 8);
@@ -971,13 +973,23 @@ static void pegs_breed(void)
     m->col = rgb_mix(lit[a].c, lit[b].c); m->age = 0; m->die = 0; m->ph = (uint8_t)jr(); m->sp = (uint8_t)jr();
 }
 
+/* the visuals' clock, in beats: the music's while it plays, at its tempo's pace while stopped (so what's lit fades on),
+ * never stepping back (a new piece's beat from 0 is carried on from) */
+static float vis_b, vis_prev;
+static void vis_clock(float dt)
+{
+    float d = eng.beat - vis_prev;
+    if (!set.playing || d < 0.0f || d > 4.0f) d = dt * eng.bpm / 60.0f;
+    vis_b += d; vis_prev = eng.beat;
+}
+
 static void pegs_step(float dt)
 {
     int lay = splash_pegs ? -2 : set.peg_n;
     if (pg_n_now != lay) { pg_n_now = lay; memset(mp, 0, sizeof mp); memset(pn, 0, sizeof pn); }   /* (a new COUNT, or the splash's: a clean board) */
     uint32_t head = eng.uiq_head;                /* the notes played since the last frame */
     if (head - ui.uiq_tail > UI_Q) ui.uiq_tail = head - UI_Q;
-    while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; pegs_note(&n); }
+    while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; if (set.playing || splash_pegs) pegs_note(&n); }   /* (stopped: the fading notes not shown) */
     pg_tick += dt * 20.0f;
     int ticks = (int)pg_tick; pg_tick -= (float)ticks;
     pg_t = (uint16_t)(pg_t + ticks);
@@ -989,7 +1001,9 @@ static void pegs_step(float dt)
             m->age = (uint16_t)(m->age + ticks);
             if (m->die && (float)(uint16_t)(m->age - m->die) > 40.0f * fade_k() * 0.5f) { m->col = 0; continue; }
             if (!m->die && m->age > (uint16_t)(400.0f + 240.0f * fade_k()) && (jr() & 63u) == 0) m->die = m->age;   /* (a life of 30 s or so) */
+            if (!m->die && !set.playing && !splash_pegs && (jr() & 31u) == 0) m->die = m->age;   /* (stopped: each fades, a second or two apart) */
         }
+    if (!set.playing && !splash_pegs) { pg_acc = 0; return; }   /* (stopped: no mixes bred) */
     pg_acc += dt * (0.2f + (float)(splash_pegs ? 100 : set.breed) * 0.13f) * (0.2f + 0.8f * (float)(cols * cols) / 400.0f);   /* BREED: 0.2 .. 13 a second (on 20 x 20) */
     int guard = 0;
     while (pg_acc >= 1.0f && guard++ < 32) { pg_acc -= 1.0f; pegs_breed(); }
@@ -1130,20 +1144,22 @@ static void ink_step(void)
 {
     uint32_t head = eng.uiq_head;                /* the notes since the last frame */
     if (head - ui.uiq_tail > UI_Q) ui.uiq_tail = head - UI_Q;
-    while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; ink_note(&n); }
-    float t = ink_beat = eng.beat;
+    while (ui.uiq_tail != head) { UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++; if (set.playing) ink_note(&n); }
+    float t = ink_beat = vis_b;
     ink_colours();
     float size = 0.6f + (float)set.peg_size * 0.008f;
     float pulse = 0.5f + 0.5f * fm_sin_turns(t - fm_floorf(t) + 0.25f);   /* (a breath across each beat, not a twitch on it) */
     t *= 0.5f;                                   /* (the drift at half the beat's pace: smaller steps from frame to frame) */
     for (int l = 0; l < NUM_LAYERS; l++) {       /* the four inks, one a layer: larger as it sounds */
-        float want = 0.45f + 0.55f * clamp01(eng.meter[l] * 1.4f);
+        float want = set.playing ? 0.45f + 0.55f * clamp01(eng.meter[l] * 1.4f) : 0.0f;   /* (stopped: drying away) */
         ink_lv[l] += (want - ink_lv[l]) * 0.04f;
         ink[l].on = 1; ink[l].layer = (uint8_t)l; ink[l].ph = 0.23f * (float)l + 0.1f;
         ink[l].x = 58.0f + 30.0f * fm_sin_turns(t * 0.018f + ink[l].ph);
         ink[l].y = 120.0f + 78.0f * fm_sin_turns(t * 0.011f + ink[l].ph * 1.7f);
         ink[l].r = 22.0f * ink_lv[l];
     }
+    if (!set.playing)                            /* (stopped: each blot starts its fade now) */
+        for (int i = NUM_LAYERS; i < INK_MAX; i++) if (ink[i].on && ink[i].life > t - ink[i].born) ink[i].life = fm_maxf(0.0f, t - ink[i].born);
     int n = 0;
     for (int i = 0; i < INK_MAX; i++) {
         if (!ink[i].on) continue;
@@ -1332,9 +1348,14 @@ static void mosh_step(void)
     if (head - ui.uiq_tail > UI_Q) ui.uiq_tail = head - UI_Q;
     ink_colours();                               /* (the palette's inks: a near-white one turned to two others' mix) */
     float zoom = 0.5f + (float)set.mosh_size * 0.017f;   /* SIZE: the zoom, 0.5 .. 2.2 (1.35 at 12 o'clock) */
-    msh_t = eng.beat;
+    msh_t = vis_b;
+    if (!set.playing) {                          /* (stopped: nothing bred, each block starting its fade now) */
+        msh_breed_at = msh_t;
+        for (int i = 0; i < MOSH_MAX; i++) if (msh[i].on && msh[i].life > msh_t - msh[i].born) msh[i].life = fm_maxf(0.0f, msh_t - msh[i].born);
+    }
     while (ui.uiq_tail != head) {
         UiNote n = eng.uiq[ui.uiq_tail % UI_Q]; ui.uiq_tail++;
+        if (!set.playing) continue;                 /* (stopped: the fading notes not shown) */
         float sp = (float)n.pan / 100.0f, sx = (sp < 0 ? -1.0f : 1.0f) * fm_sqrtf(fm_fabsf(sp));   /* (the field spread wide: a little pan goes far) */
         mosh_add(120.0f + sx * 108.0f + (mosh_rf() - 0.5f) * 36.0f,
                  24.0f + clampf(1.0f - ((float)n.note - 34.0f) / 68.0f, 0.0f, 1.0f) * 192.0f,
@@ -1703,6 +1724,7 @@ void app_frame(void)
         float dt = (float)(now - ui.last_view) / 1000.0f;
         if (dt > 0.2f) dt = 0.2f;
         ui.last_view = now; ui.t += dt;
+        vis_clock(dt);
         if (set.visual == 2) mosh_step(); else if (set.visual) ink_step(); else pegs_step(dt);
         draw_view();
     }

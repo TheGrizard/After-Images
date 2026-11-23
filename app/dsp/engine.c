@@ -671,6 +671,26 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
                 }
             else { e->tl_s[0] = L[BLK - 1]; e->tl_s[1] = R[BLK - 1]; }
         }
+        /* the softener: a dynamic EQ on the presence band (3.2 kHz, two octaves wide), where resonances and bright
+         * engines turn harsh on monitors. When the band stands more than 9 dB under the whole (where most of the time it
+         * sits lower), it's turned down by the excess, up to 8 dB, quickly (20 ms) and let go slowly (300 ms) */
+        {
+            if (e->de[0].k <= 0) { svf_set(&e->de[0], 3200.0f, 0.75f); e->de[1] = e->de[0]; }
+            float k = e->de[0].k, sb = 0, sa = 0, bl[BLK], br[BLK];
+            for (int i = 0; i < BLK; i++) {
+                bl[i] = k * svf_bp(&e->de[0], L[i]); br[i] = k * svf_bp(&e->de[1], R[i]);
+                sb += bl[i] * bl[i] + br[i] * br[i]; sa += L[i] * L[i] + R[i] * R[i];
+            }
+            e->de_band += (sb - e->de_band) * (sb > e->de_band ? 0.25f : 0.02f);
+            e->de_all += (sa - e->de_all) * 0.02f;
+            float over = e->de_all > 1e-9f && e->de_band > 1e-12f ? 10.0f * 0.30103f * fm_log2f(e->de_band / e->de_all) + 9.0f : -1.0f;
+            float want = clampf(over, 0.0f, 8.0f);       /* dB to take off */
+            e->de_cut += (want - e->de_cut) * (want > e->de_cut ? 0.25f : 0.02f);
+            if (e->de_cut > 0.05f) {
+                float c = 1.0f - fm_exp2f(-e->de_cut * (3.3219f / 20.0f));
+                for (int i = 0; i < BLK; i++) { L[i] -= c * bl[i]; R[i] -= c * br[i]; }
+            }
+        }
         wear_run(&e->wear, u(p->wear), L, R, BLK);        /* WEAR: the whole of it, the reverb's tails too */
         if (shelf > 0.001f)
             for (int i = 0; i < BLK; i++) {

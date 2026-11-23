@@ -69,6 +69,13 @@ static inline void svf_set(Svf *f, float fc, float q)
     f->a2 = g * f->a1;
     f->a3 = g * f->a2;
 }
+/* a synth filter's resonance, tamed as the cutoff climbs: full under ~1 kHz, half by 2 kHz, a fifth by 4 kHz (a
+ * resonant peak sweeping through 2-5 kHz is what's harsh on monitors) */
+static inline void svf_set_res(Svf *f, float fc, float q)
+{
+    if (q > 0.7f) { float r = fc * (1.0f / 2000.0f); q = 0.7f + (q - 0.7f) / (1.0f + r * r); }
+    svf_set(f, fc, q);
+}
 static inline void svf_run(Svf *f, float v0, float *lp, float *bp, float *hp)
 {
     float v3 = v0 + dn() - f->ic2;

@@ -119,7 +119,8 @@ struct Engine {
     float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];
     float im_left;                       /* DRIFT: seconds until the levels choose where to wander next */   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];
-    float tl_s[2], tl_lo, tl_hi, tl_elo, tl_ehi, tl_db;   /* the balance: the mix tilted toward the pieces' middle (see engine_mix_finish) */
+    float tl_s[2], tl_lo, tl_hi, tl_elo, tl_ehi, tl_db;
+    Svf de[2]; float de_band, de_all, de_cut;      /* the softener: 2-5 kHz turned down when it pokes out */   /* the balance: the mix tilted toward the pieces' middle (see engine_mix_finish) */
     float sub[2];                        /* MOOD's low shelf: the mix's lows (below ~110 Hz), added back darker it goes */
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */

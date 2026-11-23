@@ -360,7 +360,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     switch (v->engine) {
     case E_SAW: {
         float fc = (v->ff * v->p[1] + 200.0f) * swf * (1.0f - v->p[3] + v->p[3] * env) * (1.0f + 0.1f * lfo);
-        svf_set(&v->f, fc, v->p[2]);
+        svf_set_res(&v->f, fc, v->p[2]);
         float d0 = dt * (1.0f + v->p[0]), d1 = dt * (1.0f - v->p[0]);
         for (int i = 0; i < n; i++) {
             v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
@@ -458,7 +458,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
         break;
     }
     case E_STRINGS: {
-        svf_set(&v->f, (v->ff * v->p[1] + 250.0f) * swf, v->p[2]);
+        svf_set_res(&v->f, (v->ff * v->p[1] + 250.0f) * swf, v->p[2]);
         float sp = v->p[0];
         float d0 = dt * (1.0f + sp * fm_sin_turns(v->lfo)), d1 = dt * (1.0f + sp * fm_sin_turns(v->lfo + 0.33f)),
               d2 = dt * (1.0f + sp * fm_sin_turns(v->lfo + 0.67f));
@@ -473,7 +473,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     case E_PULSE: {
         float w = clampf(v->p[0] + v->p[2] * 0.3f * lfo, 0.08f, 0.92f);
-        svf_set(&v->f, (v->ff * v->p[1] + 300.0f) * swf * (0.4f + 0.6f * env), 0.9f + 4.0f * v->reso);
+        svf_set_res(&v->f, (v->ff * v->p[1] + 300.0f) * swf * (0.4f + 0.6f * env), 0.9f + 4.0f * v->reso);
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             float p2 = v->ph[0] + w; if (p2 >= 1.0f) p2 -= 1.0f;
@@ -550,7 +550,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
         break;
     }
     case E_SQUARE: {
-        svf_set(&v->f, (v->ff * v->p[1] + 200.0f) * swf * (1.0f - v->p[3] + v->p[3] * env), v->p[2]);
+        svf_set_res(&v->f, (v->ff * v->p[1] + 200.0f) * swf * (1.0f - v->p[3] + v->p[3] * env), v->p[2]);
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             float p2 = v->ph[0] + 0.5f; if (p2 >= 1.0f) p2 -= 1.0f;
@@ -573,7 +573,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     case E_SYNC: {
         float r = 1.0f + (v->p[0] - 1.0f) * v->z1;
         v->z1 *= v->p[1];
-        svf_set(&v->f, (v->ff * v->p[2] + 400.0f) * swf, 0.7f + 3.0f * v->reso);
+        svf_set_res(&v->f, (v->ff * v->p[2] + 400.0f) * swf, 0.7f + 3.0f * v->reso);
         float ds = dt * r;
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt;
@@ -609,7 +609,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
         v->z1 = 1.0f - (1.0f - v->z1) * v->p[3];                 /* the filter's slow opening, 0 to 1 */
         float vib = 1.0f + 0.0025f * lfo;
         float fc = (v->ff * v->p[1] * (0.25f + 0.75f * v->z1) + 150.0f) * swf;
-        svf_set(&v->f, fc, v->p[2]);
+        svf_set_res(&v->f, fc, v->p[2]);
         float d0 = dt * vib, d1 = dt * vib * (1.0f + v->p[0]);
         for (int i = 0; i < n; i++) {
             v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
@@ -623,7 +623,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     case E_REESE: {                                              /* the jungle and drum'n'bass bass: phase cancelling, moving */
         float det = v->p[0] * (1.0f + 0.7f * lfo), dr = v->p[3], g = v->p[5], sub = v->p[4];
         float fc = (v->ff * v->p[1] + 120.0f) * swf * (0.6f + 0.4f * env);
-        svf_set(&v->f, fc, v->p[2]); svf_set(&v->f2, fc, 0.6f);
+        svf_set_res(&v->f, fc, v->p[2]); svf_set(&v->f2, fc, 0.6f);
         float d0 = dt * (1.0f + det), d1 = dt * (1.0f - det), d2 = dt * 0.5f;
         for (int i = 0; i < n; i++) {
             v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;

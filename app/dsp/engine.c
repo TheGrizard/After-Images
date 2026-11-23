@@ -567,6 +567,12 @@ void engine_mix_sends(Engine *e)
             float es = mo(e, sl, MW_ECHO, p->s_echo[sl], 0.5f) * eck * 1.4f * g;
             float gs = fm_maxf(mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f), 0.8f * u(p->grain)) * g;   /* (the shared CHORUS: every layer into it a little) */
             float ss = 0;
+            int st = b < NUM_LAYERS ? b : e->key_layer;
+            if (e->stems_on && st >= 0 && st < NUM_LAYERS) {   /* the stems: each layer's dry, as it goes into the mix */
+                float *xl = e->stem[st][0] + k * BLK, *xr = e->stem[st][1] + k * BLK;
+                if (b < NUM_LAYERS) for (int i = 0; i < BLK; i++) { xl[i] = Lb[i] * g * pl; xr[i] = Rb[i] * g * pr; }
+                else for (int i = 0; i < BLK; i++) { xl[i] += Lb[i] * g * pl; xr[i] += Rb[i] * g * pr; }
+            }
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];
                 dl[i] += l * g * pl; dr[i] += r * g * pr;

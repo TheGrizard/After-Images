@@ -37,7 +37,9 @@ typedef struct {
     uint8_t layers_in;                   /* NOTES IN: 0 CHOSEN (every note the chosen layer), 1 LAYERS (the layers' channels theirs), 2 OFF */
     uint8_t clock_in;                    /* MOSH's SHAPES: 0 shards, 1 pebbles (v0.2-0.12: CLOCK in, moved into sync) */
     uint8_t cc_in;                       /* CCs move the macros */
-    uint8_t usb_full;                    /* USB recording at full level, not at MASTER */
+    uint8_t usb_full;                    /* bit 0, TO COMP: the USB recording at full level, not at the volume knob's; bits 1-2,
+                                          * OUTPUT (since v2.0): 0 MIX (1-2 alone), 1 CLEAN (the mix without effects on 3-4),
+                                          * 2 STEMS (each layer without effects on 3-10) */
     uint8_t usb_play;                    /* the computer's audio through the FM-1, 0..100 */
     uint8_t visual;                      /* VISUAL: MATRIX (the pegs), RORSCHACH (the inkblot), MOSH (v0.2-0.7: STEMS) */
     uint8_t palette, ink_gaps, ink_mix, mosh_size;   /* the screen: the palette (dealt by REC); RORSCHACH's GAPS, MIX; MOSH's SIZE */
@@ -79,7 +81,7 @@ static int settings_ok(void)
 {
     if (set.magic != SET_MAGIC || set.nsaved > NSAVED || (set.slot != 255 && set.slot >= set.nsaved)) return 0;
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.mosh_mould > 100 || set.sync >= NSYNC) return 0;
-    if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 1 || set.usb_play > 100
+    if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 5 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
         || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))) return 0;
     if (!piece_ok(&set.cur)) return 0;
@@ -265,6 +267,10 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         }
         was_out = out;
     }
+    {   /* the stems (USB channels 3-10), filled only while a computer records */
+        uint32_t run = 0;
+        eng.stems_on = PLAT_USB_CH >= 2 * NUM_LAYERS && (set.usb_full >> 1) && plat_usb_ch(0, &run) != 0;
+    }
     engine_block_begin(&eng, nsub);
     /* the second core: some layers and the reverb (the last block's sends); this one the rest, the keys, then the mix */
     uint8_t mask = two_cores && plat_cpu2_on() ? on2_mask : 0;
@@ -277,11 +283,37 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     engine_mix_echo(&eng);
     engine_mix_finish(&eng, L, R);
     if (two_cores) on2_mask = balance();
-    for (uint32_t i = 0; i < n && i < (uint32_t)(nsub * BLK); i++) {
+    uint32_t frames = n < (uint32_t)(nsub * BLK) ? n : (uint32_t)(nsub * BLK);
+    float g0 = gain_now;
+    for (uint32_t i = 0; i < frames; i++) {
         gain_now += (g - gain_now) * 0.002f;
         out_lvl += (fm_fabsf(L[i]) + fm_fabsf(R[i]) - out_lvl) * 0.0005f;
         lr[2 * i] = (int32_t)(soft(L[i] * gain_now) * 8388000.0f);
         lr[2 * i + 1] = (int32_t)(soft(R[i] * gain_now) * 8388000.0f);
+    }
+    if (eng.stems_on) {                          /* OUTPUT: CLEAN, the mix without effects on 3-4; STEMS, GROUND on 3-4, BODY 5-6,
+                                                  * LIGHT 7-8, DUST 9-10; at the mix's level (its gain, the leveller's) as the mix
+                                                  * goes out on 1-2 */
+        float gs = g0, lev = eng.lev_g > 0 ? eng.lev_g : 1.0f;
+        int clean = (set.usb_full >> 1) == 1;
+        for (uint32_t i = 0; i < frames; ) {
+            uint32_t run = 0; int16_t *p = plat_usb_ch(i, &run);
+            if (!p || !run) break;
+            for (uint32_t j = 0; j < run && i < frames; j++, i++) {
+                gs += (g - gs) * 0.002f;
+                float kk = gs * lev;
+                if (clean) {
+                    float cl = 0, cr = 0;
+                    for (int l = 0; l < NUM_LAYERS; l++) { cl += eng.stem[l][0][i]; cr += eng.stem[l][1][i]; }
+                    p[0] = (int16_t)(soft(cl * kk) * 32765.0f); p[1] = (int16_t)(soft(cr * kk) * 32765.0f);
+                } else
+                    for (int l = 0; l < NUM_LAYERS; l++) {
+                        p[2 * l] = (int16_t)(soft(eng.stem[l][0][i] * kk) * 32765.0f);
+                        p[2 * l + 1] = (int16_t)(soft(eng.stem[l][1][i] * kk) * 32765.0f);
+                    }
+                p += PLAT_USB_CH_STRIDE;
+            }
+        }
     }
 }
 
@@ -323,7 +355,7 @@ static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B
  * (its settings) */
 static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN };
+       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -345,7 +377,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
     { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
     { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
-    { { "TO COMP", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "FROM COMP", K_PLAYIN, 2, SO(usb_play) }, { "", K_NONE, 2, 0 } },
+    { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "LEVEL", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 } },
     { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "SHAPES", K_SHAPE, 2, SO(clock_in) }, { "", K_NONE, 2, 0 } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
@@ -412,15 +444,21 @@ static uint8_t *knob_ptr(int pg, int k)
     return (uint8_t *)&set.cur + kn->off;
 }
 
+static int knob_get(const Knob *kn, const uint8_t *p)   /* (TO COMP and OUTPUT share a byte: bit 0, bits 1-2) */
+{
+    return kn->kind == K_REC ? (*p & 1) : kn->kind == K_ROUTE ? (*p >> 1) : *p;
+}
+
 static void knob_text(int pg, int k, char *s)
 {
-    const Knob *kn = knob_of(pg, k); uint8_t v = *knob_ptr(pg, k);
+    const Knob *kn = knob_of(pg, k); uint8_t v = (uint8_t)knob_get(kn, knob_ptr(pg, k));
     s[0] = 0;
     switch (kn->kind) {
     case K_NONE: break;
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
     case K_REC: text_cat(s, v ? "FULL" : "VOLUME"); break;   /* (VOLUME: as the FM-1's volume knob has it) */
     case K_PLAYIN: if (v) int_text(v, s); else text_cat(s, "OFF"); break;
+    case K_ROUTE: text_cat(s, v == 2 ? "STEMS" : v == 1 ? "CLEAN" : "MIX"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_DIRT: text_cat(s, v < 34 ? "WARM " : v < 67 ? "FUZZ " : "BREAK "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
@@ -447,9 +485,10 @@ static void knob_text(int pg, int k, char *s)
 }
 static float knob_frac(int pg, int k)    /* the bar under the value */
 {
-    const Knob *kn = knob_of(pg, k); uint8_t v = *knob_ptr(pg, k);
+    const Knob *kn = knob_of(pg, k); uint8_t v = (uint8_t)knob_get(kn, knob_ptr(pg, k));
     switch (kn->kind) {
     case K_NONE: return 0.0f;
+    case K_ROUTE: return (float)v / 2.0f;
     case K_INCH: return (float)v / 16.0f;
     case K_REC: return v ? 1.0f : 0.0f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
@@ -648,11 +687,12 @@ static void select_layer(int l)
 static void knob_turn(int k, int d)
 {
     const Knob *kn = knob_of(ui.page, k); uint8_t *p = knob_ptr(ui.page, k);
-    int v = kn->kind == K_OCT ? (int8_t)*p : *p, lo = 0, hi = 100, step = 2, wrap = 0;
+    int v = kn->kind == K_OCT ? (int8_t)*p : knob_get(kn, p), lo = 0, hi = 100, step = 2, wrap = 0;
     if (kn->kind == K_NONE) return;
     switch (kn->kind) {
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
+    case K_ROUTE: hi = 2; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
     case K_VIS: hi = 2; step = 1; break;
     case K_SHAPE: hi = 1; step = 1; break;
@@ -674,7 +714,10 @@ static void knob_turn(int k, int d)
     v += d * step;
     if (wrap) v = ((v - lo) % (hi - lo + 1) + (hi - lo + 1)) % (hi - lo + 1) + lo;
     else v = v < lo ? lo : v > hi ? hi : v;
-    if (kn->kind == K_OCT) *(int8_t *)p = (int8_t)v; else *p = (uint8_t)v;
+    if (kn->kind == K_OCT) *(int8_t *)p = (int8_t)v;
+    else if (kn->kind == K_REC) *p = (uint8_t)((*p & ~1u) | (unsigned)v);
+    else if (kn->kind == K_ROUTE) *p = (uint8_t)((*p & 1u) | (unsigned)v << 1);
+    else *p = (uint8_t)v;
     if (kn->where == 2) { autosave_at = plat_ms() + AUTOSAVE_MS; settings_apply(); }
     else changed();
     if (kn->kind == K_ONOFF && kn->off == SO(midi_on) && !v) engine_all_off(&eng);
@@ -685,8 +728,7 @@ static void knob_turn(int k, int d)
 /* the settings that reach the platform and the screen */
 static void settings_apply(void)
 {
-    plat_usb_audio_full(set.usb_full);
-    plat_usb_play_gain((uint32_t)set.usb_play * 4096u / 100u);
+    plat_usb_audio_full(set.usb_full & 1);
     palette_apply();
 }
 
@@ -1502,7 +1544,7 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
-            "THE FM-1 AS A COMPUTER'S SOUNDCARD", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
+            "WHAT THE COMPUTER RECORDS", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }

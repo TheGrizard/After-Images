@@ -300,17 +300,26 @@ Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS 
 CLOCK (ARP) to IN. Press play on Move: the FM-1 starts with it, follows its tempo (the screen shows, say, 116 BPM IN), and
 locks to its beats and bars. It stays locked through a new piece and a change of tempo.
 
-**ARP a third time: USB AUDIO.** Plugged into a computer, the FM-1 is also its soundcard, both ways at once: the
-computer can record the FM-1, and play its own sound out of the FM-1's speaker and headphones.
+**ARP a third time: USB AUDIO.** Plugged into a computer, the FM-1 shows up as an audio input with ten channels
+(five stereo pairs), so you can record it straight into your DAW.
 
-- **TO COMP** sets the level the computer gets. **VOLUME** follows the FM-1's volume knob, so turning it down turns the
+- **OUTPUT** decides what goes on them:
+
+  | OUTPUT | 1-2 | 3-4 | 5-6 | 7-8 | 9-10 |
+  |---|---|---|---|---|---|
+  | **MIX** | the mix | | | | |
+  | **CLEAN** | the mix | the mix without effects | | | |
+  | **STEMS** | the mix | GROUND | BODY | LIGHT | DUST |
+
+  "Without effects" means without the reverb, echo and chorus, and without the mix's balance and WEAR, so you can add
+  your own. Each layer keeps its level, pan and DIRT (DIRT is part of a layer's sound), and the notes you play go in
+  the chosen layer's stem. Channels 1-2 always carry the full mix, the same as the speaker.
+- **LEVEL** sets the level the computer gets. **VOLUME** follows the FM-1's volume knob, so turning it down turns the
   recording down too. **FULL** always sends full level, so you can turn the speaker or headphones down (or off) while
   you record.
-- **FROM COMP** sets how loud the computer's own sound plays through the FM-1; **OFF** silences it. Your recording
-  never includes it either way.
 
-The connection always goes both ways (that's fixed when the FM-1 plugs in), so there's no switch for one direction:
-nothing records the FM-1 unless you choose it as an input, and FROM COMP at OFF stops the other direction.
+In your DAW, pick the pair you want as each track's input: 1-2 for the mix, 3-4 for CLEAN, or 3-4 to 9-10 for the
+stems. The computer always sees all ten channels; the ones OUTPUT doesn't use stay silent.
 
 ## 16. Ideas to try
 

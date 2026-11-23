@@ -120,6 +120,8 @@ struct Engine {
     float im_left;                       /* DRIFT: seconds until the levels choose where to wander next */   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];
     float tl_s[2], tl_lo, tl_hi, tl_elo, tl_ehi, tl_db;
+    int stems_on;                        /* a computer records the stems (USB channels 3-10): fill stem[] */
+    float stem[NUM_LAYERS][2][ENGINE_SUB * BLK];   /* each layer dry (its level, pan and DIRT; no reverb, echo, chorus), the keys in the chosen layer's */
     Svf de[2]; float de_band, de_all, de_cut;      /* the softener: 2-5 kHz turned down when it pokes out */   /* the balance: the mix tilted toward the pieces' middle (see engine_mix_finish) */
     float sub[2];                        /* MOOD's low shelf: the mix's lows (below ~110 Hz), added back darker it goes */
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */

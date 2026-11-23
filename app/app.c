@@ -38,8 +38,8 @@ typedef struct {
     uint8_t clock_in;                    /* MOSH's SHAPES: 0 shards, 1 pebbles (v0.2-0.12: CLOCK in, moved into sync) */
     uint8_t cc_in;                       /* CCs move the macros */
     uint8_t usb_full;                    /* bit 0, LEVEL: the USB recording at full level, not at the volume knob's; bit 1,
-                                          * OUTPUT: 0 MIX (the mix on 1-2, the mix without effects on 3-4), 1 STEMS (each
-                                          * layer without effects on 3-10). (v0.31: bits 1-2, MIX, CLEAN, STEMS) */
+                                          * OUTPUT: 0 MIX, 1 CLEAN (everything without FX's effects, the speaker too).
+                                          * (v0.31: bits 1-2, MIX CLEAN STEMS; v0.32: bit 1 STEMS) */
     uint8_t usb_play;                    /* the computer's audio through the FM-1, 0..100 */
     uint8_t visual;                      /* VISUAL: MATRIX (the pegs), RORSCHACH (the inkblot), MOSH (v0.2-0.7: STEMS) */
     uint8_t palette, ink_gaps, ink_mix, mosh_size;   /* the screen: the palette (dealt by REC); RORSCHACH's GAPS, MIX; MOSH's SIZE */
@@ -65,7 +65,7 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
     set.usb_full = 0; set.usb_play = 100; set.visual = 0;
     set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.mosh_size = 50;
-    set.breed = 100; set.fade = 100; set.pegs_set = 6; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
+    set.breed = 100; set.fade = 100; set.pegs_set = 7; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
 }
 
 static void settings_defaults(void)
@@ -112,15 +112,15 @@ static void settings_load(void)
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
     int was = set.pegs_set;                      /* (the store's version of these) */
-    if (was < 3 || was > 6) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
-    if (was < 4 || was > 6) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
-    if (was < 5 || was > 6) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
+    if (was < 3 || was > 7) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
+    if (was < 4 || was > 7) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
+    if (was < 5 || was > 7) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
         if (set.clock_in || set.mosh_mould) set.sync = set.clock_in ? SYNC_IN : SYNC_OUT;   /* (v0.2-0.12's two: one setting, IN first) */
         set.clock_in = 0; set.mosh_mould = 50; set.mosh_size = 50; set.pegs_set = 5;
     }
-    if (was < 6 || was > 6) {                    /* (v0.31's OUTPUT, MIX CLEAN STEMS: its STEMS STEMS, the others MIX) */
-        set.usb_full = (uint8_t)((set.usb_full & 1) | ((set.usb_full >> 1) == 2 ? 2 : 0));
-        set.pegs_set = 6;
+    if (was < 7 || was > 7) {                    /* (v0.31-0.33's OUTPUT, stems and the like: MIX) */
+        set.usb_full &= 1;
+        set.pegs_set = 7;
     }
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
@@ -255,6 +255,8 @@ static uint8_t balance(void)             /* the split that leaves the busier cor
 
 static void core2_job(uint32_t mask) { layers_job(mask); engine_mix_reverb(&eng); }   /* (the second core's: its layers, the reverb) */
 
+static volatile uint32_t c2_late;        /* the second core's jobs given up and done here instead */
+
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float L[ENGINE_SUB * BLK], R[ENGINE_SUB * BLK];
@@ -273,7 +275,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     }
     {   /* the stems (USB channels 3-10), filled only while a computer records */
         uint32_t run = 0;
-        eng.stems_on = PLAT_USB_CH >= 2 && plat_usb_ch(0, &run) != 0;
+        (void)run; eng.stems_on = (set.usb_full >> 1) & 1;   /* OUTPUT CLEAN */
     }
     engine_block_begin(&eng, nsub);
     /* the second core: some layers and the reverb (the last block's sends); this one the rest, the keys, then the mix */
@@ -281,43 +283,28 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     int sent = two_cores && plat_cpu2_on() && plat_cpu2_run(core2_job, mask);
     layers_job(sent ? (uint32_t)(~mask & 0xFu) : 0xFu);
     engine_block_layer(&eng, KEYS);
-    if (sent && plat_cpu2_wait() != 0) core2_job(mask);
+    if (sent && plat_cpu2_wait() != 0) { c2_late++; core2_job(mask); }   /* (counted: HOME's LATE) */
     if (!sent) engine_mix_reverb(&eng);
     engine_mix_sends(&eng);
     engine_mix_echo(&eng);
     engine_mix_finish(&eng, L, R);
     if (two_cores) on2_mask = balance();
     uint32_t frames = n < (uint32_t)(nsub * BLK) ? n : (uint32_t)(nsub * BLK);
-    float g0 = gain_now;
+    if (eng.stems_on) {                          /* OUTPUT CLEAN: the mix without effects, to the computer and the speaker alike
+                                                  * (the USB input is the speaker's sound): each layer at its level and pan, none
+                                                  * of FX's four, no balance or WEAR; the leveller's gain kept */
+        float lev = eng.lev_g > 0 ? eng.lev_g : 1.0f;
+        for (uint32_t i = 0; i < frames; i++) {
+            float cl = 0, cr = 0;
+            for (int l = 0; l < NUM_LAYERS; l++) { cl += eng.stem[l][0][i]; cr += eng.stem[l][1][i]; }
+            L[i] = cl * lev; R[i] = cr * lev;
+        }
+    }
     for (uint32_t i = 0; i < frames; i++) {
         gain_now += (g - gain_now) * 0.002f;
         out_lvl += (fm_fabsf(L[i]) + fm_fabsf(R[i]) - out_lvl) * 0.0005f;
         lr[2 * i] = (int32_t)(soft(L[i] * gain_now) * 8388000.0f);
         lr[2 * i + 1] = (int32_t)(soft(R[i] * gain_now) * 8388000.0f);
-    }
-    if (eng.stems_on) {                          /* OUTPUT: MIX, the mix without effects on 3-4; STEMS, GROUND on 3-4, BODY 5-6,
-                                                  * LIGHT 7-8, DUST 9-10; at the mix's level (its gain, the leveller's) as the mix
-                                                  * goes out on 1-2 */
-        float gs = g0, lev = eng.lev_g > 0 ? eng.lev_g : 1.0f;
-        int clean = PLAT_USB_CH < 2 * NUM_LAYERS || !(set.usb_full >> 1);   /* (4 channels: the clean mix alone) */
-        for (uint32_t i = 0; i < frames; ) {
-            uint32_t run = 0; int16_t *p = plat_usb_ch(i, &run);
-            if (!p || !run) break;
-            for (uint32_t j = 0; j < run && i < frames; j++, i++) {
-                gs += (g - gs) * 0.002f;
-                float kk = gs * lev;
-                if (clean) {
-                    float cl = 0, cr = 0;
-                    for (int l = 0; l < NUM_LAYERS; l++) { cl += eng.stem[l][0][i]; cr += eng.stem[l][1][i]; }
-                    p[0] = (int16_t)(soft(cl * kk) * 32765.0f); p[1] = (int16_t)(soft(cr * kk) * 32765.0f);
-                } else
-                    for (int l = 0; l < NUM_LAYERS; l++) {
-                        p[2 * l] = (int16_t)(soft(eng.stem[l][0][i] * kk) * 32765.0f);
-                        p[2 * l + 1] = (int16_t)(soft(eng.stem[l][1][i] * kk) * 32765.0f);
-                    }
-                p += PLAT_USB_CH_STRIDE;
-            }
-        }
     }
 }
 
@@ -381,7 +368,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
     { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
     { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
-    { { "LEVEL", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
+    { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "LEVEL", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 } },
     { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "SHAPES", K_SHAPE, 2, SO(clock_in) }, { "", K_NONE, 2, 0 } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
@@ -462,7 +449,7 @@ static void knob_text(int pg, int k, char *s)
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
     case K_REC: text_cat(s, v ? "FULL" : "VOLUME"); break;   /* (VOLUME: as the FM-1's volume knob has it) */
     case K_PLAYIN: if (v) int_text(v, s); else text_cat(s, "OFF"); break;
-    case K_ROUTE: text_cat(s, v ? "STEMS" : "MIX"); break;
+    case K_ROUTE: text_cat(s, v ? "CLEAN" : "MIX"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_ECHO: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "REV "); int_text((v - 50) * 2, s + strlen_(s)); } break;
     case K_DIRT: text_cat(s, v < 34 ? "WARM " : v < 67 ? "FUZZ " : "BREAK "); int_text(v < 34 ? v * 3 : v < 67 ? (v - 33) * 3 : (v - 66) * 3, s + strlen_(s)); break;
@@ -677,6 +664,7 @@ static void info(void)
     pop(APP_NAME, s, store_ok ? C_TXT : C_RED);
     text_cat(ui.pop_3, two_cores && plat_cpu2_on() ? "2 CORES" : "1 CORE");
     {   char n[12]; text_cat(ui.pop_3, "  "); int_text((int32_t)plat_xruns(), n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " DROPS"); }
+    if (c2_late) { char n[12]; text_cat(ui.pop_3, "  "); int_text((int32_t)c2_late, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " LATE"); }
     text_cat(ui.pop_3, store_ok ? "  SAVING OK" : "  NO SAVING");
     ui.pop_until = plat_ms() + 3500u;
 }
@@ -1569,7 +1557,7 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
-            "1-2 THE MIX, 3-4 WITHOUT EFFECTS", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
+            "CLEAN: WITHOUT FX, TO RECORD DRY", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }

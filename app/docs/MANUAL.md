@@ -327,16 +327,15 @@ Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS 
 CLOCK (ARP) to IN. Press play on Move: the FM-1 starts with it, follows its tempo (the screen shows, say, 116 BPM IN), and
 locks to its beats and bars. It stays locked through a new piece and a change of tempo.
 
-**ARP a third time: USB AUDIO.** Plugged into a computer, the FM-1 shows up as an audio input with four channels
-(two stereo pairs), so you can record it straight into your DAW:
+**ARP a third time: USB AUDIO.** Plugged into a computer, the FM-1 shows up as a stereo audio input, so you can
+record it straight into your DAW.
 
-- **1-2: the mix**, everything you hear from the speaker.
-- **3-4: the mix without effects:** none of the FX page's four (reverb, echo, chorus, DIRT), nor the mix's balance
-  or WEAR, so you can add your own when you mix. Each layer keeps its level and pan.
-
-Record both at once and decide later. **LEVEL** sets the level the computer gets: **VOLUME** follows the FM-1's volume
-knob, so turning it down turns the recording down too; **FULL** always sends full level, so you can turn the speaker
-or headphones down (or off) while you record.
+- **OUTPUT** sets what you hear and record. **MIX** is everything. **CLEAN** is the mix without effects: none of the
+  FX page's four (reverb, echo, chorus, DIRT), nor the mix's balance or WEAR, so you can add your own when you mix.
+  CLEAN changes the speaker and headphones too, because the computer records what the FM-1 plays.
+- **LEVEL** sets the level the computer gets. **VOLUME** follows the FM-1's volume knob, so turning it down turns the
+  recording down too. **FULL** always sends full level, so you can turn the speaker or headphones down (or off) while
+  you record.
 
 ## 17. Ideas to try
 

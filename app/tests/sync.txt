@@ -17,7 +17,13 @@ clock 480 21
 expect beatlag >-9
 expect beatlag <9
 clock 480 18
-expect clockbpm >135
+expect clockbpm >136
+expect clockbpm <142
+expect beatlag >-9
+expect beatlag <9
+clock 480 22
+expect clockbpm >111
+expect clockbpm <116
 expect beatlag >-9
 expect beatlag <9
 midi FC 00 00

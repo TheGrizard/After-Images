@@ -166,23 +166,34 @@ static void cc_set(uint8_t *v, uint32_t x) { *v = (uint8_t)(x * 100u / 127u); }
  * its tempo followed, start and stop obeyed (CLOCK IN) */
 static volatile float ext_bpm; static volatile uint32_t ext_at, ext_last;
 static uint32_t clk_n;                    /* the leader's clocks since its Start (24 a beat) */
+static int shown_bpm(void)               /* the tempo playing: the clock's when following one */
+{
+    return eng.ext_bpm > 20.0f ? (int)(eng.ext_bpm + 0.5f) : 40 + set.cur.tempo;
+}
+
 static void midi_in(void)
 {
     uint32_t pkt; int port;
     const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
     while (plat_midi_in(&pkt, &port)) {
         uint32_t st = (pkt >> 8) & 0xFFu, d1 = (pkt >> 16) & 0x7Fu, d2 = pkt >> 24 & 0x7Fu, ch = st & 15u, ty = st & 0xF0u;
-        if (st == 0xF8u) {                               /* clock: 24 a beat, timed a beat at a time */
-            static uint32_t count, beat_at;
+        if (st == 0xF8u) {                               /* clock: 24 a beat, its tempo timed over the last 8 beats */
+            /* (the clocks are read a screen frame at a time, so one beat's timing is off by up to a frame: over 8 the
+             * error is an eighth of that. A new tempo, more than 4 % off for two beats running, starts the count again) */
+            static uint32_t count, bt[9]; static int bn, odd;
             uint32_t now = plat_ms();
-            if (now - ext_last > 500u) { count = 0; beat_at = now; }   /* (a pause: start counting again) */
+            if (now - ext_last > 500u) { count = 0; bn = 0; }   /* (a pause: start counting again) */
             ext_last = now;
-            if (++count >= 24u) {
-                uint32_t ms = now - beat_at;
-                count = 0; beat_at = now;
-                if (CLK_IN && ms >= 200u && ms <= 3000u) {   /* (20 to 300 BPM) */
-                    float b = 60000.0f / (float)ms;
-                    ext_bpm = ext_bpm > 0 ? ext_bpm + (b - ext_bpm) * 0.5f : b;
+            if (count++ % 24u == 0) {
+                if (bn == 9) { for (int i = 0; i < 8; i++) bt[i] = bt[i + 1]; bn = 8; }
+                bt[bn++] = now;
+                if (CLK_IN && bn >= 2) {
+                    uint32_t one = bt[bn - 1] - bt[bn - 2], all = bt[bn - 1] - bt[0];
+                    float b1 = one ? 60000.0f / (float)one : 0.0f, b = 60000.0f * (float)(bn - 1) / (float)(all ? all : 1u);
+                    if (ext_bpm > 0 && b1 > 0 && fm_fabsf(b1 - ext_bpm) > 0.04f * ext_bpm && bn > 2) {
+                        if (++odd >= 2) { bt[0] = bt[bn - 2]; bt[1] = bt[bn - 1]; bn = 2; b = b1; odd = 0; }
+                    } else odd = 0;
+                    if (b >= 20.0f && b <= 300.0f) ext_bpm = b;
                 }
             }
             /* locked to the leader's beat, not only its tempo: at each of its beats (24 clocks from its Start) our beat
@@ -422,7 +433,7 @@ static void knob_text(int pg, int k, char *s)
     case K_KEY: text_cat(s, NOTE_NAME[v % 12]); break;
     case K_SCALE: text_cat(s, SCALES[v % NUM_SCALES].name); break;
     case K_CHORD: text_cat(s, CHORD_NAME[v % NUM_CHORDS]); break;
-    case K_TEMPO: int_text(40 + v, s); break;
+    case K_TEMPO: if (eng.ext_bpm > 20.0f) { int_text(shown_bpm(), s); text_cat(s, " IN"); } else int_text(40 + v, s); break;
     case K_ONOFF: text_cat(s, v ? "ON" : "OFF"); break;
     case K_CH:
         if (k == 1) { int_text(v + 1, s); text_cat(s, "-"); char n[4]; int_text(v + 4, n); text_cat(s, n); }   /* the four layers' */
@@ -533,7 +544,7 @@ static void new_piece(int keep_key)      /* REC: a new piece, a new key and scal
         text_cat(t, keep_key ? "SAME KEY + " : "NEW PIECE + "); text_cat(t, FX_NAME[fx]);
         pop(t, nm, LAYER_C[(seed >> 3) % NUM_LAYERS]);
         text_cat(ui.pop_3, NOTE_NAME[set.cur.key]); text_cat(ui.pop_3, " "); text_cat(ui.pop_3, SCALES[set.cur.scale].name);
-        text_cat(ui.pop_3, "  "); int_text(40 + set.cur.tempo, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM");
+        text_cat(ui.pop_3, "  "); int_text(shown_bpm(), n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " BPM");
     }
 }
 
@@ -1422,7 +1433,7 @@ static void draw_header(void)
     cv_begin(240, HEAD_H, C_BLACK);
     cv_text(4, 2, &FONT_B, name, C_TXT);
     {
-        char t[12]; int_text(40 + set.cur.tempo, t); text_cat(t, " BPM");
+        char t[16]; int_text(shown_bpm(), t); text_cat(t, eng.ext_bpm > 20.0f ? " BPM IN" : " BPM");
         cv_text(4, 17, &FONT_XS, t, C_SUB);
         int x = 4 + text_w(&FONT_XS, t) + 10;
         for (int l = 0; l < NUM_LAYERS; l++) {   /* the four layers: their sequencers, lit as they sound */

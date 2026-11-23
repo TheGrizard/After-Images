@@ -35,7 +35,7 @@ void echo_init(Echo *e);
 void echo_run(Echo *e, const float *inL, const float *inR, float *outL, float *outR, int n);
 
 #define ENS_LINE 2048                    /* the send's chorus: 46 ms of line */
-typedef struct { int16_t buf[ENS_LINE]; int pos; float ps, pf; } Ens;
+typedef struct { int16_t buf[ENS_LINE]; int pos; float ps, pf; float base, ds, df, fb; } Ens;   /* (base .. fb: glided) */
 void ens_init(Ens *c, uint32_t seed);
 /* in: mono; out: stereo, the wet alone. amt: the shared CHORUS, 0..1 */
 void ens_run(Ens *c, float amt, const float *in, float *outL, float *outR, int n);

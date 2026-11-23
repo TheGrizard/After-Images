@@ -152,15 +152,20 @@ void ens_run(Ens *c, float amt, const float *in, float *outL, float *outR, int n
     float base = (8.0f + 6.0f * lush) * (SR / 1000.0f);        /* ms, in samples */
     float ds = (1.2f + 1.6f * clamp01(amt * 2.0f) + 2.5f * lush) * (SR / 1000.0f), df = (0.12f + 0.25f * lush) * (SR / 1000.0f);
     float fb = 0.25f * lush;
+    if (c->base <= 0) { c->base = base; c->ds = ds; c->df = df; c->fb = fb; }
+    /* (the knob turned, or DRIFT moving it: the lines' lengths glide there over ~50 ms, sample by sample; a jump in a
+     * delay's length is a click) */
+    const float gl = 1.0f / (0.05f * SR);
     for (int i = 0; i < n; i++) {
+        c->base += (base - c->base) * gl; c->ds += (ds - c->ds) * gl; c->df += (df - c->df) * gl; c->fb += (fb - c->fb) * gl;
         c->ps += rs; if (c->ps >= 1.0f) c->ps -= 1.0f;
         c->pf += rf; if (c->pf >= 1.0f) c->pf -= 1.0f;
         float t[3];
         for (int k = 0; k < 3; k++) {
             float th = (float)k * (1.0f / 3.0f);
-            t[k] = ens_tap(c, base + ds * (0.5f + 0.5f * sine_c(c->ps + th)) + df * (0.5f + 0.5f * sine_c(c->pf + th)));
+            t[k] = ens_tap(c, c->base + c->ds * (0.5f + 0.5f * sine_c(c->ps + th)) + c->df * (0.5f + 0.5f * sine_c(c->pf + th)));
         }
-        c->buf[c->pos] = to16(soft_clip(in[i] + fb * t[1]));
+        c->buf[c->pos] = to16(soft_clip(in[i] + c->fb * t[1]));
         c->pos = (c->pos + 1) & (ENS_LINE - 1);
         outL[i] = 0.75f * t[0] + 0.45f * t[1];
         outR[i] = 0.75f * t[2] + 0.45f * t[1];

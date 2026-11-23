@@ -314,6 +314,7 @@ void app_init(void)
 {
     dsp_init();
     settings_load();
+    save_end = plat_ms() | 1u;                  /* (the start's own save, if it made one) */
     engine_init(&eng, &set.cur);
     eng.clock = plat_ticks24;
     eng.midi = midi_send;
@@ -614,9 +615,20 @@ static void hist_step(int d)
 /* SAVE while the music plays: the flash's erase stops the sound for tens of ms, so the sound fades out first (a few
  * ms), the save, and back in: a soft dip, not a crunch */
 static int save_pending; static uint32_t save_t;   /* the slot (+1) waiting for the fade, since when */
+/* the drops a save makes: writing the flash holds the interrupts off with the sound silenced, so the audio's next half
+ * comes late and the platform counts a drop no one hears. Those are kept apart, so HOME's DROPS counts only the music's */
+static uint32_t xr_seen, xr_saves, save_end;
+static int store_save(void)
+{
+    int ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
+    save_end = plat_ms() | 1u;
+    return ok;
+}
+static uint32_t drops(void) { return plat_xruns() - xr_saves; }
+
 static void store_now(int slot)
 {
-    store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
+    store_ok = store_save();
     char s[12] = "SLOT ", n[4]; int_text(slot + 1, n); text_cat(s, n);
     if (store_ok) pop("SAVED", s, C_TXT);
     else pop("NOT SAVED", "UNTIL POWER OFF", C_RED);
@@ -664,7 +676,7 @@ static void info(void)
     int_text((int32_t)plat_cpu_pct(), n); text_cat(s, n); text_cat(s, "%");
     pop(APP_NAME, s, store_ok ? C_TXT : C_RED);
     text_cat(ui.pop_3, two_cores && plat_cpu2_on() ? "2 CORES" : "1 CORE");
-    {   char n[12]; text_cat(ui.pop_3, "  "); int_text((int32_t)plat_xruns(), n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " DROPS"); }
+    {   char n[12]; text_cat(ui.pop_3, "  "); int_text((int32_t)drops(), n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " DROPS"); }
     if (c2_late) { char n[12]; text_cat(ui.pop_3, "  "); int_text((int32_t)c2_late, n); text_cat(ui.pop_3, n); text_cat(ui.pop_3, " LATE"); }
     text_cat(ui.pop_3, store_ok ? "  SAVING OK" : "  NO SAVING");
     ui.pop_until = plat_ms() + 3500u;
@@ -1713,6 +1725,9 @@ void app_ui_init(void)
 void app_frame(void)
 {
     uint32_t now = plat_ms();
+    {   uint32_t xr = plat_xruns();             /* (a drop just after a save: the save's) */
+        if (xr != xr_seen) { if (save_end && now - save_end < 500u) xr_saves += xr - xr_seen; xr_seen = xr; }
+    }
     input();
     speak();
     if (ui.splash_on) {
@@ -1751,7 +1766,7 @@ void app_frame(void)
         && (out_lvl < 0.002f || now - stopped_at >= 6000u)
         && (auto_fading || (save_hold = 1, auto_fading = 1, save_t = now, 0)) && (gain_now <= 0.004f || now - save_t >= 250u)) {
         autosave_at = 0; auto_fading = 0;
-        store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
+        store_ok = store_save();
         save_hold = 0;
     }
     if (now - ui.last_head >= 100u && !full_now()) {   /* the header: its words, and the layers' lights */

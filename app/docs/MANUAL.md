@@ -152,7 +152,7 @@ The knobs reach notes that are already sounding, so a long note changes as you t
 **ENV: MIX**
 
 - **LEVEL** sets the layer's volume, the same as K1 to K4 at home.
-- **ATTACK** and **RELEASE** set how each note fades in and out.
+- **ATTACK** and **RELEASE** set how each note fades in and out. Even at zero, every note eases in over 2 ms and rings out for a moment, so nothing clicks or gets clipped off.
 - **OCTAVE** moves the layer down or up by up to two octaves.
 
 **ENV again: VOICE**

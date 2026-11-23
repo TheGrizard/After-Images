@@ -51,6 +51,8 @@ typedef struct {
     uint8_t on, engine, rel;             /* rel: 0 attack, 2 past it */
     uint8_t id;                          /* the note's number for MIDI and the screen */
     int8_t note;                         /* MIDI note */
+    uint8_t kill;                        /* 1: this block its last, faded to nothing across it (given up for another note) */
+    uint16_t dcl;                        /* samples into the note's opening fade (DECLICK of them) */
     float freq, vel, pan, gl, gr, g_last, gl_last, gr_last;   /* g_last, gl_last, gr_last: last block's gain and pan, ramped from */
     float env, a_k, r_k, sus, d_k, hold; /* the envelope: attack and release rates, sustain, decay, seconds to hold */
     float ph[4], fb, ws, lfo, lfo_dp;    /* phases, feedback, width */

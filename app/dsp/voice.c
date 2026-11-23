@@ -37,7 +37,8 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
     v->glide_k = s->glide > 0.001f ? clamp01(BLK_S / s->glide) : 1.0f;
     v->sweep = s->sweep; v->sw_k = clamp01(BLK_S / (0.2f + 1.2f * s->glide + 2.5f * s->sweep)); v->reso = s->reso;   /* (SWEEP: up to 3 s to open) */
     v->pan_amt = s->pan_move;
-    if (start || v->hold > 0) v->r_k = k_of(s->release * 0.33f + 0.004f);   /* (a tail let go under load keeps its pace) */
+    if (start || v->hold > 0) v->r_k = k_of(s->release * 0.33f + 0.008f);   /* (a tail let go under load keeps its pace; RELEASE 0 still a
+                                                                                     * short tail, ~50 ms, never clipped off) */
     v->sus = 1.0f; v->d_k = k_of(1.0f);
     v->lfo_dp = (0.1f + 0.4f * wd) * BLK_S;
     v->drive = 1.0f + 5.0f * wt * wt;
@@ -274,7 +275,7 @@ void voice_start(Voice *v, const Sound *s, int note, float vel, float dur, float
     v->pan_ph = (float)(seed >> 20 & 255u) / 256.0f;
     v->pan_dp = (0.04f + 0.3f * (float)(seed >> 4 & 255u) / 255.0f) * BLK_S;   /* once every 3 to 25 s */
     v->env = 0;                                  /* (a note taken while it sounded fades out in the engine's ghost) */
-    v->hold = dur;
+    v->hold = dur; v->kill = 0; v->dcl = 0;
     float att = s->attack * (1.15f - 0.9f * wt);                 /* heavy: sharper */
     v->a_k = k_of(att * 0.33f + 0.0008f);
     for (int i = 0; i < 4; i++) v->ph[i] = (float)((seed >> (i * 8)) & 255u) * (1.0f / 256.0f);
@@ -310,6 +311,7 @@ void voice_legato(Voice *v, int note, float vel, float dur)
 static inline float saw_bl(float ph, float dt) { return 2.0f * ph - 1.0f - blep(ph, dt); }
 
 float g_voice_floor = 0.001f;
+#define DECLICK 88                       /* (2 ms) */
 static const uint8_t HAS_FILTER[NUM_ENGINES] = {   /* (their own filter follows SWEEP and F.GLIDE) */
     [E_SAW] = 1, [E_PULSE] = 1, [E_BREATH] = 1, [E_FOLD] = 1, [E_SUB] = 1, [E_STRINGS] = 1, [E_TRI] = 1, [E_SQUARE] = 1,
     [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1, [E_REESE] = 1, [E_CHOIR] = 1 };
@@ -347,8 +349,12 @@ void voice_render(Voice *v, float *L, float *R, int n)
         else env += (v->sus - env) * v->d_k;                         /* decay to the sustain */
         out[i] = env;
     }
+    /* the opening: every note faded in over its first 2 ms whatever its attack, so ATTACK 0 is as quick as it sounds
+     * but never ticks (a one-pole's attack is steepest at its very start) */
+    if (v->dcl < DECLICK)
+        for (int i = 0; i < n && v->dcl < DECLICK; i++) { float t = (float)(++v->dcl) * (1.0f / DECLICK); out[i] *= t * t * (3.0f - 2.0f * t); }
     v->hold -= (float)n / SR; v->age += (float)n / SR;
-    int last = v->hold <= 0 && env < g_voice_floor;   /* faded under the floor: this block its last, faded the rest of the way
+    int last = (v->hold <= 0 && env < g_voice_floor) || v->kill;   /* faded under the floor: this block its last, faded the rest of the way
                                                   * to nothing (cut, it stepped from its level to silence: a tiny click
                                                   * each, a crackle under a busy pattern) */
     if (last) for (int i = 0; i < n; i++) out[i] *= 1.0f - (float)(i + 1) / (float)n;

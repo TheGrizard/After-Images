@@ -475,7 +475,7 @@ void engine_block_begin(Engine *e, int nsub)
     cost_add(e, NBUS, t0);
 }
 
-static void apply(VoiceEv *q, int nq, Voice *v, Voice *ghost, int sub)
+static void apply(VoiceEv *q, int nq, Voice *v, Voice *ghost, int sub, float *Lb, float *Rb)
 {
     for (int i = 0; i < nq; i++) {
         if (q[i].sub != sub) continue;
@@ -483,11 +483,13 @@ static void apply(VoiceEv *q, int nq, Voice *v, Voice *ghost, int sub)
         if (q[i].rel == 1) voice_release(x);
         else if (q[i].rel == 2) voice_legato(x, q[i].note, q[i].vel, q[i].dur);
         else {
-            if (x->on && x->env > 0.002f) {      /* a sounding note taken: it fades in a ghost, no click (the quietest
-                                                  * ghost given up if all four are fading) */
+            if (x->on && x->env > 0.002f) {      /* a sounding note taken: it fades in a ghost, no click. All four fading:
+                                                  * the quietest of them and it faded right out across this block (not cut) */
                 Voice *g = &ghost[0];
                 for (int j = 0; j < 4; j++) { if (!ghost[j].on) { g = &ghost[j]; break; } if (ghost[j].env < g->env) g = &ghost[j]; }
-                if (!g->on || g->env < x->env) { *g = *x; g->hold = 0; g->r_k = 0.0015f; }
+                Voice *out = !g->on ? 0 : g->env < x->env ? g : x;
+                if (out) { out->kill = 1; voice_render(out, Lb, Rb, BLK); }
+                if (out != x) { *g = *x; g->hold = 0; g->r_k = 0.0015f; }
             }
             voice_start(x, &q[i].snd, q[i].note, q[i].vel, q[i].dur, q[i].pan, q[i].from_hz, q[i].seed);
         }
@@ -506,7 +508,7 @@ void engine_block_layer(Engine *e, int b)
         float *sl = e->stem[b][0] + k * BLK, *sr = e->stem[b][1] + k * BLK;   /* (the stem: before DIRT) */
         if (e->stems_on) { memset(sl, 0, sizeof(float) * BLK); memset(sr, 0, sizeof(float) * BLK); }
         if (b == KEYS) {
-            apply(e->kq, e->nkq, e->kv, e->ghost[KEYS], k);
+            apply(e->kq, e->nkq, e->kv, e->ghost[KEYS], k, Lb, Rb);
             int any = 0;
             for (int j = 0; j < 4; j++) if (e->ghost[KEYS][j].on) { e->ghost[KEYS][j].pm = e->pm[KEYS]; voice_render(&e->ghost[KEYS][j], Lb, Rb, BLK); any = 1; }
             for (int i = 0; i < KEY_POLY; i++) if (e->kv[i].on) { e->kv[i].ws = wg > 0.5f ? (wg - 0.5f) * 1.4f : 0.0f; e->kv[i].pm = e->pm[KEYS]; voice_render(&e->kv[i], Lb, Rb, BLK); any = 1; }
@@ -524,7 +526,7 @@ void engine_block_layer(Engine *e, int b)
             continue;
         }
         Layer *L = &e->L[b];
-        apply(L->q, L->nq, L->v, e->ghost[b], k);
+        apply(L->q, L->nq, L->v, e->ghost[b], k, Lb, Rb);
         if (e->gains[k][b] < 1e-4f) {            /* faded right out (DRIFT, LEVEL): its voices go on unheard, no sound made */
             for (int i = 0; i < L->nv; i++) voice_skip(&L->v[i], BLK);
             for (int j = 0; j < 4; j++) e->ghost[b][j].on = 0;

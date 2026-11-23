@@ -38,7 +38,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '[.[] | select(.draft == false)][0].tag_name')
+          # (the one published last, not the list's first or the highest number: a tag made by mistake can't take over)
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[] | select(.draft == false)] | sort_by(.published_at) | last | .tag_name')
           [ -n "$tag" ] && [ "$tag" != null ] || { echo 'no release yet'; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#[vV]}" >> "$GITHUB_OUTPUT"

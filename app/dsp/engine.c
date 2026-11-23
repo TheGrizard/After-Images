@@ -55,7 +55,7 @@ static Shifter g_shim;                           /* the shimmer's pitch shifter 
 /* the mix's buffers, a block's (engine_mix_*: the stages two cores share) */
 #define MIXN (ENGINE_SUB * BLK)
 static float mx_dl[MIXN], mx_dr[MIXN], mx_rl[MIXN], mx_rr[MIXN], mx_el[MIXN], mx_er[MIXN], mx_gm[MIXN];
-static float mx_vl[MIXN], mx_vr[MIXN], mx_wl[MIXN], mx_wr[MIXN];   /* the reverb's out; the echo's and grains' (to the dry mix) */
+static float mx_vl[MIXN], mx_vr[MIXN], mx_wl[MIXN], mx_wr[MIXN];   /* the reverb's out; the echo's and the chorus's (to the dry mix) */
 static float mx_rvk, mx_shk, mx_grk;
 static int mx_nsub;                              /* the sends' block's length, for the reverb a block on */
 
@@ -118,7 +118,7 @@ void engine_init(Engine *e, const Piece *p)
     }
     reverb_init(&e->rv, 1.3f);
     echo_init(&e->echo);
-    grains_init(&e->gr, p->seed);
+    ens_init(&e->ens, p->seed);
     for (int l = 0; l < NUM_LAYERS; l++) dirt_init(&e->L[l].dirt, p->seed + (uint32_t)l);
     dirt_init(&e->kdirt, p->seed + 11u);
     patch(e, p->seed);
@@ -306,7 +306,7 @@ static void control(Engine *e, int sub)
     if (e->seed_now != p->seed) {                    /* a new piece: the conductor starts again */
         e->seed_now = p->seed; rng_seed(&e->rng, p->seed);
         e->root = 0; e->chord_left = 4; e->sec_left = 24; e->mask = 0xF; e->beat = 0; e->bar = 0;
-        grains_init(&e->gr, p->seed);
+        ens_init(&e->ens, p->seed);
         patch(e, p->seed);
         engine_all_off(e);
     }
@@ -527,7 +527,7 @@ static float energy(const float *a, const float *b) { float s = 0; for (int i = 
 static int fx_wake(int *q, float in, int mem) { if (in > FX_QUIET) { *q = 0; return 1; } return *q < mem; }
 static void fx_rest(int *q, float out) { if (out > FX_QUIET) *q = 0; else if (*q < 1 << 30) *q += BLK; }
 
-/* the mix, in stages so two cores can share it. The wet effects, echo, grains, shimmer and reverb (engine_mix_reverb),
+/* the mix, in stages so two cores can share it. The wet effects, echo, chorus, shimmer and reverb (engine_mix_reverb),
  * take the sends of the block before (5.8 ms later: unheard; the echo's time that much shorter, so its repeats stay on
  * the beat), so the second core can run them beside its layers; then the sends gathered (engine_mix_sends), the wet
  * added and the chorus (engine_mix_echo), and the sum, the shelf and the leveller (engine_mix_finish) */
@@ -542,7 +542,7 @@ void engine_mix_sends(Engine *e)
     float grk = u(p->grain), gsend = 0;
     for (int l = 0; l < NUM_LAYERS; l++) gsend = fm_maxf(gsend, mo(e, l, MW_GRAIN, p->s_grain[l], 0.5f) * e->L[l].present);
     if (e->key_layer >= 0 && e->key_layer < NUM_LAYERS) gsend = fm_maxf(gsend, u(p->s_grain[e->key_layer]));
-    grk = fm_maxf(grk, 0.35f * gsend);              /* (a send wakes the grains: a gentle cloud with GRAIN's own at 0) */
+    grk = fm_maxf(grk, 0.35f * gsend);              /* (a send wakes the chorus: a gentle one with CHORUS's own at 0) */
     mx_rvk = rvk; mx_shk = shk; mx_grk = grk; mx_nsub = e->nsub;
     e->rv_size = 2.5f + 12.0f * rvk * rvk - 3.0f * shk; e->rv_damp = 1800.0f + 4200.0f * u(p->mood) + 4000.0f * shk;
     e->echo.time_s = clampf(60.0f / e->bpm * 0.75f, 0.12f, 0.7f);   /* a dotted eighth */
@@ -550,15 +550,6 @@ void engine_mix_sends(Engine *e)
     e->echo.time_s -= (float)(e->nsub * BLK) / SR;  /* (it runs a block late: a block shorter, so it lands on the beat) */
     e->echo.fb = rev > 0 ? 0.45f + 0.3f * rev : 0.2f + 0.45f * eck; e->echo.wow = u(p->warp) + u(p->drift) * 0.5f;
     e->echo.rev = rev;
-    e->gr.density = grk < 0.9f ? fm_sqrtf(grk) : 1.0f; e->gr.frozen = grk >= 0.92f; e->gr.size = 0.3f + 0.7f * grk;
-    e->gr.spread = 0.3f + 0.7f * grk; e->gr.shimmer = 0;   /* (SHIMMER gave way to DIRT) */
-    {   /* the grains' pitches: octaves, and the fifth only where the scale has one */
-        const Scale *sc = &SCALES[p->scale % NUM_SCALES]; int has5 = 0;
-        for (int i = 0; i < sc->n; i++) if (sc->st[i] == 7) has5 = 1;
-        e->gr_ratio[0] = 1; e->gr_ratio[1] = 1; e->gr_ratio[2] = 2; e->gr_ratio[3] = 0.5f;
-        e->gr_ratio[4] = has5 ? 1.5f : 2.0f; e->gr_ratio[5] = has5 ? 0.75f : 1.0f;
-        e->gr.ratios = e->gr_ratio; e->gr.nratios = 6;
-    }
     for (int k = 0; k < e->nsub; k++) {
         float *dl = mx_dl + k * BLK, *dr = mx_dr + k * BLK, *rl = mx_rl + k * BLK, *rr = mx_rr + k * BLK;
         float *el = mx_el + k * BLK, *er = mx_er + k * BLK, *gm = mx_gm + k * BLK;
@@ -571,7 +562,7 @@ void engine_mix_sends(Engine *e)
             /* (DRIFT morphing each send: a dry layer may wander into the reverb, a wet one out of it) */
             float rs = mo(e, sl, MW_RV, p->s_rv[sl], 0.5f) * 0.8f * (0.3f + 1.2f * rvk) * g * (1.0f + 1.5f * far);   /* (far off: more reverb than itself) */
             float es = mo(e, sl, MW_ECHO, p->s_echo[sl], 0.5f) * eck * 1.4f * g;
-            float gs = fm_maxf(mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f), 0.8f * u(p->grain)) * 0.9f * g;   /* (the shared GRAIN: every layer into it a little) */
+            float gs = fm_maxf(mo(e, sl, MW_GRAIN, p->s_grain[sl], 0.5f), 0.8f * u(p->grain)) * g;   /* (the shared CHORUS: every layer into it a little) */
             float ss = 0;
             for (int i = 0; i < BLK; i++) {
                 float l = Lb[i], r = Rb[i];
@@ -593,7 +584,7 @@ void engine_mix_sends(Engine *e)
 void engine_mix_reverb(Engine *e)                /* the wet effects (the second core's: it touches only theirs) */
 {
     uint32_t t0 = now(e);
-    float shk = mx_shk, gg = fm_sqrtf(mx_grk) * (e->gr.frozen ? 3.2f : 2.0f);   /* (the cloud up with the dry; a freeze a little over it) */
+    float shk = mx_shk, gk = mx_grk, gg = fm_sqrtf(gk) * 1.1f;   /* (the chorus's wet beside the dry) */
     if (e->rv_size > 0) reverb_set(&e->rv, e->rv_size, e->rv_damp);
     int ns = mx_nsub < e->nsub ? mx_nsub : e->nsub;
     for (int k = ns; k < e->nsub; k++) for (int i = 0; i < BLK; i++) mx_vl[k * BLK + i] = mx_vr[k * BLK + i] = mx_wl[k * BLK + i] = mx_wr[k * BLK + i] = 0;
@@ -602,12 +593,12 @@ void engine_mix_reverb(Engine *e)                /* the wet effects (the second 
         float *el = mx_el + k * BLK, *er = mx_er + k * BLK, *gm = mx_gm + k * BLK, *wl = mx_wl + k * BLK, *wr = mx_wr + k * BLK;
         float ol[BLK] = { 0 }, orr[BLK] = { 0 }, gl[BLK] = { 0 }, grr[BLK] = { 0 }, sh[BLK];
         if (fx_wake(&e->q_echo, energy(el, er), 34000)) { echo_run(&e->echo, el, er, ol, orr, BLK); fx_rest(&e->q_echo, energy(ol, orr)); }
-        if (fx_wake(&e->q_gr, energy(gm, gm), 26000) || e->gr.frozen) { grains_run(&e->gr, gm, gl, grr, sh, BLK); fx_rest(&e->q_gr, energy(gl, grr)); }
+        if (fx_wake(&e->q_gr, energy(gm, gm), 4400)) { ens_run(&e->ens, gk, gm, gl, grr, BLK); fx_rest(&e->q_gr, energy(gl, grr)); }
         (void)sh;
         for (int i = 0; i < BLK; i++) {
             wl[i] = ol[i] + gl[i] * gg; wr[i] = orr[i] + grr[i] * gg;
-            rl[i] += ol[i] * 0.3f + gl[i] * gg * 0.5f;
-            rr[i] += orr[i] * 0.3f + grr[i] * gg * 0.5f;
+            rl[i] += ol[i] * 0.3f + gl[i] * gg * 0.3f;
+            rr[i] += orr[i] * 0.3f + grr[i] * gg * 0.3f;
         }
         if (shk > 0.001f && fx_wake(&e->q_sh, energy(e->shim_prev, e->shim_prev), 4400)) {   /* the shimmer: the reverb's last block, an octave up and down, back in */
             /* (a limiter in the loop: the louder the reverb, the less goes round again, so it never runs away) */

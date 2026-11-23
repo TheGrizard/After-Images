@@ -34,7 +34,7 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
 
 static int clampi_(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
-/* each role's sends, as the mix had them before there were sends: reverb, echo, grains */
+/* each role's sends, as the mix had them before there were sends: reverb, echo, chorus */
 static const uint8_t SEND_DEF[NUM_LAYERS][3] = { { 15, 0, 0 }, { 60, 15, 45 }, { 45, 50, 40 }, { 85, 40, 75 } };
 
 void piece_sends_default(Piece *p)
@@ -67,7 +67,7 @@ static void roll_voice(Piece *p, int l, Rng *r)    /* the VOICE page: now and th
     }
 }
 
-const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "GRAIN CLOUD", "FROZEN GRAINS", "SATURATED", "TAPE FUZZ", "WIDE SPACE", "HAZE" };
+const char *const FX_NAME[NUM_FX] = { "SHIMMER", "REVERSE ECHO", "CHORUS", "ENSEMBLE", "SATURATED", "TAPE FUZZ", "WIDE SPACE", "HAZE" };
 
 /* the scales a new piece is dealt: mostly minor and consonant, for ambient; the harsh ones (AEOLIAN B5, LYD DOM, PHRYG
  * DOM, HUNGARIAN, DBL HARM, IN SEN, WHOLE TONE) only by hand */
@@ -127,8 +127,8 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     switch (fx) {
     case FX_SHIMMER: p->reverb = pick(&r, 66, 96); break;
     case FX_REVERSE: p->echo = pick(&r, 62, 95); break;
-    case FX_CLOUD:   p->grain = pick(&r, 45, 85); break;
-    case FX_FREEZE:  p->grain = pick(&r, 93, 100); break;
+    case FX_CHORUS:  p->grain = pick(&r, 35, 50); break;
+    case FX_ENSEMBLE: p->grain = pick(&r, 65, 95); break;
     case FX_FOLD:    p->dirt = pick(&r, 5, 32); break;
     case FX_CRUSH:   p->dirt = pick(&r, 40, 64); break;
     case FX_HAZE:    /* Boards of Canada's: the pitch wandering, the chorus, a touch flat, dark, echoed */
@@ -153,7 +153,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
         p->mood = pick(&r, 20, 85); p->motion = pick(&r, 30, 70); p->evolve = pick(&r, 25, 70);
         p->weird = pick(&r, 20, 70);                 /* DRIFT: the layers wandering in and out */
     }
-    if (!p->grain) for (int l = 0; l < NUM_LAYERS; l++) p->s_grain[l] = 0;   /* (no grains in the piece: none sent; a send alone wakes them) */
+    if (!p->grain) for (int l = 0; l < NUM_LAYERS; l++) p->s_grain[l] = 0;   /* (no chorus in the piece: none sent; a send alone wakes it) */
 }
 
 /* the next piece's key, from the last one's round the circle of fifths, so the pieces lead on from one another:

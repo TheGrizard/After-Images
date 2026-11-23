@@ -77,10 +77,10 @@ Press a page's button again for its next page; dots by the page's name show how 
 | SEQ | SEQUENCE (chosen layer) | TYPE · DENSITY · RATE · MUTATE |
 | ENV | MIX (chosen layer) | LEVEL · ATTACK · RELEASE · OCTAVE |
 | ENV again | VOICE (chosen layer) | F.GLIDE · LEGATO · SWEEP · RESO |
-| FX | SENDS (chosen layer) | REVERB · ECHO · GRAIN · DIRT |
-| FX again | EFFECTS (shared) | REVERB · ECHO · GRAIN · DIRT |
+| FX | SENDS (chosen layer) | REVERB · ECHO · CHORUS · DIRT |
+| FX again | EFFECTS (shared) | REVERB · ECHO · CHORUS · DIRT |
 | LFO | MOTION | LINK · WARP · FLOW · CHAOS |
-| LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · CHORUS |
+| LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · JUNO |
 | GLO | SCALE | KEY · SCALE · CHORDS · TEMPO |
 | GLO again | VISUAL | VISUAL · · SHAPES (MOSH's) · |
 | GLO a third time | SCREEN | the chosen visual's four (below) |
@@ -100,13 +100,14 @@ Press a page's button again for its next page; dots by the page's name show how 
 - **Sends and effects.** Each layer sends its own amount to the shared effects, so GROUND can go only to the reverb
   while LIGHT is fuzzed and echoed. **REVERB:** to 12 o'clock a room, small to vast; past it a shimmer an octave up,
   and by full an octave down too. **ECHO:** a tempo-locked tape echo; past 12 o'clock a reversed, smeared wash.
-  **GRAIN:** a cloud; right up it freezes. **DIRT:** tape pushed hard, from warm saturation to fuzz to breakup with
-  hiss, sputter and dropouts. A send always does something, even with the shared amount at 0, and the shared GRAIN and DIRT reach every
+  **CHORUS:** three voices swinging round the sound, left, middle and right; past 12 o'clock slower, deeper and
+  wider, a string machine's ensemble. **DIRT:** tape pushed hard, from warm saturation to fuzz to breakup with
+  hiss, sputter and dropouts. A send always does something, even with the shared amount at 0, and the shared CHORUS and DIRT reach every
   layer a little, even with its send at 0.
 - **MOTION:** LINK (layers answering each other), WARP (swing, phrases speeding and slowing), FLOW (slow random
   movement), CHAOS (ratchets and skips).
 - **WARBLE** puts Boards of Canada's worn tape in the synth itself: the pitch wandering, a faster flutter, everything
-  a touch flat, and the Juno's chorus.
+  a touch flat, and JUNO, the Juno's chorus on the whole mix.
 
 The knobs reach notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWEEP or RESO and held notes follow.
 
@@ -119,7 +120,7 @@ slowly against each other, driven into a deep low-pass with a sub under it, lega
 beating), MALLET (marimba, vibes or kalimba), WAVES (a wavetable scanned dark to bright) and CHOIR (three voices, ooh to
 aah).
 
-Each REC also features one effect: shimmer, reverse echo, a grain cloud, frozen grains, tape saturation, tape fuzz,
+Each REC also features one effect: shimmer, reverse echo, chorus, ensemble, tape saturation, tape fuzz,
 wide space or HAZE (warble, chorus, flat and dark), never the same twice in a row. A slow leveller keeps every piece
 at about the same loudness.
 

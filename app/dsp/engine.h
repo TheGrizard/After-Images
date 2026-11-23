@@ -22,7 +22,7 @@ typedef struct {
 typedef struct {
     uint32_t seed;
     uint8_t mood, motion, evolve, weird;          /* HOME (weird: DRIFT, the layers' wandering levels and pans) */
-    uint8_t reverb, echo, grain, chorus;          /* EFFECTS; chorus: WARBLE's (in v0.1 this byte was SHIMMER) */
+    uint8_t reverb, echo, grain, chorus;          /* EFFECTS (grain: CHORUS, the send's, since v0.29; it was GRAIN); chorus: WARBLE's JUNO (in v0.1 this byte was SHIMMER) */
     uint8_t link, warp, drift, chaos;             /* MOTION (the LFO button) */
     uint8_t key, scale, chord, tempo;             /* SCALE (the GLO button): tempo is BPM - 40 */
     uint8_t dirt, warble, flutter, detune;        /* EFFECTS' DIRT; WARBLE's (LFO again): in v0.1 the tape's, zeroed at the upgrade */
@@ -32,7 +32,7 @@ typedef struct {
     uint8_t legato[NUM_LAYERS];                   /* 1: a note playing slides on to the next, not started again */
     uint8_t sweep[NUM_LAYERS];                    /* 0..100: the filter opening over each note */
     uint8_t reso[NUM_LAYERS];                     /* 0..100: the filter's resonance */
-    /* v0.4: each layer's SENDS (FX): how much of it goes to the reverb, the echo, the grains, and how much DIRT it gets */
+    /* v0.4: each layer's SENDS (FX): how much of it goes to the reverb, the echo, the chorus (GRAIN until v0.29), and how much DIRT it gets */
     uint8_t s_rv[NUM_LAYERS], s_echo[NUM_LAYERS], s_grain[NUM_LAYERS], s_dirt[NUM_LAYERS];
 } Piece;
 #define PIECE_SIZE1 __builtin_offsetof(Piece, glide)   /* v0.1's Piece: up to here */
@@ -46,7 +46,7 @@ extern const float RATES[NUM_RATES];
 /* REC: a new piece from a seed (the scale, the key and the tempo kept, unless `all`); one layer anew (SEL + REC) */
 void piece_roll(Piece *p, uint32_t seed, int all, int fx);   /* fx: the effect it features (FX_*), -1 its seed's choice */
 /* the effect each new piece features (REC deals them from a shuffled deck, none twice in a row) */
-enum { FX_SHIMMER, FX_REVERSE, FX_CLOUD, FX_FREEZE, FX_FOLD, FX_CRUSH, FX_SPACE, FX_HAZE, NUM_FX };
+enum { FX_SHIMMER, FX_REVERSE, FX_CHORUS, FX_ENSEMBLE, FX_FOLD, FX_CRUSH, FX_SPACE, FX_HAZE, NUM_FX };
 extern const char *const FX_NAME[NUM_FX];
 void piece_next_key(Piece *p, int key, int scale, uint32_t seed);   /* REC: round the circle of fifths from the last */
 void piece_roll_layer(Piece *p, int layer, uint32_t seed);
@@ -114,9 +114,8 @@ struct Engine {
     int want_change;                     /* LINK asked for a new chord at the next bar */
     float duck, gov, fade;
     int playing;
-    float gr_ratio[6];
     /* effects */
-    Reverb rv; Echo echo; Grains gr; float shim_prev[BLK]; Chorus ch;   /* (the shimmer's shifter: in engine.c, out of the pool) */
+    Reverb rv; Echo echo; Ens ens; float shim_prev[BLK]; Chorus ch;   /* (the shimmer's shifter: in engine.c, out of the pool) */
     float wb_v, wb_t, wb_left, wb_rate, fl_ph, pm[NUM_LAYERS + 1];
     float im_left;                       /* DRIFT: seconds until the levels choose where to wander next */   /* WARBLE: the pitch's slow wandering, its flutter; each bus's pitch now */
     float dc[2];

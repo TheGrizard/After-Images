@@ -34,20 +34,11 @@ typedef struct {
 void echo_init(Echo *e);
 void echo_run(Echo *e, const float *inL, const float *inR, float *outL, float *outR, int n);
 
-#define GR_MAX 24576                     /* 0.56 s */
-#define GR_N 8
-typedef struct {
-    int16_t buf[GR_MAX]; int pos, fill;  /* fill: samples of sound in it (a freeze waits for a bufferful) */
-    int frozen;
-    struct { float at, rate, t, len, amp, pan; int on, shimmer; } g[GR_N];
-    float density, size, spread, shimmer;   /* set from GRAIN and SHIMMER */
-    Rng rng;
-    float next;
-    const float *ratios; int nratios;    /* the pitches a grain may take, in tune with the scale (fifths and octaves) */
-} Grains;
-void grains_init(Grains *g, uint32_t seed);
-/* in: mono; out: stereo, and the octaves for the reverb */
-void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shim, int n);
+#define ENS_LINE 2048                    /* the send's chorus: 46 ms of line */
+typedef struct { int16_t buf[ENS_LINE]; int pos; float ps, pf; } Ens;
+void ens_init(Ens *c, uint32_t seed);
+/* in: mono; out: stereo, the wet alone. amt: the shared CHORUS, 0..1 */
+void ens_run(Ens *c, float amt, const float *in, float *outL, float *outR, int n);
 
 /* DIRT: tape, pushed. Up to a third, warm saturation (asymmetric, as tape's: even harmonics); to two thirds, fuzz, the
  * top end going as saturated tape loses it; past that, breakup: hiss that rises with the sound, the fuzz sputtering as

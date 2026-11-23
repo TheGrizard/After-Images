@@ -128,57 +128,42 @@ void echo_run(Echo *e, const float *inL, const float *inR, float *outL, float *o
     }
 }
 
-/* ------------------------------------------------------------------ grains */
-static const float RATIOS[] = { 1.0f, 1.0f, 2.0f, 0.5f, 1.5f, 1.0f };
-
-void grains_init(Grains *g, uint32_t seed)
+/* ------------------------------------------------------------------ chorus (the send's): an ensemble
+ * Three voices reading one short line, each swung by a slow and a fast sine a third of a turn apart (the string
+ * machines' ensemble), left, middle and right. Up to 12 o'clock a chorus, gentle to lush; past it slower, deeper and
+ * wider, the voices fed back a little: a thick ensemble. Its line moves smoothly, never jumps: no clicks */
+void ens_init(Ens *c, uint32_t seed)
 {
-    memset(g, 0, sizeof *g);
-    rng_seed(&g->rng, seed);
-    g->ratios = RATIOS; g->nratios = 6;
-    g->size = 0.15f;
+    memset(c, 0, sizeof *c);
+    c->ps = (float)(seed & 255u) / 256.0f; c->pf = (float)(seed >> 8 & 255u) / 256.0f;
 }
 
-void grains_run(Grains *g, const float *in, float *outL, float *outR, float *shim, int n)
+static float ens_tap(const Ens *c, float d)
 {
-    if (!g->frozen || g->fill < GR_MAX) {       /* (frozen: held, once there's a bufferful of sound to hold) */
-        float e = 0;
-        for (int i = 0; i < n; i++) { g->buf[g->pos] = to16(in[i]); g->pos = g->pos + 1 >= GR_MAX ? 0 : g->pos + 1; e += in[i] * in[i]; }
-        if (e > 1e-7f * (float)n) g->fill = g->fill + n > GR_MAX ? GR_MAX : g->fill + n;
-    }
-    for (int i = 0; i < n; i++) { outL[i] = outR[i] = shim[i] = 0; }
-    if (g->density <= 0.001f && g->shimmer <= 0.001f) return;
-    g->next -= (float)n / SR;
-    if (g->next <= 0) {                                  /* a new grain */
-        g->next = (0.02f + 0.25f * (1.0f - g->density)) * rng_range(&g->rng, 0.5f, 1.5f);
-        for (int k = 0; k < GR_N; k++) {
-            if (g->g[k].on) continue;
-            int sh = rng_chance(&g->rng, g->shimmer * 0.6f);
-            if (!sh && g->density <= 0.001f) break;
-            g->g[k].on = 1; g->g[k].shimmer = sh;
-            g->g[k].rate = sh ? 2.0f : g->ratios[rng_int(&g->rng, g->nratios)];
-            g->g[k].len = (0.04f + 0.4f * g->size) * SR * rng_range(&g->rng, 0.7f, 1.3f);
-            float back = (float)GR_MAX * 0.9f * (0.1f + 0.9f * g->spread * rng_f(&g->rng));
-            if (g->g[k].rate > 1.0f) back += g->g[k].len * (g->g[k].rate - 1.0f) + 64.0f;   /* (ahead of the writer: never) */
-            g->g[k].at = (float)g->pos - back; while (g->g[k].at < 0) g->g[k].at += (float)GR_MAX;
-            g->g[k].t = 0; g->g[k].amp = 0.8f; g->g[k].pan = rng_bi(&g->rng);
-            break;
+    int di = (int)d; float f = d - (float)di;
+    int a = (c->pos - di) & (ENS_LINE - 1), b = (a - 1) & (ENS_LINE - 1);
+    return ((float)c->buf[a] + ((float)c->buf[b] - (float)c->buf[a]) * f) * (1.0f / 16384.0f);
+}
+
+void ens_run(Ens *c, float amt, const float *in, float *outL, float *outR, int n)
+{
+    float lush = clamp01(amt * 2.0f - 1.0f);                  /* past 12 o'clock: the ensemble */
+    float rs = (0.55f - 0.3f * lush) / SR, rf = (5.2f + 0.8f * amt) / SR;
+    float base = (8.0f + 6.0f * lush) * (SR / 1000.0f);        /* ms, in samples */
+    float ds = (1.2f + 1.6f * clamp01(amt * 2.0f) + 2.5f * lush) * (SR / 1000.0f), df = (0.12f + 0.25f * lush) * (SR / 1000.0f);
+    float fb = 0.25f * lush;
+    for (int i = 0; i < n; i++) {
+        c->ps += rs; if (c->ps >= 1.0f) c->ps -= 1.0f;
+        c->pf += rf; if (c->pf >= 1.0f) c->pf -= 1.0f;
+        float t[3];
+        for (int k = 0; k < 3; k++) {
+            float th = (float)k * (1.0f / 3.0f);
+            t[k] = ens_tap(c, base + ds * (0.5f + 0.5f * sine_c(c->ps + th)) + df * (0.5f + 0.5f * sine_c(c->pf + th)));
         }
-    }
-    for (int k = 0; k < GR_N; k++) {
-        if (!g->g[k].on) continue;
-        float pl = 0.5f - 0.5f * g->g[k].pan, pr = 1.0f - pl, inv = 1.0f / g->g[k].len;
-        for (int i = 0; i < n; i++) {
-            float u = g->g[k].t * inv;
-            if (u >= 1.0f) { g->g[k].on = 0; break; }
-            float win = 0.5f - 0.5f * sine_c(u + 0.25f);    /* Hann */
-            float p = g->g[k].at; int a = (int)p; float f = p - (float)a; int b = a + 1 >= GR_MAX ? 0 : a + 1;
-            float x = ((float)g->buf[a] + ((float)g->buf[b] - (float)g->buf[a]) * f) * (1.0f / 16384.0f) * win * g->g[k].amp;
-            g->g[k].at += g->g[k].rate; if (g->g[k].at >= (float)GR_MAX) g->g[k].at -= (float)GR_MAX;
-            g->g[k].t += 1.0f;
-            if (g->g[k].shimmer) shim[i] += x;
-            else { outL[i] += x * pl; outR[i] += x * pr; }
-        }
+        c->buf[c->pos] = to16(soft_clip(in[i] + fb * t[1]));
+        c->pos = (c->pos + 1) & (ENS_LINE - 1);
+        outL[i] = 0.75f * t[0] + 0.45f * t[1];
+        outR[i] = 0.75f * t[2] + 0.45f * t[1];
     }
 }
 

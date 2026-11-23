@@ -32,7 +32,7 @@ typedef struct {
     int8_t base;                         /* the role's C (a multiple of 12): the key's root is this plus the key */
     int8_t span;                         /* degrees a sequencer's range covers */
     float hp, lp;                        /* the band: the bus's high-pass and low-pass (Hz) */
-    float rv, echo, grain;               /* sends: reverb, echo, grains */
+    float rv, echo, grain;               /* sends: reverb, echo, chorus */
     float width;                         /* stereo spread of its voices */
     int poly;                            /* voices */
 } Role;

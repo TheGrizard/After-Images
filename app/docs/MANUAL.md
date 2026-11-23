@@ -327,25 +327,16 @@ Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS 
 CLOCK (ARP) to IN. Press play on Move: the FM-1 starts with it, follows its tempo (the screen shows, say, 116 BPM IN), and
 locks to its beats and bars. It stays locked through a new piece and a change of tempo.
 
-**ARP a third time: USB AUDIO.** Plugged into a computer, the FM-1 shows up as an audio input with ten channels
-(five stereo pairs), so you can record it straight into your DAW.
+**ARP a third time: USB AUDIO.** Plugged into a computer, the FM-1 shows up as an audio input with four channels
+(two stereo pairs), so you can record it straight into your DAW:
 
-- **OUTPUT** decides what goes on them:
+- **1-2: the mix**, everything you hear from the speaker.
+- **3-4: the mix without effects:** none of the FX page's four (reverb, echo, chorus, DIRT), nor the mix's balance
+  or WEAR, so you can add your own when you mix. Each layer keeps its level and pan.
 
-  | OUTPUT | 1-2 | 3-4 | 5-6 | 7-8 | 9-10 |
-  |---|---|---|---|---|---|
-  | **MIX** | the mix | the mix without effects | | | |
-  | **STEMS** | the mix | GROUND | BODY | LIGHT | DUST |
-
-  "Without effects" means none of the FX page's four (reverb, echo, chorus, DIRT), nor the mix's balance or WEAR, so
-  you can add your own when you mix. Each layer keeps its level and pan, and the notes you play go in the chosen
-  layer's stem. Channels 1-2 always carry the full mix, the same as the speaker.
-- **LEVEL** sets the level the computer gets. **VOLUME** follows the FM-1's volume knob, so turning it down turns the
-  recording down too. **FULL** always sends full level, so you can turn the speaker or headphones down (or off) while
-  you record.
-
-In your DAW, pick the pair you want as each track's input: 1-2 for the mix, 3-4 for the mix without effects (MIX), or
-3-4 to 9-10 for the stems (STEMS). The computer always sees all ten channels; the ones OUTPUT doesn't use stay silent.
+Record both at once and decide later. **LEVEL** sets the level the computer gets: **VOLUME** follows the FM-1's volume
+knob, so turning it down turns the recording down too; **FULL** always sends full level, so you can turn the speaker
+or headphones down (or off) while you record.
 
 ## 17. Ideas to try
 

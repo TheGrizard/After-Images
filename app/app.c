@@ -273,7 +273,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     }
     {   /* the stems (USB channels 3-10), filled only while a computer records */
         uint32_t run = 0;
-        eng.stems_on = PLAT_USB_CH >= 2 * NUM_LAYERS && plat_usb_ch(0, &run) != 0;
+        eng.stems_on = PLAT_USB_CH >= 2 && plat_usb_ch(0, &run) != 0;
     }
     engine_block_begin(&eng, nsub);
     /* the second core: some layers and the reverb (the last block's sends); this one the rest, the keys, then the mix */
@@ -299,7 +299,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
                                                   * LIGHT 7-8, DUST 9-10; at the mix's level (its gain, the leveller's) as the mix
                                                   * goes out on 1-2 */
         float gs = g0, lev = eng.lev_g > 0 ? eng.lev_g : 1.0f;
-        int clean = !(set.usb_full >> 1);
+        int clean = PLAT_USB_CH < 2 * NUM_LAYERS || !(set.usb_full >> 1);   /* (4 channels: the clean mix alone) */
         for (uint32_t i = 0; i < frames; ) {
             uint32_t run = 0; int16_t *p = plat_usb_ch(i, &run);
             if (!p || !run) break;
@@ -381,7 +381,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
     { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
     { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
-    { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "LEVEL", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 } },
+    { { "LEVEL", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
     { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "SHAPES", K_SHAPE, 2, SO(clock_in) }, { "", K_NONE, 2, 0 } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
@@ -1569,7 +1569,7 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
-            "WHAT THE COMPUTER RECORDS", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
+            "1-2 THE MIX, 3-4 WITHOUT EFFECTS", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }

@@ -278,6 +278,9 @@ and the four layers always keep four clearly different colours.
   **SHAPES** picks BLOCKS (squares, rectangles and lines) or LINES (mostly lines). SCREEN: **SIZE** (the zoom), **BREED,
   MOULD, FADE**.
 
+When you stop, the visual fades to black. While stopped, the keys (and MIDI in) still draw on it, so you can watch your
+sounds as you audition them. It fades again a few seconds after you stop playing.
+
 ![RORSCHACH](img/rorschach.png "RORSCHACH") ![MOSH](img/mosh.png "MOSH")
 
 ## 14. Playing the keys

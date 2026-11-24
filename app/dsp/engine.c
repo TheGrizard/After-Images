@@ -18,10 +18,10 @@ static int fifth_of(const Scale *s)
 }
 
 /* ------------------------------------------------------------------ the screen, MIDI */
-static void post(Engine *e, int layer, int note, float vel, float pan, float dur)
+static void post(Engine *e, int layer, int note, float vel, float pan, float dur, int key)
 {
     UiNote *q = &e->uiq[e->uiq_head % UI_Q];
-    q->dur = (uint8_t)clampf(dur * 10.0f, 1.0f, 255.0f); q->layer = (uint8_t)layer; q->note = (uint8_t)note; q->vel = (uint8_t)(vel * 127.0f); q->pan = (int8_t)(pan * 100.0f);
+    q->dur = (uint8_t)clampf(dur * 10.0f, 1.0f, 255.0f); q->layer = (uint8_t)layer; q->note = (uint8_t)note; q->vel = (uint8_t)(vel * 127.0f); q->pan = (int8_t)(pan * 100.0f); q->key = (uint8_t)key;
     e->uiq_head++;
 }
 
@@ -208,7 +208,7 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
             L->last_v[i] = (int8_t)vi; L->last_hz[i] = mtof((float)note);
         }
         midi_note(e, (e->midi_ch + l) & 15, note, vel, dur);
-        post(e, l, note, vel, pan, dur);
+        post(e, l, note, vel, pan, dur, 0);
     }
     L->last_n = nn;
     e->events[l]++;
@@ -236,7 +236,7 @@ static void keys_in(Engine *e, int sub)
             int vi = pick_voice(e->kv, KEY_POLY, &e->key_next);
             e->kv_lay[vi] = (int8_t)lay; e->kv_own[vi] = (uint8_t)own;
             queue(e->kq, &e->nkq, sub, vi, note, vel, 600.0f, rng_bi(&e->rng) * 0.3f, &snd, rng_u32(&e->rng));
-            post(e, lay, note, vel, 0, 1.5f);
+            post(e, lay, note, vel, 0, 1.5f, 1);
             if (e->midi && e->midi_on) e->midi(0x09u | (0x90u | e->midi_keys_ch) << 8 | (uint32_t)note << 16 | (uint32_t)(vel * 127.0f) << 24);
         } else {
             for (int i = 0; i < KEY_POLY; i++)          /* (a key's voice: the one playing its note, held) */

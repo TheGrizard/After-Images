@@ -55,7 +55,7 @@ int piece_ok(const Piece *p);
 void piece_name(uint32_t seed, char *out);    /* two words from the seed: GLASS HERON */
 
 /* ---------------- what the screen sees */
-typedef struct { uint8_t layer, note, vel; int8_t pan; uint8_t dur; } UiNote;   /* dur: tenths of a second */
+typedef struct { uint8_t layer, note, vel; int8_t pan; uint8_t dur, key; } UiNote;   /* dur: tenths of a second; key: played (keys, MIDI in) */
 #define UI_Q 64
 
 #define ENGINE_SUB 8                     /* control steps an app block holds (fm1-base's 256 samples) */

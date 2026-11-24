@@ -1123,7 +1123,7 @@ static int ink_next = NUM_LAYERS;
 static float ink_rgb[NUM_LAYERS][3], ink_beat, ink_lv[NUM_LAYERS];
 static float ink_f[INK_GR][INK_GC];              /* the ink's depth (1.1 its edge), less the voids */
 static uint8_t ink_c[INK_GR][INK_GC][3];         /* its colour */
-static struct { float x, y, r2, k; } ink_now[INK_MAX];
+static struct { float x, y, r2, k, ir; } ink_now[INK_MAX];   /* (ir: 1 / its reach squared) */
 static struct { float x, y, r2; } void_now[INK_VOIDS];
 
 static void ink_colours(void)                    /* the palette's four, a near-white one turned to two others' mix, all vivid */
@@ -1192,6 +1192,8 @@ static void ink_step(void)
         float x = ink[i].x, y = ink[i].y;
         if (i >= NUM_LAYERS) { x += 6.0f * fm_sin_turns(t * 0.07f + ink[i].ph); y += 6.0f * fm_sin_turns(t * 0.055f + ink[i].ph * 1.3f); }
         float r = ink[i].r * size * sw;
+        if (r < 0.1f) continue;
+        ink_now[n].ir = 1.0f / (20.25f * r * r);  /* (its reach: 4.5 radii) */
         ink_now[n].x = x; ink_now[n].y = y; ink_now[n].r2 = r * r; ink_now[n].k = k; ink_lay[n] = ink[i].layer;
         n++;
     }
@@ -1216,7 +1218,12 @@ static void ink_sample(float x, float y, float t, float mix, int gxi, int gyi, f
     float f = 0, w = 0, cr = 0, cg = 0, cb = 0;
     for (int j = 0; j < ink_nn; j++) {
         int i = ink_near[j];
-        float dx = x - ink_now[i].x, dy = y - ink_now[i].y, q = ink_now[i].r2 / (dx * dx + dy * dy + 30.0f) * ink_now[i].k;
+        /* each ink eased to exactly nothing at its reach, so the strips (drawn apart, each with only the inks that
+         * reach it) meet without a seam; within a radius the easing is under 1 % */
+        float dx = x - ink_now[i].x, dy = y - ink_now[i].y, d2 = dx * dx + dy * dy, u = d2 * ink_now[i].ir;
+        if (u >= 1.0f) continue;
+        u = 1.0f - u * u;
+        float q = ink_now[i].r2 / (d2 + 30.0f) * ink_now[i].k * u * u;
         f += q;
         float qw = q * q * q * (1.0f - mix) + q * mix;   /* MIX: each its own colour near its heart .. all bled together */
         w += qw; cr += ink_rgb[ink_lay[i]][0] * qw; cg += ink_rgb[ink_lay[i]][1] * qw; cb += ink_rgb[ink_lay[i]][2] * qw;
@@ -1244,7 +1251,7 @@ static void draw_ink(void)
     int g0 = v0 / INK_G, g1 = (v1 - 1) / INK_G + 1;
     if (g1 - g0 + 1 > INK_GR) g1 = g0 + INK_GR - 1;
     float t = ink_beat, mix = (float)set.ink_mix / 100.0f;
-    {   /* (an ink farther than 4.5 radii from the strip adds under 5 %: left out) */
+    {   /* (an ink farther than its reach, 4.5 radii, from the strip adds nothing: left out) */
         float ya = (float)(g0 * INK_G) * 240.0f / (float)VIEW_H, yb = (float)(g1 * INK_G) * 240.0f / (float)VIEW_H;
         ink_nn = 0;
         for (int i = 0; i < ink_n; i++) {

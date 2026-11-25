@@ -81,6 +81,10 @@ int main(int argc, char **argv)
     float peak = 0, ss = 0;
     clock_t t0 = clock();
     for (long done = 0; done < frames; done += ENGINE_SUB * BLK) {
+        if (getenv("MOODSWEEP")) {               /* MOODSWEEP=hz: MOOD swept 0..100 and back, as a hand turning it fast */
+            float ph = (float)done / SR * (float)atof(getenv("MOODSWEEP")); ph -= (float)(long)ph;
+            pc.mood = (uint8_t)(100.0f * (ph < 0.5f ? ph * 2.0f : 2.0f - ph * 2.0f));
+        }
         engine_block_begin(&eng, ENGINE_SUB);
         eng.gov += (1.0f - eng.gov) * 0.01f;   /* (the app's load guard easing back, as on the FM-1 with room to spare) */
         if (getenv("GOV1")) eng.gov = 1.0f;

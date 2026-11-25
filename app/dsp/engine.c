@@ -677,7 +677,11 @@ void engine_mix_echo(Engine *e)                  /* the wet added to the dry */
 void engine_mix_finish(Engine *e, float *outL, float *outR)
 {
     const Piece *p = e->p;
-    float shelf = 1.8f * clamp01((0.5f - u(p->mood)) * 2.0f);   /* MOOD dark: the sub, up to +9 dB below ~110 Hz */
+    /* MOOD dark: the sub, up to +9 dB below ~110 Hz; glided sample by sample from the last block's (set once a block, MOOD
+     * turned quickly stepped it there: a crackle in the bass) */
+    float shelf_to = 1.8f * clamp01((0.5f - u(p->mood)) * 2.0f), shelf = e->shelf;
+    float dsh = e->nsub > 0 ? (shelf_to - shelf) / (float)(e->nsub * BLK) : 0.0f;
+    e->shelf = shelf_to;
     for (int k = 0; k < e->nsub; k++) {
         float *dl = mx_dl + k * BLK, *dr = mx_dr + k * BLK, *vl = mx_vl + k * BLK, *vr = mx_vr + k * BLK;
         float *L = outL + k * BLK, *R = outR + k * BLK;
@@ -742,12 +746,13 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
             e->de_c = c1;
         }
         wear_run(&e->wear, u(p->wear), L, R, BLK);        /* WEAR: the whole of it, the reverb's tails too */
-        if (shelf > 0.001f)
+        if (shelf > 0.001f || dsh > 0.0f)
             for (int i = 0; i < BLK; i++) {
+                shelf += dsh;
                 e->sub[0] += 0.0156f * (L[i] - e->sub[0]); e->sub[1] += 0.0156f * (R[i] - e->sub[1]);
                 L[i] += shelf * e->sub[0]; R[i] += shelf * e->sub[1];
             }
-        else e->sub[0] = e->sub[1] = 0;
+        else { shelf += dsh * BLK; e->sub[0] = e->sub[1] = 0; }
         /* the bass in mono: below ~120 Hz the sides taken out (12 dB an octave), whatever the reverb, echo, chorus or DRIFT
          * did, so the low end sits in the middle, phase-safe on any system and on a club's mono sub */
         if (e->mbs[0].a1 == 0.0f) { svf_set(&e->mbs[0], 120.0f, 0.5412f); svf_set(&e->mbs[1], 120.0f, 1.3066f); }   /* (24 dB:

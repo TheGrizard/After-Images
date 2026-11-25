@@ -139,6 +139,7 @@ struct Engine {
                                           * the mix tilted toward the pieces' middle (see engine_mix_finish) */
     Svf mbs[2];                          /* the bass in mono: the sides' high-pass (24 dB at 120 Hz) */
     float sub[2];                        /* MOOD's low shelf: the mix's lows (below ~110 Hz), added back darker it goes */
+    float shelf;                         /* its amount the last block ended at (glided from) */
     float lev_ss, lev_g;                 /* the leveller: the mix's loudness, slowly; its gain */
     /* MIDI out: the app's; notes on their layers' channels, the clock */
     void (*midi)(uint32_t pkt);

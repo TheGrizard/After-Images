@@ -1,0 +1,12 @@
+{
+  "what": "Turns the FM-1 into an endless ambient machine. Press REC and it composes a new piece in key: four layers, eleven generative sequencers and twenty-five sound engines, with shimmer, echo and tape, three visuals, MIDI clock and USB audio. Play along on the keys.",
+  "author": "TheGrizard",
+  "kinds": [
+    "synth"
+  ],
+  "play": "https://thegrizard.github.io/After-Images/emu/",
+  "cheat": "https://thegrizard.github.io/After-Images/manual/",
+  "image": "docs/screen.png",
+  "color": "#4FD1C5",
+  "sounds": "none"
+}

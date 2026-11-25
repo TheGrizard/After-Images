@@ -5,7 +5,8 @@
 
 const char *const ENGINE_NAME[NUM_ENGINES] = {
     "DRIFT SAW", "FM", "STRING", "DX", "BLEEP", "GLASS", "BREATH", "VOICE", "FOLD", "SUB", "STRINGS", "E.PIANO",
-    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "VHS SYNTH", "REESE", "ORGAN", "BOWL", "MALLET", "WAVES", "CHOIR"
+    "TRIANGLE", "SINE", "SQUARE", "CZ", "SYNC", "SHAPES", "VHS SYNTH", "REESE", "ORGAN", "BOWL", "MALLET", "WAVES", "CHOIR",
+    "JUNO", "LADDER", "BRASS", "BOWED", "RUMBLE"
 };
 
 float g_sine[SINE_SIZE + 1];
@@ -147,6 +148,7 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         v->p[2] = wd;                                            /* the chorus beside it */
         break;
     case E_SQUARE:
+        v->p[0] = 0.3f * wd;                                     /* ENTROPY: its width swaying (PWM) */
         v->p[1] = 1.2f + 8.0f * tone * tone;
         v->p[2] = 0.6f + 1.5f * wt + 4.0f * s->reso;
         v->p[3] = 0.3f + 0.5f * wt;                              /* the filter's envelope */
@@ -158,7 +160,7 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         v->p[3] = 0.4f + 0.6f * wt;                              /* the envelope's depth */
         break;
     case E_SYNC:
-        v->p[0] = 1.5f + 5.0f * tone + 3.0f * wt;                /* the slave's ratio at the start */
+        v->p[0] = 1.5f + 5.0f * tone + 3.0f * wt + 4.0f * wd;    /* the slave's ratio at the start (ENTROPY: further) */
         v->p[1] = 1.0f - k_of(0.25f + 1.5f * (1.0f - wt));       /* its sweep down, a block */
         v->p[2] = 4.0f + 10.0f * tone;
         if (start) v->z1 = 1.0f;
@@ -249,9 +251,62 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         v->lfo_dp = (4.6f + 0.8f * (float)(seed & 255u) / 255.0f) * BLK_S;   /* vibrato */
         if (start) v->z1 = (float)(seed >> 8 & 255u) / 256.0f;
         break;
+    case E_JUNO:
+        v->p[0] = 0.12f + 0.2f * wd;                             /* the widths' sway (PWM) */
+        v->p[1] = 1.2f + 6.0f * tone * tone;                     /* the low-pass's top, times the pitch */
+        v->p[2] = 0.6f + 1.0f * wt + 4.0f * s->reso;
+        v->p[3] = 0.15f + 0.45f * wt;                            /* the filter's envelope */
+        v->p[4] = 0.15f + 0.3f * wt;                             /* the sub, an octave down */
+        v->p[5] = 0.0025f + 0.004f * wd;                         /* the second pulse a little apart */
+        v->lfo_dp = (0.35f + 0.6f * wd) * BLK_S;                 /* the PWM's sway, under once a second */
+        break;
+    case E_LADDER:
+        v->p[1] = 1.0f + 6.0f * tone * tone;                     /* the cutoff, times the pitch (+ 60 Hz) */
+        v->p[2] = 0.4f + 2.6f * s->reso + 0.8f * wt;             /* the ladder's resonance (0..~3.8; 4 sings) */
+        v->p[3] = 1.0f + 5.0f * wt;                              /* how far it opens on each note */
+        v->p[4] = 1.0f - k_of(0.12f + 0.5f * (1.0f - wt)) * BLK; /* its closing again, a block */
+        v->p[5] = 0.35f + 0.5f * wd;                             /* the square beside the saw */
+        if (start) { v->z1 = 1.0f; for (int k = 0; k < 4; k++) v->oe[k] = 0; }
+        if (v->p[4] < 0.0f) v->p[4] = 0.0f;
+        break;
+    case E_BRASS:
+        v->p[0] = 0.003f + 0.007f * wd;                          /* the saws apart */
+        v->p[1] = 1.2f + 5.0f * tone;                            /* the filter's top when open, times the pitch */
+        v->p[2] = 0.6f + 0.8f * wt + 4.0f * s->reso;
+        v->p[3] = clamp01(BLK_S / (0.08f + 0.5f * (1.0f - wt))); /* the swell's pace: heavy, a quicker blare */
+        v->p[4] = 0.012f + 0.02f * wt;                           /* the pitch's breath up into the note */
+        v->lfo_dp = 5.0f * BLK_S;                                /* its vibrato, coming in late */
+        if (start) v->z1 = 0.0f;
+        break;
+    case E_BOWED: {
+        v->p[0] = 0.25f + 0.5f * wt + 0.9f * wd * wd;           /* the rosin: noise in the bow; ENTROPY, pressing hard, scratching */
+        v->p[2] = wd;                                            /* ENTROPY: the bow's pressure, the tone breaking up under it */
+        v->p[1] = 0.2f + 0.75f * tone;                           /* the string's brightness: its loop's low-pass */
+        v->ks_damp = 0.985f + 0.012f * (1.0f - wt * 0.5f);       /* how long it rings: the resonance's depth */
+        v->lfo_dp = 5.3f * BLK_S;                                /* the vibrato */
+        if (start) {
+            float len = SR / f;
+            while (len >= (float)(KS_MAX - 2)) len *= 0.5f;      /* (too low for the line: its octave, the bow keeps the pitch) */
+            v->ks_len = (int)len; v->ks_frac = len - (float)v->ks_len; v->ks_pos = v->ks_len + 1; v->ks_lp = 0;
+            memset(v->ks, 0, sizeof v->ks);
+            if (v->a_k > k_of(0.03f)) v->a_k = k_of(0.03f);      /* (a bow never snaps in) */
+        }
+        break;
+    }
+    case E_RUMBLE:
+        v->p[0] = 10.0f + 30.0f * (1.0f - wt);                   /* the resonances' Q: heavy, more wind than note */
+        v->p[1] = 0.03f + 0.25f * tone * tone;                   /* the noise's darkness (a one-pole's rate) */
+        v->p[2] = 0.25f + 0.35f * (1.0f - tone);                 /* the sine under it */
+        v->p[3] = 0.35f + 0.4f * wd;                             /* the fifth's resonance */
+        v->lfo_dp = (0.15f + 0.5f * wd) * BLK_S;                 /* the gusts */
+        svf_set(&v->f, f, v->p[0]); svf_set(&v->f2, f * 1.5f, v->p[0]);
+        if (start) { v->z1 = 0.0f; if (v->a_k > k_of(0.02f)) v->a_k = k_of(0.02f); }
+        break;
     case E_SUB:
     default:
         v->p[0] = 0.15f + 0.35f * tone;                          /* the octave */
+        v->p[1] = 0.004f * wd;                                   /* ENTROPY: the octave a little off, beating against the root */
+        if (start) { v->ph[1] = 2.0f * v->ph[0]; v->ph[1] -= fm_floorf(v->ph[1]); }   /* (in step with the root: at 0, as ever) */
         v->drive = 1.0f + 6.0f * wt;
         break;
     }
@@ -314,7 +369,8 @@ float g_voice_floor = 0.001f;
 #define DECLICK 88                       /* (2 ms) */
 static const uint8_t HAS_FILTER[NUM_ENGINES] = {   /* (their own filter follows SWEEP and F.GLIDE) */
     [E_SAW] = 1, [E_PULSE] = 1, [E_BREATH] = 1, [E_FOLD] = 1, [E_SUB] = 1, [E_STRINGS] = 1, [E_TRI] = 1, [E_SQUARE] = 1,
-    [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1, [E_REESE] = 1, [E_CHOIR] = 1 };
+    [E_CZ] = 1, [E_SYNC] = 1, [E_SHAPES] = 1, [E_BOARDS] = 1, [E_REESE] = 1, [E_CHOIR] = 1,
+    [E_JUNO] = 1, [E_LADDER] = 1, [E_BRASS] = 1, [E_RUMBLE] = 1 };
 
 /* a voice nobody can hear (its layer faded right out): its envelope goes on, so it ends when it would, no sound made */
 void voice_skip(Voice *v, int n)
@@ -556,9 +612,10 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     case E_SQUARE: {
         svf_set_res(&v->f, (v->ff * v->p[1] + 200.0f) * swf * (1.0f - v->p[3] + v->p[3] * env), v->p[2]);
+        float w = 0.5f - v->p[0] * (0.5f + 0.5f * lfo);
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
-            float p2 = v->ph[0] + 0.5f; if (p2 >= 1.0f) p2 -= 1.0f;
+            float p2 = v->ph[0] + w; if (p2 >= 1.0f) p2 -= 1.0f;
             out[i] *= svf_lp(&v->f, 0.5f * (saw_bl(v->ph[0], dt) - saw_bl(p2, dt)));
         }
         break;
@@ -722,22 +779,105 @@ void voice_render(Voice *v, float *L, float *R, int n)
         }
         break;
     }
-    case E_SUB:
-    default: {
-        float o = v->p[0];
+    case E_JUNO: {                                               /* two pulses, their widths swaying apart, a square sub */
+        float w0 = 0.5f - v->p[0] * (0.6f + 0.4f * lfo), w1 = 0.5f - v->p[0] * (0.6f - 0.4f * lfo), sub = v->p[4];
+        svf_set_res(&v->f, (v->ff * v->p[1] + 180.0f) * swf * (1.0f - v->p[3] + v->p[3] * env), v->p[2]);
+        float d0 = dt, d1 = dt * (1.0f + v->p[5]), d2 = dt * 0.5f;
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            v->ph[2] += d2; if (v->ph[2] >= 1.0f) v->ph[2] -= 1.0f;
+            float q0 = v->ph[0] + w0; if (q0 >= 1.0f) q0 -= 1.0f;
+            float q1 = v->ph[1] + w1; if (q1 >= 1.0f) q1 -= 1.0f;
+            float q2 = v->ph[2] + 0.5f; if (q2 >= 1.0f) q2 -= 1.0f;
+            float x = 0.3f * (saw_bl(v->ph[0], d0) - saw_bl(q0, d0) + saw_bl(v->ph[1], d1) - saw_bl(q1, d1))
+                    + sub * 0.5f * (saw_bl(v->ph[2], d2) - saw_bl(q2, d2));
+            out[i] *= svf_lp(&v->f, x);
+        }
+        break;
+    }
+    case E_LADDER: {                                             /* a 24 dB ladder: four one-poles, the last fed back, driven */
+        v->z1 *= v->p[4];                                        /* the opening on each note, closing again */
+        float fc = (v->ff * v->p[1] + 60.0f) * (1.0f + v->p[3] * v->z1) * swf;
+        if (fc > 12000.0f) fc = 12000.0f;
+        float g = 1.0f - fm_expf(-TWO_PI_F * fc / SR), k = v->p[2], sq = v->p[5];
+        float *y = v->oe;
+        y[0] += dn();                                            /* (never into the denormals) */
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
-            out[i] *= sine_c(v->ph[0]) + o * sine_c(2.0f * v->ph[0]);
+            float p2 = v->ph[0] + 0.5f; if (p2 >= 1.0f) p2 -= 1.0f;
+            float sw = saw_bl(v->ph[0], dt), x = (1.0f - sq) * sw + sq * 0.5f * (sw - saw_bl(p2, dt));
+            float u = clampf((x - k * y[3]) * 1.3f, -1.5f, 1.5f);
+            u -= u * u * u * (1.0f / 6.75f);                     /* (a cubic's soft saturation, no division) */
+            y[0] += g * (u - y[0]); y[1] += g * (y[0] - y[1]); y[2] += g * (y[1] - y[2]); y[3] += g * (y[2] - y[3]);
+            out[i] *= y[3] * (1.0f + 0.35f * k);                 /* (the resonance's loss of body made back) */
+        }
+        break;
+    }
+    case E_BRASS: {                                              /* the filter swells open past where it sits, then settles */
+        float tgt = v->age < 0.25f ? 1.15f : 0.72f;
+        v->z1 += (tgt - v->z1) * v->p[3];
+        float vib = 1.0f + 0.003f * lfo * clamp01((v->age - 0.4f) * 1.5f);   /* (the vibrato: after ~0.4 s) */
+        float bend = 1.0f - v->p[4] * fm_expf(-v->age * 18.0f);  /* (a breath of pitch up into the note) */
+        svf_set_res(&v->f, (v->ff * v->p[1] * (0.15f + 0.85f * v->z1) + 150.0f) * swf, v->p[2]);
+        float d0 = dt * vib * bend * (1.0f + v->p[0]), d1 = dt * vib * bend * (1.0f - v->p[0]);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            out[i] *= svf_lp(&v->f, 0.5f * (saw_bl(v->ph[0], d0) + saw_bl(v->ph[1], d1)));
+        }
+        break;
+    }
+    case E_BOWED: {                                              /* the bow (a saw, rosin noise) into a comb at the pitch */
+        float vib = 1.0f + (0.004f + 0.006f * v->p[2]) * lfo * clamp01((v->age - 0.35f) * 1.2f), d0 = dt * vib;
+        float press = 1.0f + 2.5f * v->p[2] * v->p[2];          /* (ENTROPY: overpressure, the string's tone grinding) */
+        float leff = clampf(((float)(v->ks_len + 1) - v->ks_frac) / vib, 2.0f, (float)(KS_MAX - 3));
+        int li = (int)leff; float fr = leff - (float)li, damp = v->ks_damp, c = v->p[1], rz = v->p[0];
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += d0; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            float bow = 0.7f * saw_bl(v->ph[0], d0) + rz * noise(&v->noise) * 0.35f;
+            int w = v->ks_pos, r0 = (w - li) & (KS_MAX - 1), r1 = (r0 - 1) & (KS_MAX - 1);
+            float a = v->ks[r0] * (1.0f / 12000.0f), b = v->ks[r1] * (1.0f / 12000.0f), yv = a + (b - a) * fr;
+            v->ks_lp += c * (yv - v->ks_lp) + dn();
+            float wv = v->ks_lp * damp + bow * (1.0f - damp) * 1.5f;
+            v->ks[w] = (int16_t)clampf(wv * 12000.0f, -32000.0f, 32000.0f);
+            v->ks_pos = (w + 1) & (KS_MAX - 1);
+            out[i] *= soft_clip((yv * 2.2f + bow * 0.12f) * press) * (1.0f + 0.25f * (press - 1.0f) / press);
+        }
+        break;
+    }
+    case E_RUMBLE: {                                             /* wind through two pipes: the note and its fifth */
+        float gust = 0.75f + 0.25f * lfo, g = 0.3f * fm_sqrtf(v->p[0]) * gust, c = v->p[1], fifth = v->p[3], s = v->p[2];
+        if (v->ff != v->freq || v->sweep > 0.001f) {
+            float fq = (f + v->ff) * 0.5f * (0.5f + 0.5f * swf);
+            svf_set(&v->f, fq, v->p[0]); svf_set(&v->f2, fq * 1.5f, v->p[0]);
+        }
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->z1 += c * (noise(&v->noise) - v->z1) + dn();     /* dark noise */
+            float nz = v->z1 * 2.5f;
+            out[i] *= (svf_bp(&v->f, nz) + fifth * svf_bp(&v->f2, nz)) * g + s * sine_c(v->ph[0]);
+        }
+        break;
+    }
+    case E_SUB:
+    default: {
+        float o = v->p[0], d1 = 2.0f * dt * (1.0f + v->p[1]);
+        for (int i = 0; i < n; i++) {
+            v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
+            v->ph[1] += d1; if (v->ph[1] >= 1.0f) v->ph[1] -= 1.0f;
+            out[i] *= sine_c(v->ph[0]) + o * sine_c(v->ph[1]);
         }
         break;
     }
     }
 
     /* ENTROPY past halfway: synthesis turning on itself. A chaos oscillator at the note's pitch (in key), blended in
-     * with the engine: FM feedback (a growl, then the screech of a DX at feedback 7), PWM (a pulse whose width swings
+     * under the engine: FM feedback (a growl, then the screech of a DX at feedback 7), PWM (a pulse whose width swings
      * faster and wider), or a sine phase-modulated by that pulse; each note one of the three */
-    if (v->ent > 0.001f) {
-        float e = v->ent, m = 0.75f * e, beta = 0.3f + 1.7f * e;
+    if (v->ent > 0.001f) {                       /* (a third of the sound at most: each engine its own all the way up,
+                                                  * DIRT's fuzz and the tape's breakup there for crunch) */
+        float e = v->ent, m = 0.35f * e, beta = 0.3f + 1.7f * e;
         v->clfo += (0.15f + 7.0f * e * e) * BLK_S * (float)n / BLK; if (v->clfo >= 1.0f) v->clfo -= 1.0f;
         float w = 0.5f + (0.1f + 0.38f * e) * fm_sin_turns(v->clfo), cd = dt * (v->cmode == 2 ? 2.0f : 1.0f);
         for (int i = 0; i < n; i++) {

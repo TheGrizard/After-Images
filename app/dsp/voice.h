@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* After Images: the sound engines. Twenty-five small synthesis engines, each a few operations a sample, so twenty voices and
+/* After Images: the sound engines. Thirty small synthesis engines, each a few operations a sample, so twenty voices and
  * the effects fit the FM-1's two cores. Every engine has three colours: TONE (dark to bright), WEIGHT (soft to heavy:
  * drive, attack, index, fold) and WEIRD (what it does past halfway is its own: inharmonic, folded, ring-modulated). */
 #ifndef AI_VOICE_H
@@ -33,6 +33,12 @@ enum {
     E_MALLET,   /* MALLET: a struck bar, marimba, vibes or kalimba: three modes ringing down, a knock of noise */
     E_WAVES,    /* WAVES: a wavetable, eight waves dark to bright, scanned through as the note sounds */
     E_CHOIR,    /* CHOIR: three voices a little apart through two formants, an aah to an ooh, breathing */
+    /* v2.12 */
+    E_JUNO,     /* JUNO: an 80s poly's pad, two pulses their widths swaying (PWM), a square sub, a 12 dB low-pass */
+    E_LADDER,   /* LADDER: a saw and a square into a resonant 24 dB ladder low-pass, opening a little on each note */
+    E_BRASS,    /* BRASS: soft synth brass, two saws apart, the filter swelling open and settling, a breath of pitch up into it */
+    E_BOWED,    /* BOWED: a bow's stick and slip (a saw and rosin noise) through a string's resonance, its vibrato coming late */
+    E_RUMBLE,   /* RUMBLE: pitched wind: dark noise through two tuned resonances (the note, its fifth), gusting, a sine under */
     NUM_ENGINES
 };
 extern const char *const ENGINE_NAME[NUM_ENGINES];

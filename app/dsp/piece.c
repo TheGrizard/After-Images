@@ -3,10 +3,10 @@
 #include "engine.h"
 
 /* the engines that suit each role's band */
-static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB, E_TRI, E_SINE, E_SQUARE, E_CZ, E_SYNC, E_BOARDS, E_REESE, E_REESE, E_ORGAN, E_WAVES };
-static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW, E_TRI, E_SQUARE, E_CZ, E_SHAPES, E_BOARDS, E_BOARDS, E_REESE, E_ORGAN, E_ORGAN, E_CHOIR, E_CHOIR, E_WAVES, E_BOWL };
-static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM, E_TRI, E_SINE, E_CZ, E_SYNC, E_SHAPES, E_BOARDS, E_MALLET, E_MALLET, E_BOWL, E_WAVES, E_CHOIR };
-static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS, E_SINE, E_SHAPES, E_BOWL, E_BOWL, E_MALLET, E_CHOIR, E_WAVES };
+static const uint8_t POOL_G[] = { E_SUB, E_FM, E_PULSE, E_FOLD, E_SAW, E_SUB, E_TRI, E_SINE, E_SQUARE, E_CZ, E_SYNC, E_BOARDS, E_REESE, E_REESE, E_ORGAN, E_WAVES, E_LADDER, E_LADDER };
+static const uint8_t POOL_B[] = { E_SAW, E_STRINGS, E_VOX, E_EPIANO, E_PULSE, E_BREATH, E_STRINGS, E_SAW, E_TRI, E_SQUARE, E_CZ, E_SHAPES, E_BOARDS, E_BOARDS, E_REESE, E_ORGAN, E_ORGAN, E_CHOIR, E_CHOIR, E_WAVES, E_BOWL, E_JUNO, E_JUNO, E_BRASS, E_BOWED };
+static const uint8_t POOL_L[] = { E_PLUCK, E_DX, E_EPIANO, E_PULSE, E_DX, E_FOLD, E_VOX, E_SAW, E_FM, E_TRI, E_SINE, E_CZ, E_SYNC, E_SHAPES, E_BOARDS, E_MALLET, E_MALLET, E_BOWL, E_WAVES, E_CHOIR, E_JUNO, E_BRASS, E_BOWED };
+static const uint8_t POOL_D[] = { E_BREATH, E_STRINGS, E_DX, E_PLUCK, E_VOX, E_DX, E_BREATH, E_GLASS, E_SINE, E_SHAPES, E_BOWL, E_BOWL, E_MALLET, E_CHOIR, E_WAVES, E_RUMBLE };
 static const uint8_t *const POOL[NUM_LAYERS] = { POOL_G, POOL_B, POOL_L, POOL_D };
 static const uint8_t POOL_N[NUM_LAYERS] = { sizeof POOL_G, sizeof POOL_B, sizeof POOL_L, sizeof POOL_D };
 /* each role's rates (RATES' indexes) and envelopes (attack, release ranges, 0..100) */
@@ -23,7 +23,7 @@ static void roll_layer(Piece *p, int l, Rng *r, int weight)
     if (l == L_GROUND && lp->tone < 34) lp->tone = (uint8_t)(34 + lp->tone % 8);   /* (the bass never filtered to a murmur) */
     if (l >= L_LIGHT && lp->tone > 70) lp->tone = (uint8_t)(64 + lp->tone % 7);    /* (nor the top thinned to a hiss) */
     lp->weight = (uint8_t)weight;
-    lp->weird = rng_chance(r, 0.25f) ? pick(r, 40, 85) : pick(r, 0, 35);
+    lp->weird = rng_chance(r, 0.2f) ? pick(r, 40, 72) : pick(r, 0, 35);   /* (ENTROPY high now and then, never right up) */
     lp->density = pick(r, 30, 70);
     lp->rate = pick(r, RATE_LO[l], RATE_HI[l]);
     lp->mutate = pick(r, 10, 60);
@@ -138,7 +138,7 @@ void piece_roll(Piece *p, uint32_t seed, int all, int fx)
     case FX_CHORUS:  p->grain = pick(&r, 35, 50); break;
     case FX_ENSEMBLE: p->grain = pick(&r, 65, 95); break;
     case FX_FOLD:    p->dirt = pick(&r, 5, 32); break;
-    case FX_CRUSH:   p->dirt = pick(&r, 40, 64); break;
+    case FX_CRUSH:   p->dirt = pick(&r, 36, 56); break;
     case FX_HAZE:    /* an old VHS synth's: the pitch wandering, worn, chorused, a touch flat, dark, echoed */
         p->warble = pick(&r, 45, 85); p->flutter = pick(&r, 10, 35); p->detune = pick(&r, 30, 65); p->wear = pick(&r, 35, 70);
         p->grain = pick(&r, 30, 50);                 /* (the chorus on all but the bass) */
@@ -291,25 +291,25 @@ typedef struct {
 } Persona;
 #define N_(a) (uint8_t)(sizeof a / sizeof a[0])
 
-static const uint8_t SE_G[] = { E_REESE, E_FOLD, E_SAW, E_ORGAN, E_ORGAN, E_SHAPES, E_WAVES, E_SUB };
-static const uint8_t SE_B[] = { E_SAW, E_STRINGS, E_STRINGS, E_ORGAN, E_BOARDS, E_WAVES, E_CHOIR, E_BOWL, E_REESE };
-static const uint8_t SE_L[] = { E_BOWL, E_WAVES, E_SHAPES, E_BREATH, E_FOLD, E_CHOIR, E_STRINGS, E_ORGAN };
-static const uint8_t SE_D[] = { E_BREATH, E_BREATH, E_SHAPES, E_BOWL, E_CHOIR, E_GLASS };
+static const uint8_t SE_G[] = { E_REESE, E_FOLD, E_SAW, E_ORGAN, E_ORGAN, E_SHAPES, E_WAVES, E_SUB, E_LADDER };
+static const uint8_t SE_B[] = { E_SAW, E_STRINGS, E_STRINGS, E_ORGAN, E_BOARDS, E_WAVES, E_CHOIR, E_BOWL, E_REESE, E_BOWED, E_BOWED, E_BRASS };
+static const uint8_t SE_L[] = { E_BOWL, E_WAVES, E_SHAPES, E_BREATH, E_FOLD, E_CHOIR, E_STRINGS, E_ORGAN, E_BOWED, E_RUMBLE };
+static const uint8_t SE_D[] = { E_BREATH, E_RUMBLE, E_RUMBLE, E_SHAPES, E_BOWL, E_CHOIR, E_GLASS };
 static const uint8_t SS_G[] = { S_LORENZ, S_EUCLID, S_TURING, S_DRUNK }, SS_B[] = { S_LORENZ, S_ORBITS, S_MARKOV, S_DRUNK };
 static const uint8_t SS_L[] = { S_ORBITS, S_LORENZ, S_CHIMES, S_DRUNK }, SS_D[] = { S_CHIMES, S_LIFE, S_BOUNCE };
 static const uint8_t SSC[] = { 1, 1, 3, 3, 3, 6, 7, 11, 16, 17 }, SFX[] = { FX_CRUSH, FX_FOLD, FX_HAZE, FX_HAZE, FX_SPACE, FX_REVERSE };
 
 static const uint8_t DE_G[] = { E_SINE, E_SINE, E_SUB, E_TRI, E_WAVES };
-static const uint8_t DE_B[] = { E_STRINGS, E_STRINGS, E_CHOIR, E_CHOIR, E_WAVES, E_VOX };
-static const uint8_t DE_L[] = { E_CHOIR, E_WAVES, E_STRINGS, E_GLASS, E_SINE, E_TRI, E_BOWL };
+static const uint8_t DE_B[] = { E_STRINGS, E_STRINGS, E_CHOIR, E_CHOIR, E_WAVES, E_VOX, E_JUNO, E_JUNO, E_BOWED };
+static const uint8_t DE_L[] = { E_CHOIR, E_WAVES, E_STRINGS, E_GLASS, E_SINE, E_TRI, E_BOWL, E_BOWED, E_JUNO };
 static const uint8_t DE_D[] = { E_GLASS, E_BREATH, E_SINE, E_BOWL, E_CHOIR };
 static const uint8_t DS_G[] = { S_DRUNK, S_ORBITS, S_PHASE, S_EUCLID }, DS_B[] = { S_PHASE, S_ORBITS, S_MARKOV, S_DRUNK };
 static const uint8_t DS_L[] = { S_ORBITS, S_PHASE, S_DRUNK, S_CHIMES }, DS_D[] = { S_CHIMES, S_ORBITS, S_BOUNCE };
 static const uint8_t DSC[] = { 0, 4, 4, 13, 13, 15, 15, 2, 19 }, DFX[] = { FX_SHIMMER, FX_SHIMMER, FX_SHIMMER, FX_SHIMMER, FX_SPACE, FX_REVERSE };
 
-static const uint8_t EE_G[] = { E_SAW, E_SAW, E_SQUARE, E_BOARDS, E_BOARDS, E_SUB };
-static const uint8_t EE_B[] = { E_BOARDS, E_BOARDS, E_STRINGS, E_STRINGS, E_SAW, E_SQUARE };
-static const uint8_t EE_L[] = { E_SAW, E_SQUARE, E_SQUARE, E_BOARDS, E_PULSE, E_TRI };
+static const uint8_t EE_G[] = { E_SAW, E_SAW, E_SQUARE, E_BOARDS, E_BOARDS, E_SUB, E_LADDER, E_LADDER, E_LADDER };
+static const uint8_t EE_B[] = { E_BOARDS, E_BOARDS, E_STRINGS, E_STRINGS, E_SAW, E_SQUARE, E_JUNO, E_JUNO, E_JUNO, E_BRASS, E_BRASS };
+static const uint8_t EE_L[] = { E_SAW, E_SQUARE, E_SQUARE, E_BOARDS, E_PULSE, E_TRI, E_JUNO, E_JUNO, E_BRASS };
 static const uint8_t EE_D[] = { E_PULSE, E_SQUARE, E_TRI, E_SAW, E_BOARDS };
 static const uint8_t ES_G[] = { S_TURING, S_EUCLID, S_MARKOV }, ES_B[] = { S_EUCLID, S_TURING, S_LIFE };
 static const uint8_t ES_L[] = { S_MARKOV, S_TURING }, ES_D[] = { S_TURING, S_EUCLID, S_MARKOV, S_DRUNK };

@@ -137,8 +137,8 @@ dots beside the page's name show how many pages that button has, and which one y
 - **ENGINE** picks its sound (see 8). The **PRESET** knob does the same from any page.
 - **TONE** works like a DJ's filter: 12 o'clock is open, left sweeps a low-pass down, right sweeps a high-pass up.
 - **WEIGHT** goes from soft to heavy.
-- **ENTROPY** adds strangeness. Up to halfway it's the engine's own; past it the synthesis turns on itself with chaos,
-  feedback and slackness.
+- **ENTROPY** adds strangeness in each engine's own way: saws drift apart, bells go inharmonic, the organ's rotor
+  speeds up. Past halfway a little chaos (feedback and slackness) joins in, but the engine stays itself all the way up.
 
 The knobs reach notes that are already sounding, so a long note changes as you turn.
 
@@ -164,12 +164,14 @@ The knobs reach notes that are already sounding, so a long note changes as you t
 
 ## 8. The sounds
 
-Twenty-five engines. REC picks ones that suit each layer, but any layer can play any of them.
+Thirty engines. REC picks ones that suit each layer and the personality, but any layer can play any of them.
 
 | Engine | What it is |
 |---|---|
 | **BLEEP** | a pulse wave, its width moving |
+| **BOWED** | a bowed string's tone, its vibrato coming late; ENTROPY presses the bow harder |
 | **BOWL** | a singing bowl, rubbed or struck, its overtones beating |
+| **BRASS** | soft synth brass, the filter swelling open then settling |
 | **BREATH** | noise through a tuned resonance: wind and breath |
 | **CHOIR** | three voices singing from "ooh" to "aah" |
 | **CZ** | 80s phase distortion, sine to saw to resonant sweeps |
@@ -179,12 +181,15 @@ Twenty-five engines. REC picks ones that suit each layer, but any layer can play
 | **FM** | two-operator FM with feedback |
 | **FOLD** | a sine folded back on itself |
 | **GLASS** | four sine partials, bell-like |
+| **JUNO** | an 80s polysynth pad: two pulses swaying in width, a sub, made for chorus |
+| **LADDER** | a warm bass through a resonant 24 dB filter that opens a little on each note |
 | **MALLET** | a marimba, vibes or kalimba |
 | **ORGAN** | drawbars with a rotating speaker's swirl |
 | **REESE** | the jungle bass: two saws beating slowly, a deep low-pass, a sub underneath, long and legato |
+| **RUMBLE** | pitched wind: dark noise through two tuned resonances, gusting |
 | **SHAPES** | unusual waves that DRIFT moves through |
 | **SINE** | pure; WEIGHT warms it |
-| **SQUARE** | plain and warm |
+| **SQUARE** | plain and warm; ENTROPY sways its width |
 | **STRING** | a plucked string; ENTROPY loosens it |
 | **STRINGS** | an 80s string machine: soft, dark, wandering |
 | **SUB** | a sine with its octave, driven: deep bass |

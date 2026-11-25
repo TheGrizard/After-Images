@@ -116,12 +116,13 @@ The knobs reach notes already sounding: turn TONE, WEIGHT, ENTROPY, RELEASE, SWE
 
 ## The sounds
 
-Twenty-five engines: DRIFT SAW, FM, DX (four-operator FM), STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an
+Thirty engines: DRIFT SAW, FM, DX (four-operator FM), STRING, BLEEP, GLASS, BREATH, VOICE, FOLD, SUB, STRINGS (an
 80s string machine), E.PIANO (80s FM), TRIANGLE, SINE, SQUARE, CZ (phase distortion), SYNC, SHAPES (unusual
 waveforms), VHS SYNTH (a saw and square drifting apart through a slowly opening dark filter), REESE (two saws beating
 slowly against each other, driven into a deep low-pass with a sub under it, legato with a long tail), ORGAN (drawbars and a rotary speaker's swirl), BOWL (a singing bowl, its partials
-beating), MALLET (marimba, vibes or kalimba), WAVES (a wavetable scanned dark to bright) and CHOIR (three voices, ooh to
-aah).
+beating), MALLET (marimba, vibes or kalimba), WAVES (a wavetable scanned dark to bright), CHOIR (three voices, ooh to
+aah), JUNO (an 80s polysynth's PWM pad), LADDER (a warm bass through a resonant 24 dB filter), BRASS (soft synth brass,
+swelling), BOWED (a bowed string's tone) and RUMBLE (pitched wind).
 
 Each REC also features one effect: shimmer, reverse echo, chorus, ensemble, tape saturation, tape fuzz,
 wide space or HAZE (warble, wear, chorus, flat and dark), never the same twice in a row. A slow leveller keeps every piece

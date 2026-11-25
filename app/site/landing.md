@@ -16,8 +16,9 @@ always in key and always evolving. Press REC again and the next piece follows on
   Hold REC to stay in key.
 - **Systems, not dice:** eleven sequencers, from Euclidean rings and Markov chains to the Lorenz attractor and
   Conway's Life, patched so one layer's notes nudge another's.
-- **Twenty-five engines:** FM, DX, phase distortion, wavetables, plucked strings, mallets, a singing bowl, a choir,
-  an organ, an 80s string machine, a Reese bass and more, with ENTROPY turning their synthesis in on itself.
+- **Thirty engines:** FM, DX, phase distortion, wavetables, plucked strings, mallets, a singing bowl, a choir,
+  an organ, an 80s string machine, a PWM pad, a ladder-filter bass, synth brass, a bowed string, pitched wind, a Reese
+  bass and more, each with its own ENTROPY.
 - **An ambient mixer:** DRIFT fades the layers in and out, walks them round the stereo field and slowly morphs their
   effects and character.
 - **Four personalities:** ANALYST (anything goes), SENTINEL (dark, sparse drones), DIPLOMAT (distant pads in

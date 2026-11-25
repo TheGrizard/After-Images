@@ -56,6 +56,7 @@ int main(int argc, char **argv)
     if (getenv("GRAIN")) pc.grain = (uint8_t)atoi(getenv("GRAIN"));   /* GRAIN=0..100: the shared GRAIN */
     if (getenv("DIRT")) pc.dirt = (uint8_t)atoi(getenv("DIRT"));
     if (getenv("WEAR")) pc.wear = (uint8_t)atoi(getenv("WEAR"));
+    if (getenv("ENT")) for (int l = 0; l < NUM_LAYERS; l++) pc.l[l].weird = (uint8_t)atoi(getenv("ENT"));   /* ENT=0..100: ENTROPY */
     if (getenv("MUTE")) for (int l = 0; l < NUM_LAYERS; l++) if (atoi(getenv("MUTE")) & (1 << l)) pc.l[l].level = 0;   /* MUTE=bitmask */
     if (getenv("DRIFT")) pc.weird = (uint8_t)atoi(getenv("DRIFT"));   /* DRIFT=0..100 */
     if (getenv("SOLO")) {                        /* SOLO=0..3: that layer alone */

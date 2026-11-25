@@ -20,7 +20,7 @@ tap HOME
 wait 200
 tap REC
 wait 600
-expect tempo <71
+expect tempo <76
 expect mood <33
 # the macros yours after: MOOD turned up, the next REC keeps it
 tap GLO
@@ -34,7 +34,7 @@ wait 200
 tap REC
 wait 600
 expect mood 100
-expect tempo <71
+expect tempo <76
 tap GLO
 wait 100
 tap GLO

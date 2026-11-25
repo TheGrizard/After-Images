@@ -130,8 +130,8 @@ at about the same loudness.
 ### Personality
 
 AUDIO (GLO three times, KNOB 1) sets what REC favours: **ANALYST** (the original, anything goes), **SENTINEL** (dark,
-droning, fuzzy, 50-70 BPM), **DIPLOMAT** (distant pads deep in shimmer and echo, 45-65 BPM) or **EXPLORER** (analogue
-synthwave: Turing machine arpeggios over a melodic bass line, 80-110 BPM). Each favours its own engines, sequencers,
+sparse drones, 45-75 BPM: fuzzed, worn or clean), **DIPLOMAT** (distant pads deep in shimmer and echo,
+45-65 BPM) or **EXPLORER** (analogue synthwave: Turing machine arpeggios over a melodic bass line, 80-110 BPM). Each favours its own engines, sequencers,
 scales, effects and macro ranges; no new sounds, just a different hand on the dice.
 
 ## The visuals

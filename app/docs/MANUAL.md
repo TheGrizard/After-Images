@@ -273,12 +273,13 @@ what the screen shows.
 The four personalities each favour their own sounds, sequencers, tempos, scales, effects and macro ranges:
 
 - **ANALYST.** The original After Images: anything from drones to melodies, 65 to 110 BPM.
-- **SENTINEL.** Dark, droning and fuzzy. Slow, sparse lines at 50 to 70 BPM on REESE, FOLD and noisy BREATH, everything
-  through the fuzz, MOOD low.
+- **SENTINEL.** Dark, sparse drones at 45 to 75 BPM in dark scales (Phrygian, minor, Hungarian, Hirajoshi): ORGAN,
+  STRINGS, REESE and FOLD, few notes, MOOD low. Each REC is one of three kinds: a drone in the tape fuzz, a worn and
+  wandering VHS one, or a clean, dark and wide one.
 - **DIPLOMAT.** Distant and ethereal. Slow pads (STRINGS, CHOIR, WAVES, SINE) at 45 to 65 BPM, long swells, deep in the
   shimmer reverb and the echo, the bass soft.
 - **EXPLORER.** Analogue, melodic and moving, the synthwave side. Turing machine arpeggios and a bass line with a melody
-  of its own, on DRIFT SAW, SQUARE and VHS SYNTH at 80 to 110 BPM, chorused and a little wobbly.
+  of its own, on DRIFT SAW, SQUARE and VHS SYNTH at 80 to 110 BPM, smooth and deep in chorus, a little wobbly.
 
 The personality takes effect at your next REC. With SENTINEL, DIPLOMAT or EXPLORER, REC also sets the HOME macros within
 that personality's ranges (on ANALYST they stay as you left them). Everything is still yours to change afterwards.

@@ -291,13 +291,13 @@ typedef struct {
 } Persona;
 #define N_(a) (uint8_t)(sizeof a / sizeof a[0])
 
-static const uint8_t SE_G[] = { E_REESE, E_FOLD, E_SAW, E_ORGAN, E_SHAPES };
-static const uint8_t SE_B[] = { E_SAW, E_STRINGS, E_ORGAN, E_BOARDS, E_WAVES, E_BREATH, E_REESE };
-static const uint8_t SE_L[] = { E_BOWL, E_WAVES, E_SHAPES, E_BREATH, E_FOLD, E_CHOIR };
-static const uint8_t SE_D[] = { E_BREATH, E_BREATH, E_SHAPES, E_GLASS, E_GLASS };
-static const uint8_t SS_G[] = { S_LORENZ, S_DRUNK, S_PHASE }, SS_B[] = { S_PHASE, S_LORENZ, S_DRUNK, S_ORBITS };
-static const uint8_t SS_L[] = { S_ORBITS, S_DRUNK, S_LORENZ, S_PHASE }, SS_D[] = { S_CHIMES, S_LIFE, S_DRUNK };
-static const uint8_t SSC[] = { 1, 1, 3, 3, 3, 7, 16 }, SFX[] = { FX_CRUSH, FX_CRUSH, FX_FOLD, FX_FOLD, FX_HAZE };
+static const uint8_t SE_G[] = { E_REESE, E_FOLD, E_SAW, E_ORGAN, E_ORGAN, E_SHAPES, E_WAVES, E_SUB };
+static const uint8_t SE_B[] = { E_SAW, E_STRINGS, E_STRINGS, E_ORGAN, E_BOARDS, E_WAVES, E_CHOIR, E_BOWL, E_REESE };
+static const uint8_t SE_L[] = { E_BOWL, E_WAVES, E_SHAPES, E_BREATH, E_FOLD, E_CHOIR, E_STRINGS, E_ORGAN };
+static const uint8_t SE_D[] = { E_BREATH, E_BREATH, E_SHAPES, E_BOWL, E_CHOIR, E_GLASS };
+static const uint8_t SS_G[] = { S_LORENZ, S_EUCLID, S_TURING, S_DRUNK }, SS_B[] = { S_LORENZ, S_ORBITS, S_MARKOV, S_DRUNK };
+static const uint8_t SS_L[] = { S_ORBITS, S_LORENZ, S_CHIMES, S_DRUNK }, SS_D[] = { S_CHIMES, S_LIFE, S_BOUNCE };
+static const uint8_t SSC[] = { 1, 1, 3, 3, 3, 6, 7, 11, 16, 17 }, SFX[] = { FX_CRUSH, FX_FOLD, FX_HAZE, FX_HAZE, FX_SPACE, FX_REVERSE };
 
 static const uint8_t DE_G[] = { E_SINE, E_SINE, E_SUB, E_TRI, E_WAVES };
 static const uint8_t DE_B[] = { E_STRINGS, E_STRINGS, E_CHOIR, E_CHOIR, E_WAVES, E_VOX };
@@ -319,9 +319,9 @@ static const Persona PERSONA[NUM_PERS - 1] = {
     {   /* SENTINEL */
         { SE_G, SE_B, SE_L, SE_D }, { N_(SE_G), N_(SE_B), N_(SE_L), N_(SE_D) },
         { SS_G, SS_B, SS_L, SS_D }, { N_(SS_G), N_(SS_B), N_(SS_L), N_(SS_D) },
-        { { 0, 1 }, { 0, 1 }, { 0, 2 }, { 1, 3 } }, { { 30, 60 }, { 60, 95 }, { 50, 90 }, { 30, 70 } },
-        { { 75, 100 }, { 85, 100 }, { 80, 100 }, { 70, 100 } }, { 10, 25 }, { 80, 72, 54, 48 },
-        -6, 8, -12, { 10, 30 }, { 14, 32 }, { 5, 25 }, { 10, 30 }, { 15, 40 }, SSC, N_(SSC), SFX, N_(SFX), 0 },
+        { { 0, 1 }, { 0, 1 }, { 0, 2 }, { 0, 2 } }, { { 30, 60 }, { 60, 95 }, { 50, 90 }, { 30, 70 } },
+        { { 75, 100 }, { 85, 100 }, { 80, 100 }, { 70, 100 } }, { 5, 20 }, { 80, 78, 52, 38 },
+        -12, 10, -12, { 5, 35 }, { 8, 25 }, { 5, 22 }, { 10, 30 }, { 15, 40 }, SSC, N_(SSC), SFX, N_(SFX), 0 },
     {   /* DIPLOMAT */
         { DE_G, DE_B, DE_L, DE_D }, { N_(DE_G), N_(DE_B), N_(DE_L), N_(DE_D) },
         { DS_G, DS_B, DS_L, DS_D }, { N_(DS_G), N_(DS_B), N_(DS_L), N_(DS_D) },
@@ -374,12 +374,22 @@ int piece_roll_as(Piece *p, uint32_t seed, int all, int pers)
         for (int l = 0; l < NUM_LAYERS; l++) p->l[l].weird = pick(&r, 35, 80);
         p->legato[L_GROUND] = 1; p->glide[L_GROUND] = pick(&r, 12, 30);   /* (the bass held, a short slide: no long sweeps) */
         for (int l = L_BODY; l < NUM_LAYERS; l++) { p->legato[l] = 0; p->glide[l] = 0; }
-        p->dirt = pick(&r, 20, 32);
-        static const uint8_t DS[NUM_LAYERS][2] = { { 70, 90 }, { 60, 90 }, { 40, 75 }, { 55, 85 } };
-        for (int l = 0; l < NUM_LAYERS; l++) p->s_dirt[l] = pick(&r, DS[l][0], DS[l][1]);
-        p->wear = pick(&r, 10, 30);
-        if (p->l[L_LIGHT].octave < 0) p->l[L_LIGHT].octave = 0;   /* (the top kept up) */
-        if (rng_chance(&r, 0.25f)) p->l[L_DUST].octave = 1;
+        /* three kinds, by the effect dealt: a tape drone in the fuzz (TAPE FUZZ, SATURATED); worn and wandering (HAZE);
+         * clean, dark and wide (SPACE, REVERSE ECHO) */
+        if (fx == FX_CRUSH || fx == FX_FOLD) {
+            p->dirt = pick(&r, 20, 32);
+            static const uint8_t DS[NUM_LAYERS][2] = { { 70, 90 }, { 60, 90 }, { 40, 75 }, { 55, 85 } };
+            for (int l = 0; l < NUM_LAYERS; l++) p->s_dirt[l] = pick(&r, DS[l][0], DS[l][1]);
+            p->wear = pick(&r, 10, 30);
+        } else if (fx == FX_HAZE) {
+            p->wear = (uint8_t)clampi_(p->wear, 30, 60);
+        } else {
+            p->dirt = 0; for (int l = 0; l < NUM_LAYERS; l++) p->s_dirt[l] = 0;
+            p->wear = pick(&r, 20, 40);
+            p->reverb = (uint8_t)clampi_(p->reverb, 55, 85);
+        }
+        if (p->l[L_LIGHT].octave > 0) p->l[L_LIGHT].octave = 0;
+        p->l[L_DUST].octave = 0;
     }
     if (pers == PERS_DIPLOMAT) {                 /* pads, far off: deep in the reverb (its shimmer), the echo long (short of
                                                   * its reverse smear but in REVERSE ECHO's pieces), the pads sliding */

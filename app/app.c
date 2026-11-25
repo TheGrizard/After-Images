@@ -1177,7 +1177,7 @@ static void ink_step(void)
     float tb = ink_beat = vis_b, t;              /* (tb: the beat, the blots' ages counted in it) */
     ink_colours();
     float size = 0.6f + (float)set.peg_size * 0.008f;
-    float pulse = 0.5f + 0.5f * fm_sin_turns(t - fm_floorf(t) + 0.25f);   /* (a breath across each beat, not a twitch on it) */
+    float pulse = 0.5f + 0.5f * fm_sin_turns(tb - fm_floorf(tb) + 0.25f);   /* (a breath across each beat, not a twitch on it) */
     t = tb * 0.5f;                               /* (the drift at half the beat's pace: smaller steps from frame to frame) */
     for (int l = 0; l < NUM_LAYERS; l++) {       /* the four inks, one a layer: larger as it sounds */
         float want = set.playing ? 0.45f + 0.55f * clamp01(eng.meter[l] * 1.4f) : 0.0f;   /* (stopped: drying away) */

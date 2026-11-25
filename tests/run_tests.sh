@@ -4,10 +4,12 @@
 # a FAIL line.
 set -e
 cd "$(dirname "$0")/.."
-./build.sh --host
 out=app/build/host/shots
 mkdir -p "$out"
 fail=0
+# the app's own code compiles with no warning (one read of a value never set drew nothing in the browser's emulator)
+./build.sh --host 2> "$out/build.log" || { cat "$out/build.log"; exit 1; }
+if grep -E "^[^ ]*app/[^ ]*: warning:" "$out/build.log"; then echo "FAIL: warnings in the app's code"; fail=1; fi
 for t in app/tests/*.txt; do
     echo "== $t"
     log="$out/$(basename "$t" .txt).log"

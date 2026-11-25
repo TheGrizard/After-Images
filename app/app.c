@@ -586,6 +586,7 @@ static int fx_next(void)
     return fx_last = fxdeck[--fxdeck_n];
 }
 
+static uint8_t pers_due;                  /* AUDIO turned: the next REC sets the personality's HOME macros, once */
 static void new_piece(int keep_key)      /* REC: a new piece, a new key and scale too; held, in the same key */
 {
     int all = 0, key = set.cur.key, scale = set.cur.scale;   /* (the HOME macros stay yours either way) */
@@ -595,8 +596,10 @@ static void new_piece(int keep_key)      /* REC: a new piece, a new key and scal
     hist_push();
     uint32_t seed = (set.cur.seed * 1664525u + 1013904223u) ^ plat_ms() * 2654435761u ^ plat_ticks24();
     if (set.pers == PERS_ANALYST) piece_roll(&set.cur, seed, all, fx);
-    else fx = piece_roll_as(&set.cur, seed, 1, set.pers);   /* (a personality deals its own effect, and sets the
-                                                                     * HOME macros in its ranges: its character is in them) */
+    else fx = piece_roll_as(&set.cur, seed, pers_due, set.pers);   /* (a personality deals its own effect; the first REC
+                                                                     * after AUDIO is turned sets the HOME macros in its
+                                                                     * ranges, the RECs after keep them yours, as ANALYST's) */
+    pers_due = 0;
     if (keep_key) { set.cur.key = (uint8_t)key; set.cur.scale = (uint8_t)scale; }
     else if (set.pers == PERS_ANALYST) piece_next_key(&set.cur, key, scale, seed);
     else { int sc = set.cur.scale; piece_next_key(&set.cur, key, scale, seed); set.cur.scale = (uint8_t)sc; }   /* (round the
@@ -755,6 +758,7 @@ static void knob_turn(int k, int d)
     else if (kn->kind == K_REC) *p = (uint8_t)((*p & ~1u) | (unsigned)v);
     else if (kn->kind == K_ROUTE) *p = (uint8_t)((*p & 1u) | (unsigned)v << 1);
     else *p = (uint8_t)v;
+    if (kn->kind == K_PERS) pers_due = 1;
     if (kn->where == 2) { autosave_at = plat_ms() + AUTOSAVE_MS; settings_apply(); }
     else changed();
     if (kn->kind == K_ONOFF && kn->off == SO(midi_on) && !v) engine_all_off(&eng);

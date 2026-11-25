@@ -281,8 +281,9 @@ The four personalities each favour their own sounds, sequencers, tempos, scales,
 - **EXPLORER.** Analogue, melodic and moving, the synthwave side. Turing machine arpeggios and a bass line with a melody
   of its own, on DRIFT SAW, SQUARE and VHS SYNTH at 80 to 110 BPM, smooth and deep in chorus, a little wobbly.
 
-The personality takes effect at your next REC. With SENTINEL, DIPLOMAT or EXPLORER, REC also sets the HOME macros within
-that personality's ranges (on ANALYST they stay as you left them). Everything is still yours to change afterwards.
+The personality takes effect at your next REC. The first REC after you choose SENTINEL, DIPLOMAT or EXPLORER also sets
+the HOME macros within that personality's ranges, since part of its character lives there. After that the macros are
+yours: RECs keep them as you leave them, as ANALYST always does.
 
 **GLO a fourth time: SCREEN** sets up the visual. Each REC deals a new colour palette, and the four layers always keep
 four clearly different colours.

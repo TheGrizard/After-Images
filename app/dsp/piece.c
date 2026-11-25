@@ -313,7 +313,7 @@ static const uint8_t EE_L[] = { E_SAW, E_SQUARE, E_SQUARE, E_BOARDS, E_PULSE, E_
 static const uint8_t EE_D[] = { E_PULSE, E_SQUARE, E_TRI, E_SAW, E_BOARDS };
 static const uint8_t ES_G[] = { S_TURING, S_EUCLID, S_MARKOV }, ES_B[] = { S_EUCLID, S_TURING, S_LIFE };
 static const uint8_t ES_L[] = { S_MARKOV, S_TURING }, ES_D[] = { S_TURING, S_EUCLID, S_MARKOV, S_DRUNK };
-static const uint8_t ESC[] = { 2, 2, 2, 1, 1, 4, 4, 14, 19 }, EFX[] = { FX_CHORUS, FX_ENSEMBLE, FX_ENSEMBLE, FX_HAZE, FX_HAZE, FX_SPACE };
+static const uint8_t ESC[] = { 2, 2, 2, 1, 1, 4, 4, 14, 19 }, EFX[] = { FX_CHORUS, FX_CHORUS, FX_ENSEMBLE, FX_ENSEMBLE, FX_ENSEMBLE };
 
 static const Persona PERSONA[NUM_PERS - 1] = {
     {   /* SENTINEL */
@@ -333,7 +333,7 @@ static const Persona PERSONA[NUM_PERS - 1] = {
         { ES_G, ES_B, ES_L, ES_D }, { N_(ES_G), N_(ES_B), N_(ES_L), N_(ES_D) },
         { { 3, 5 }, { 3, 6 }, { 3, 6 }, { 7, 9 } }, { { 0, 12 }, { 10, 35 }, { 5, 20 }, { 0, 5 } },
         { { 30, 55 }, { 50, 75 }, { 40, 65 }, { 15, 35 } }, { 45, 75 }, { 80, 60, 58, 50 },
-        0, 5, 15, { 40, 70 }, { 55, 85 }, { 45, 70 }, { 35, 60 }, { 10, 30 }, ESC, N_(ESC), EFX, N_(EFX), 90 },
+        -10, 5, 15, { 40, 70 }, { 55, 85 }, { 45, 70 }, { 35, 60 }, { 10, 30 }, ESC, N_(ESC), EFX, N_(EFX), 90 },
 };
 const char *const PERS_NAME[NUM_PERS] = { "ANALYST", "SENTINEL", "DIPLOMAT", "EXPLORER" };
 
@@ -393,10 +393,19 @@ int piece_roll_as(Piece *p, uint32_t seed, int all, int pers)
     if (pers == PERS_EXPLORER) {                 /* analogue and clean: no fuzz, a little drift; now and then a bass line under
                                                   * LIGHT's melody, DUST's quick line against both (counterpoint, arpeggios) */
         p->dirt = 0; for (int l = 0; l < NUM_LAYERS; l++) p->s_dirt[l] = 0;
-        if (p->warble < 15) p->warble = pick(&r, 15, 40);   /* (the VHS wander, in every piece; HAZE's more) */
+        if (p->warble < 15) p->warble = pick(&r, 15, 40);   /* (the VHS wander, in every piece) */
         if (p->detune < 15) p->detune = pick(&r, 15, 40);
-        if (p->wear < 10) p->wear = pick(&r, 10, 30);
-        if (!p->grain) { p->grain = pick(&r, 30, 50); for (int l = 1; l < NUM_LAYERS; l++) p->s_grain[l] = pick(&r, 40, 80); }
+        p->wear = rng_chance(&r, 0.4f) ? pick(&r, 5, 15) : 0;
+        /* smooth: ENTROPY kept low (its chaos oscillator, past halfway, is noise; DRIFT's wander can't reach it from
+         * here), the filters low-pass side, little resonance or sweep; and the chorus deep on every layer */
+        for (int l = 0; l < NUM_LAYERS; l++) {
+            p->l[l].weird = pick(&r, 0, 15);
+            if (p->reso[l] > 20) p->reso[l] = pick(&r, 0, 20);
+            if (p->sweep[l] > 35) p->sweep[l] = pick(&r, 0, 35);
+            if (l > L_GROUND) p->s_grain[l] = pick(&r, 70, 100);
+        }
+        p->s_grain[L_GROUND] = pick(&r, 30, 60);
+        if (p->grain < 35) p->grain = pick(&r, 40, 50);
         /* the Turing machine's quick loops: DUST's arpeggio always, BODY's chords often (here a sequencer may play on two
          * layers); the bass a melody of its own in most pieces, LIGHT answering it, else LIGHT the melody */
         p->l[L_DUST].seq = S_TURING;

@@ -355,9 +355,11 @@ record it straight into your DAW.
 - **OUTPUT** sets what you hear and record. **MIX** is everything. **CLEAN** is the mix without effects: none of the
   FX page's four (reverb, echo, chorus, DIRT), nor the mix's balance or WEAR, so you can add your own when you mix.
   CLEAN changes the speaker and headphones too, because the computer records what the FM-1 plays.
-- **LEVEL** sets the level the computer gets. **VOLUME** follows the FM-1's volume knob, so turning it down turns the
-  recording down too. **FULL** always sends full level, so you can turn the speaker or headphones down (or off) while
-  you record.
+- **LEVEL** sets how the computer's level is set. **VOLUME** follows the FM-1's volume knob, so turning it down turns
+  the recording down too. **FIXED** ignores the volume knob and sends the level on **GAIN** (KNOB 4, shown only with
+  FIXED): 0 to 100, starting at 80. 100 is full scale, where the peaks touch the top; 80 (about 4 dB down) leaves
+  headroom for your DAW or AUM. With FIXED, GAIN turns the speaker and headphones down by the same amount, under the
+  volume knob.
 
 ## 17. Ideas to try
 

@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MPL-2.0
+# USB AUDIO's LEVEL: VOLUME (the FM-1's volume knob) or FIXED, then GAIN (KNOB 4, FIXED's alone) 0..100 from 80; kept
+wait 3000
+expect usb_full 0
+expect usb_audio_full 0
+expect usb_lvl 80
+tap ARP
+wait 200
+tap ARP
+wait 200
+tap ARP
+wait 200
+expect page 13
+shot usb_volume.png
+turn K4 -3
+wait 300
+expect usb_lvl 80
+turn K3 1
+wait 300
+expect usb_full 1
+expect usb_audio_full 1
+turn K4 -2
+wait 300
+expect usb_lvl 70
+shot usb_fixed.png
+tap HOME
+tap PLAY
+wait 15000
+expect playing 0
+reboot
+wait 3000
+expect usb_full 1
+expect usb_lvl 70
+expect usb_audio_full 1
+tap ARP
+wait 200
+tap ARP
+wait 200
+tap ARP
+wait 200
+turn K3 -1
+wait 300
+expect usb_full 0
+expect usb_audio_full 0
+expect usb_lvl 70

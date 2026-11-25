@@ -49,6 +49,8 @@ typedef struct {
     uint8_t peg_n, peg_size;             /* PEGS: COUNT (an index into PEG_NS), SIZE 0..100 */
     /* v2.9 (pegs_set 8) */
     uint8_t pers;                        /* AUDIO: the personality REC rolls with (PERS_ANALYST..PERS_EXPLORER) */
+    /* v2.11 (pegs_set 9) */
+    uint8_t usb_lvl;                     /* USB AUDIO's GAIN, with LEVEL FIXED: 0..100 (100: the old FULL) */
 } settings_t;
 #define SET_SIZE_V28 __builtin_offsetof(settings_t, pers)   /* (v2.0-2.8's settings: everything before it) */
 static settings_t set;
@@ -73,7 +75,7 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
     set.usb_full = 0; set.usb_play = 100; set.visual = 0;
     set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.mosh_size = 50;
-    set.breed = 100; set.fade = 100; set.pegs_set = 8; set.peg_n = PEG_N_DEF; set.peg_size = 100; set.pers = PERS_ANALYST;   /* MATRIX: 8 big balls, breeding, lingering */
+    set.breed = 100; set.fade = 100; set.pegs_set = 9; set.peg_n = PEG_N_DEF; set.peg_size = 100; set.pers = PERS_ANALYST; set.usb_lvl = 80;   /* MATRIX: 8 big balls, breeding, lingering */
 }
 
 static void settings_defaults(void)
@@ -92,7 +94,7 @@ static int settings_ok(void)
     if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 3 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
         || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))
-        || set.pers >= NUM_PERS) return 0;
+        || set.pers >= NUM_PERS || set.usb_lvl > 100) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -123,17 +125,19 @@ static void settings_load(void)
     if (magic == SET_MAGIC && n == (int)SET_SIZE_V28) { set.pers = PERS_ANALYST; n = (int)sizeof set; }   /* (v2.0-2.8's: the
                                                                      * same, but for the personality after: ANALYST, as before) */
     int was = set.pegs_set;                      /* (the store's version of these) */
-    if (was < 3 || was > 8) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
-    if (was < 4 || was > 8) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
-    if (was < 5 || was > 8) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
+    if (was < 3 || was > 9) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
+    if (was < 4 || was > 9) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
+    if (was < 5 || was > 9) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
         if (set.clock_in || set.mosh_mould) set.sync = set.clock_in ? SYNC_IN : SYNC_OUT;   /* (v0.2-0.12's two: one setting, IN first) */
         set.clock_in = 0; set.mosh_mould = 50; set.mosh_size = 50; set.pegs_set = 5;
     }
-    if (was < 7 || was > 8) {                    /* (v0.31-0.33's OUTPUT, stems and the like: MIX) */
+    if (was < 7 || was > 9) {                    /* (v0.31-0.33's OUTPUT, stems and the like: MIX) */
         set.usb_full &= 1;
         set.pegs_set = 7;
     }
-    if (was < 8 || was > 8) { set.pers = PERS_ANALYST; set.pegs_set = 8; }   /* (before v2.9: the roll as it was) */
+    if (was < 8 || was > 9) { set.pers = PERS_ANALYST; set.pegs_set = 8; }   /* (before v2.9: the roll as it was) */
+    if (was < 9 || was > 9) { set.usb_lvl = 80; set.pegs_set = 9; }   /* (before v2.11: FULL was 100; FIXED starts at 80,
+                                                                     * clear of the top) */
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -273,6 +277,8 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float L[ENGINE_SUB * BLK], R[ENGINE_SUB * BLK];
     float g = muted || save_hold ? 0.0f : (float)master_q12 / 4096.0f * OUT_GAIN;
+    if (set.usb_full & 1) { float u = (float)set.usb_lvl * 0.01f; g *= u * u; }   /* (LEVEL's own level, as MASTER's curve:
+                                                                     * the computer's, and the speaker's under MASTER) */
     int nsub = (int)(n / BLK);
     if (nsub > ENGINE_SUB) nsub = ENGINE_SUB;
     midi_in();
@@ -359,7 +365,7 @@ static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B
  * (its settings) */
 static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_VIS, K_PERS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE };
+       K_PEGN, K_SYNC, K_VIS, K_PERS, K_ULVL, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -381,7 +387,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
     { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
     { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
-    { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "LEVEL", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 } },
+    { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "LEVEL", K_REC, 2, SO(usb_full) }, { "GAIN", K_ULVL, 2, SO(usb_lvl) } },
     { { "AUDIO", K_PERS, 2, SO(pers) }, { "", K_NONE, 2, 0 }, { "VISUAL", K_VIS, 2, SO(visual) }, { "SHAPES", K_SHAPE, 2, SO(clock_in) } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
@@ -437,6 +443,7 @@ static const Knob *knob_of(int pg, int k)
     if (pg == PG_SCREEN && set.visual == 2) return &MOSH_KNOBS[k];
     if (pg == PG_SCREEN && set.visual == 1) return &INK_KNOBS[k];   /* (SCREEN: the chosen visual's own four) */
     if (pg == PG_VISUAL && k == 3 && set.visual != 2) return &PAGES[PG_VISUAL][1];   /* (SHAPES: MOSH's alone) */
+    if (pg == PG_USB && k == 3 && !(set.usb_full & 1)) return &PAGES[PG_USB][1];   /* (GAIN: LEVEL FIXED's alone) */
     return &PAGES[pg][k];
 }
 
@@ -461,7 +468,8 @@ static void knob_text(int pg, int k, char *s)
     switch (kn->kind) {
     case K_NONE: break;
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
-    case K_REC: text_cat(s, v ? "FULL" : "VOLUME"); break;   /* (VOLUME: as the FM-1's volume knob has it) */
+    case K_REC: text_cat(s, v ? "FIXED" : "VOLUME"); break;   /* (VOLUME: as the FM-1's volume knob has it; FIXED: GAIN) */
+    case K_ULVL: int_text(v, s); break;
     case K_PLAYIN: if (v) int_text(v, s); else text_cat(s, "OFF"); break;
     case K_ROUTE: text_cat(s, v ? "CLEAN" : "MIX"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
@@ -496,7 +504,8 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_NONE: return 0.0f;
     case K_ROUTE: return (float)v;
     case K_INCH: return (float)v / 16.0f;
-    case K_REC: return v ? 1.0f : 0.0f;
+    case K_REC: return (float)v;
+    case K_ULVL: return (float)v * 0.01f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
     case K_VIS: return (float)v * 0.5f;
     case K_PERS: return (float)v / (float)(NUM_PERS - 1);
@@ -718,6 +727,7 @@ static void knob_turn(int k, int d)
     switch (kn->kind) {
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
+    case K_ULVL: hi = 100; step = 5; break;
     case K_ROUTE: hi = 1; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
     case K_VIS: hi = 2; step = 1; break;
@@ -1626,15 +1636,15 @@ static void draw_panel_rows(int y0)
     /* four columns: label, value, bar */
     for (int k = 0; k < 4; k++) {
         /* (PERSONALITY's: a knob with an empty one beside it centred across both, its long names room) */
-        int wide = pg == PG_VISUAL && k < 3 && knob_of(pg, k + 1)->kind == K_NONE;
+        int wide = (pg == PG_VISUAL || pg == PG_USB) && k < 3 && knob_of(pg, k + 1)->kind == K_NONE;
         int cx = 60 * k + 30 + (wide ? 30 : 0), y = y0 + 50;
         int hot = focus && k == ui.last_knob;
         const char *nm = knob_of(pg, k)->name;
         cv_text(cx - text_w(&FONT_XS, nm) / 2, y, &FONT_XS, nm, hot ? pc : C_SUB);
         char v[24]; knob_text(pg, k, v);
         int room = k < 3 && knob_of(pg, k + 1)->kind == K_NONE ? 112 : 56;   /* (the next column empty: its room too) */
-        const felucca_font_t *f = text_w(&FONT_M, v) <= room && pg != PG_VISUAL ? &FONT_M   /* (PERSONALITY's all one size:
-                                                                     * its longest names need the smaller) */
+        const felucca_font_t *f = text_w(&FONT_M, v) <= room && pg != PG_VISUAL && pg != PG_USB ? &FONT_M   /* (PERSONALITY's
+                                                                     * and USB AUDIO's all one size: their longest need the smaller) */
                                 : text_w(&FONT_B, v) <= room + 2 ? &FONT_B : &FONT_XS;
         if (text_w(f, v) > room + 2) v[9] = 0;
         int vx = cx - text_w(f, v) / 2;
@@ -1849,6 +1859,8 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "reverb")) *got = set.cur.reverb;
     else if (!strcmp(what, "midi_ch")) *got = set.midi_ch;
     else if (!strcmp(what, "pers")) *got = set.pers;
+    else if (!strcmp(what, "usb_lvl")) *got = set.usb_lvl;
+    else if (!strcmp(what, "usb_full")) *got = set.usb_full & 1;
     else if (!strcmp(what, "visual")) *got = set.visual;
     else if (!strcmp(what, "motion")) *got = set.cur.motion;
     else if (!strcmp(what, "hist")) *got = hist_n;

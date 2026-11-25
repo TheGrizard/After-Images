@@ -387,7 +387,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "COUNT", K_PEGN, 2, SO(peg_n) }, { "SIZE", K_PCT, 2, SO(peg_size) }, { "BREED", K_PCT, 2, SO(breed) }, { "FADE", K_PCT, 2, SO(fade) } },
     { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
     { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
-    { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "LEVEL", K_REC, 2, SO(usb_full) }, { "GAIN", K_ULVL, 2, SO(usb_lvl) } },
+    { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "CONTROL", K_REC, 2, SO(usb_full) }, { "GAIN", K_ULVL, 2, SO(usb_lvl) } },
     { { "AUDIO", K_PERS, 2, SO(pers) }, { "", K_NONE, 2, 0 }, { "VISUAL", K_VIS, 2, SO(visual) }, { "SHAPES", K_SHAPE, 2, SO(clock_in) } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
@@ -468,7 +468,7 @@ static void knob_text(int pg, int k, char *s)
     switch (kn->kind) {
     case K_NONE: break;
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
-    case K_REC: text_cat(s, v ? "FIXED" : "VOLUME"); break;   /* (VOLUME: as the FM-1's volume knob has it; FIXED: GAIN) */
+    case K_REC: text_cat(s, v ? "FIXED" : "MASTER"); break;   /* (MASTER: as the FM-1's volume knob has it; FIXED: GAIN) */
     case K_ULVL: int_text(v, s); break;
     case K_PLAYIN: if (v) int_text(v, s); else text_cat(s, "OFF"); break;
     case K_ROUTE: text_cat(s, v ? "CLEAN" : "MIX"); break;

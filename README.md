@@ -89,7 +89,7 @@ Press a page's button again for its next page; dots by the page's name show how 
 | GLO a fourth time | SCREEN | the chosen visual's four (below) |
 | ARP | MIDI | CLOCK · NOTES OUT · NOTES IN · CC IN |
 | ARP again | CHANNELS | LAYERS · KEYS · PLAY CH · |
-| ARP a third time | USB AUDIO | OUTPUT · · LEVEL · GAIN (FIXED's) |
+| ARP a third time | USB AUDIO | OUTPUT · · CONTROL · GAIN (FIXED's) |
 
 ### What the settings do
 
@@ -160,7 +160,7 @@ and the four layers always keep four clearly different hues.
   piece or a change of tempo. With an **Ableton Move**: a USB cable from Move's USB-A port to the FM-1, Move's MIDI
   Sync set to Out, and CLOCK at IN.
 - **USB audio** (ARP a third time): a stereo pair to the computer. OUTPUT: MIX, or CLEAN (without FX's effects, the
-  speaker too). LEVEL: as the volume knob (VOLUME), or FIXED at GAIN's 0-100 (80 to start; 100 full scale).
+  speaker too). CONTROL: the volume knob (MASTER), or FIXED at GAIN's 0-100 (80 to start; 100 full scale).
 
 ## Saving
 

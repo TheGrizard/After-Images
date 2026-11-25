@@ -277,6 +277,13 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float L[ENGINE_SUB * BLK], R[ENGINE_SUB * BLK];
     float g = muted || save_hold ? 0.0f : (float)master_q12 / 4096.0f * OUT_GAIN;
+    /* the first 0.8 s after power-on silent, then faded in over 0.3: MASTER reads as halfway until the platform's
+     * loop first reads the knob (and smooths it in), so turned right down it played for half a second at half volume */
+    static uint32_t since_boot;
+    if (since_boot < (uint32_t)(1.1f * SR)) {
+        since_boot += n;
+        g *= clamp01(((float)since_boot - 0.8f * SR) / (0.3f * SR));
+    }
     if (set.usb_full & 1) { float u = (float)set.usb_lvl * 0.01f; g *= u * u; }   /* (LEVEL's own level, as MASTER's curve:
                                                                      * the computer's, and the speaker's under MASTER) */
     int nsub = (int)(n / BLK);

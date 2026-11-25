@@ -1635,7 +1635,9 @@ static void draw_panel_rows(int y0)
             "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
             "CLEAN: WITHOUT FX, TO RECORD DRY", "WHAT REC MAKES, AND WHAT YOU SEE", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
-                : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
+                : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED"
+                : pg == PG_USB && !(set.usb_full >> 1 & 1) ? "MIX: THE FULL MIX, WITH FX" : HINT[pg], dim(C_SUB, 0.8f));   /* (USB
+                                                                     * AUDIO's: what OUTPUT sends, MIX or CLEAN) */
     }
     /* four columns: label, value, bar */
     for (int k = 0; k < 4; k++) {

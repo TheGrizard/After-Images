@@ -1633,7 +1633,9 @@ static void draw_panel_rows(int y0)
         cv_text(cx - text_w(&FONT_XS, nm) / 2, y, &FONT_XS, nm, hot ? pc : C_SUB);
         char v[24]; knob_text(pg, k, v);
         int room = k < 3 && knob_of(pg, k + 1)->kind == K_NONE ? 112 : 56;   /* (the next column empty: its room too) */
-        const felucca_font_t *f = text_w(&FONT_M, v) <= room ? &FONT_M : text_w(&FONT_B, v) <= room + 2 ? &FONT_B : &FONT_XS;
+        const felucca_font_t *f = text_w(&FONT_M, v) <= room && pg != PG_VISUAL ? &FONT_M   /* (PERSONALITY's all one size:
+                                                                     * its longest names need the smaller) */
+                                : text_w(&FONT_B, v) <= room + 2 ? &FONT_B : &FONT_XS;
         if (text_w(f, v) > room + 2) v[9] = 0;
         int vx = cx - text_w(f, v) / 2;
         if (vx < 4) vx = 4;

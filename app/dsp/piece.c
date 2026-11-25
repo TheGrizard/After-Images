@@ -414,7 +414,7 @@ int piece_roll_as(Piece *p, uint32_t seed, int all, int pers)
             if (p->sweep[l] > 35) p->sweep[l] = pick(&r, 0, 35);
             if (l > L_GROUND) p->s_grain[l] = pick(&r, 70, 100);
         }
-        p->s_grain[L_GROUND] = pick(&r, 30, 60);
+        p->s_grain[L_GROUND] = 0;                /* (never the bass: a chorus is stereo, the bass stays mono) */
         if (p->grain < 35) p->grain = pick(&r, 40, 50);
         /* the Turing machine's quick loops: DUST's arpeggio always, BODY's chords often (here a sequencer may play on two
          * layers); the bass a melody of its own in most pieces, LIGHT answering it, else LIGHT the melody */

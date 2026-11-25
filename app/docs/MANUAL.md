@@ -177,10 +177,10 @@ Thirty engines. REC picks ones that suit each layer and the personality, but any
 | **CZ** | 80s phase distortion, sine to saw to resonant sweeps |
 | **DRIFT SAW** | two detuned saws, low-passed: the classic pad |
 | **DX** | four-operator FM with a spectrum that moves over each note |
-| **E.PIANO** | an 80s FM electric piano |
+| **E.PIANO** | an 80s FM electric piano: struck, its tine ringing, harder notes barking, a gentle stereo tremolo |
 | **FM** | two-operator FM with feedback |
 | **FOLD** | a sine folded back on itself |
-| **GLASS** | four sine partials, bell-like |
+| **GLASS** | a struck glass: partials off the harmonics, the upper ones fading first |
 | **JUNO** | an 80s polysynth pad: two pulses swaying in width, a sub, made for chorus |
 | **LADDER** | a warm bass through a resonant 24 dB filter that opens a little on each note |
 | **MALLET** | a marimba, vibes or kalimba |
@@ -188,16 +188,19 @@ Thirty engines. REC picks ones that suit each layer and the personality, but any
 | **REESE** | the jungle bass: two saws beating slowly, a deep low-pass, a sub underneath, long and legato |
 | **RUMBLE** | pitched wind: dark noise through two tuned resonances, gusting |
 | **SHAPES** | unusual waves that DRIFT moves through |
-| **SINE** | pure; WEIGHT warms it |
-| **SQUARE** | plain and warm; ENTROPY sways its width |
+| **SINE** | pure and clean; WEIGHT warms it |
+| **SQUARE** | hollow, its width always swaying a little; ENTROPY sweeps it to a thin pulse |
 | **STRING** | a plucked string; ENTROPY loosens it |
 | **STRINGS** | an 80s string machine: soft, dark, wandering |
 | **SUB** | a sine with its octave, driven: deep bass |
 | **SYNC** | a hard-synced saw, sweeping down over each note |
-| **TRIANGLE** | soft and round; WEIGHT folds it |
+| **TRIANGLE** | soft and hollow, its odd harmonics through; WEIGHT folds it |
 | **VHS SYNTH** | a saw and square drifting apart through a slow, dark filter, like an old synth on a worn tape |
 | **VOICE** | a pulse through vowel formants |
 | **WAVES** | a wavetable scanned from dark to bright as each note plays |
+
+The bass stays in the middle: GROUND's notes sit near the centre, DRIFT never walks it far, and below about 120 Hz the
+whole mix is mono, so the low end is solid on any system.
 
 ## 9. The sequencers
 

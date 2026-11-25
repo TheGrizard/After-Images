@@ -76,15 +76,20 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         break;
     }
     case E_EPIANO:
-        v->p[0] = 0.6f + 1.6f * wt + 0.8f * tone;                /* the body's index (WEIGHT: the bark) */
-        v->p[1] = 0.8f + 2.0f * tone;                            /* the tine's knock */
+        v->p[0] = (0.6f + 1.6f * wt + 0.8f * tone) * (0.55f + 0.6f * v->vel);   /* the body's index (WEIGHT, and played harder: the bark) */
+        v->p[1] = (0.8f + 2.0f * tone) * (0.6f + 0.5f * v->vel); /* the tine's strike */
         v->p[2] = 14.0f + (wd > 0.4f ? (wd - 0.4f) * 9.0f : 0.0f);   /* the tine's ratio (DRIFT: off it, a clank) */
         v->p[3] = 1.0f - k_of(0.25f + 0.6f * (1.0f - wt));       /* the body's index fades, a sample */
-        v->p[4] = 1.0f - k_of(0.012f);                           /* the knock, fast */
+        v->p[4] = 1.0f - k_of(0.06f);                            /* the tine's strike, ringing ~60 ms */
         v->p[5] = 0.002f + 0.006f * wd;                          /* the tape-ish wobble */
-        if (start) { v->z1 = 1.0f; v->z2 = 1.0f; }
+        if (start) {
+            v->z1 = 1.0f; v->z2 = 1.0f;
+            if (v->a_k < k_of(0.01f * 0.33f)) v->a_k = k_of(0.01f * 0.33f);   /* (struck: never swelling in, whatever ATTACK) */
+        }
         v->sus = 0.0f; v->d_k = k_of(1.8f + 2.5f * (1.0f - wt));
         v->lfo_dp = (4.5f + 1.5f * wd) * BLK_S;
+        v->pan_amt = fm_maxf(v->pan_amt, 0.25f + 0.35f * wd);    /* a suitcase's stereo tremolo (ENTROPY: deeper) */
+        v->pan_dp = (3.5f + 2.5f * wd) * BLK_S;
         break;
     case E_DX: {
         /* the ratios, by algorithm: kept on whole and half numbers (in tune), DRIFT pulls them off */
@@ -118,9 +123,11 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         v->p[1] = 2.0f + 12.0f * tone * tone;
         v->p[2] = 0.3f + 0.6f * wd;                              /* how much the width moves */
         break;
-    case E_GLASS:
-        v->p[0] = 1.0f; v->p[1] = 2.0f + 0.03f * wd; v->p[2] = 3.0f + 0.9f * wd * wd; v->p[3] = 4.0f + 1.7f * wd;
-        v->p[4] = 0.25f + 0.6f * tone;                           /* the upper partials' level */
+    case E_GLASS:                                                /* a struck glass: its modes off the harmonics, the upper fading first */
+        v->p[0] = 1.0f; v->p[1] = 2.32f + 0.08f * wd; v->p[2] = 4.25f + 0.6f * wd * wd; v->p[3] = 6.63f + 1.2f * wd;
+        v->p[4] = 0.35f + 0.6f * tone;                           /* the upper partials' level */
+        if (start) for (int k = 1; k < 4; k++) v->oe[k] = 1.0f;
+        for (int k = 1; k < 4; k++) v->ok[k] = 1.0f - k_of((2.2f - 0.6f * (float)k) * (0.6f + 0.6f * (1.0f - wt))) * BLK;   /* (each a block) */
         break;
     case E_BREATH:
         v->p[0] = 6.0f + 40.0f * (1.0f - wt) + 60.0f * (1.0f - wd);   /* the resonance's Q: soft is purer */
@@ -140,7 +147,7 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
     case E_TRI:
         v->p[0] = 1.0f + 3.0f * wt * wt;                         /* the fold */
         v->p[1] = 0.5f - 0.45f * wd;                             /* where its peak is: 0.5 a triangle, near 0 a saw */
-        v->p[2] = 3.0f + 14.0f * tone;                           /* its filter, times the pitch */
+        v->p[2] = 6.0f + 20.0f * tone;                           /* its filter, times the pitch (open: its odd harmonics, hollow) */
         break;
     case E_SINE:
         v->p[0] = 0.25f * wt;                                    /* the 2nd */
@@ -148,10 +155,11 @@ static void voice_params(Voice *v, const Sound *s, uint32_t seed, int start)
         v->p[2] = wd;                                            /* the chorus beside it */
         break;
     case E_SQUARE:
-        v->p[0] = 0.3f * wd;                                     /* ENTROPY: its width swaying (PWM) */
-        v->p[1] = 1.2f + 8.0f * tone * tone;
+        v->p[0] = 0.1f + 0.32f * wd;                             /* its width swaying (PWM): gently always, ENTROPY to a thin pulse */
+        v->p[1] = 2.5f + 10.0f * tone * tone;                    /* (bright enough to stay hollow) */
         v->p[2] = 0.6f + 1.5f * wt + 4.0f * s->reso;
-        v->p[3] = 0.3f + 0.5f * wt;                              /* the filter's envelope */
+        v->p[3] = 0.15f + 0.35f * wt;                            /* the filter's envelope */
+        v->lfo_dp = (0.25f + 0.9f * wd) * BLK_S;                 /* the PWM's sweep: every 4 s, to near once a second */
         break;
     case E_CZ:
         v->p[0] = 0.15f + 0.8f * tone;                           /* how far the phase bends (opens with the envelope) */
@@ -546,11 +554,14 @@ void voice_render(Voice *v, float *L, float *R, int n)
     case E_GLASS: {
         float u = v->p[4], dr = 1.0f + 0.045f * v->ent * lfo;   /* (ENTROPY: the partials drifting apart and back) */
         float q1 = v->p[1] * dr, q2 = v->p[2] * (2.0f - dr), q3 = v->p[3] * (1.0f + 0.03f * v->ent * (1.0f - lfo));
-        for (int i = 0; i < n; i++) {
+        for (int k = 1; k < 4; k++) { v->oe[k] *= fm_maxf(v->ok[k], 0.0f); if (v->oe[k] < 1e-5f) v->oe[k] = 0.0f; }
+        float a1 = u * 0.42f * v->oe[1], a2 = u * 0.3f * v->oe[2], a3 = u * 0.2f * v->oe[3];
+        for (int i = 0; i < n; i++) {                            /* (the modes each their own phase: inharmonic, they never lock) */
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
-            float p = v->ph[0];
-            out[i] *= 0.6f * sine_c(p) + u * (0.35f * sine_c(p * q1 + v->ph[1]) + 0.22f * sine_c(p * q2 + v->ph[2])
-                                             + 0.14f * sine_c(p * q3));
+            v->ph[1] += dt * q1; if (v->ph[1] >= 1.0f) v->ph[1] -= fm_floorf(v->ph[1]);
+            v->ph[2] += dt * q2; if (v->ph[2] >= 1.0f) v->ph[2] -= fm_floorf(v->ph[2]);
+            v->z2 += dt * q3; if (v->z2 >= 1.0f) v->z2 -= fm_floorf(v->z2);   /* (z2: ph[3] is the ring modulator's) */
+            out[i] *= 0.6f * sine_c(v->ph[0]) + a1 * sine_c(v->ph[1]) + a2 * sine_c(v->ph[2]) + a3 * sine_c(v->z2);
         }
         break;
     }
@@ -909,8 +920,11 @@ void voice_render(Voice *v, float *L, float *R, int n)
         float pn = clampf(v->pan + v->pan_amt * fm_sin_turns(v->pan_ph), -1.0f, 1.0f), t = (pn + 1.0f) * 0.25f * PI_F;
         v->gl = fm_cosf(t); v->gr = fm_sinf(t);
     }
-    /* the piece's WEIRD: a ring modulator off the harmonics, then the weight's drive */
+    /* the piece's WEIRD: a ring modulator off the harmonics, then the weight's drive (SINE and GLASS clean: the drive's
+     * odd harmonics made every soft engine alike) */
+    static const uint8_t CLEAN[NUM_ENGINES] = { [E_SINE] = 1, [E_GLASS] = 1 };
     float d = v->drive, norm = (1.0f + d) / d, gain = v->vel * 0.32f;
+    if (CLEAN[v->engine % NUM_ENGINES]) { d = 0.0f; norm = v->engine == E_SINE ? 1.18f : 1.42f; }   /* (at the driven ones' level) */
     if (v->ws > 0.001f) {
         float rr = dt * 1.4142f, ws = v->ws;
         for (int i = 0; i < n; i++) {
@@ -925,7 +939,7 @@ void voice_render(Voice *v, float *L, float *R, int n)
     float da = (a1 - a0) / (float)n, db = (b1 - b0) / (float)n;
     for (int i = 0; i < n; i++) {
         a0 += da; b0 += db;
-        float x = soft_clip(out[i] * d) * norm;
+        float x = d > 0.0f ? soft_clip(out[i] * d) * norm : out[i] * norm;
         L[i] += x * a0; R[i] += x * b0;
     }
     v->g_last = gain; v->gl_last = v->gl; v->gr_last = v->gr;

@@ -49,6 +49,7 @@ static void midi_due(Engine *e)
 
 /* each bus's ghost: a note whose voice a new one took, fading out over ~80 ms, not cut off (in the RAM beside the
  * engine's, not the pool's: the pool keeps its headroom) */
+float g_band_lp = 1.0f;                          /* (the bands' low-pass scaled: the renderer's A/B; 1 on the FM-1) */
 static Shifter g_shim;                           /* the shimmer's pitch shifter (8 KB: beside the engine, not in the pool) */
 
 /* the mix's buffers, a block's (engine_mix_*: the stages two cores share) */
@@ -373,7 +374,8 @@ static void immerse(Engine *e)
         float far = 1.0f - L->im;                                /* how far off it has gone */
         L->im_g = 1.0f - d * far;                                /* its level (at DRIFT 0: as set) */
         L->im_far = d * far;
-        float pn = d * 0.85f * L->im_pan, a = (pn + 1.0f) * 0.25f * PI_F;   /* its walk round the stereo field */
+        float pn = d * 0.85f * L->im_pan * (l == L_GROUND ? ROLES[l].width : 1.0f), a = (pn + 1.0f) * 0.25f * PI_F;   /* its walk round
+                                                                 * the stereo field (GROUND's no wider than its notes': near the middle) */
         L->im_l = fm_cosf(a) * 1.4142f; L->im_r = fm_sinf(a) * 1.4142f;
     }
 }
@@ -451,7 +453,7 @@ void engine_block_begin(Engine *e, int nsub)
         float hp = ROLES[l].hp * fm_exp2f(6.5f * hi + (l == L_GROUND ? 0.0f : 2.0f * bright));   /* (DRIFT: far off by its level and reverb alone) */
         /* patched: the source layer's activity opens this one's filter, the random voltage moves it (LINK, DRIFT) */
         lp *= fm_exp2f(u(p->link) * 1.8f * (e->L[L->src].cv - 0.25f) + u(p->drift) * 0.9f * L->rnd);
-        lp = clampf(lp, 40.0f, 18000.0f); hp = clampf(hp, 15.0f, 12000.0f);
+        lp *= g_band_lp; lp = clampf(lp, 40.0f, 18000.0f); hp = clampf(hp, 15.0f, 12000.0f);
         if (L->lp_hz <= 0) { L->lp_hz = lp; L->hp_hz = hp; }
         L->lp_hz += (lp - L->lp_hz) * 0.35f; L->hp_hz += (hp - L->hp_hz) * 0.35f;   /* (turned smoothly, no steps) */
         float q = 0.6f + 1.4f * (lo > hi ? lo : hi) * (lo > hi ? lo : hi);
@@ -746,6 +748,14 @@ void engine_mix_finish(Engine *e, float *outL, float *outR)
                 L[i] += shelf * e->sub[0]; R[i] += shelf * e->sub[1];
             }
         else e->sub[0] = e->sub[1] = 0;
+        /* the bass in mono: below ~120 Hz the sides taken out (12 dB an octave), whatever the reverb, echo, chorus or DRIFT
+         * did, so the low end sits in the middle, phase-safe on any system and on a club's mono sub */
+        if (e->mbs[0].a1 == 0.0f) { svf_set(&e->mbs[0], 120.0f, 0.5412f); svf_set(&e->mbs[1], 120.0f, 1.3066f); }   /* (24 dB:
+                                                                 * two, a Butterworth's pair of Qs) */
+        for (int i = 0; i < BLK; i++) {
+            float m = 0.5f * (L[i] + R[i]), sd = svf_hp(&e->mbs[1], svf_hp(&e->mbs[0], 0.5f * (L[i] - R[i])));
+            L[i] = m + sd; R[i] = m - sd;
+        }
         /* the leveller: pieces come out at about the same loudness (+-8 dB at most), over seconds, never pumping */
         float ss = 0;
         for (int i = 0; i < BLK; i++) ss += L[i] * L[i] + R[i] * R[i];

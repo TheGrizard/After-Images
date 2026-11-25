@@ -275,3 +275,141 @@ void piece_name(uint32_t seed, char *out)
         if (rng_chance(&r, 0.5f)) { o = put(o, rng_chance(&r, 0.5f) ? " " : "-", 1); num(o, 1 + rng_int(&r, rng_chance(&r, 0.5f) ? 9 : 99)); }
     }
 }
+
+/* ------------------------------------------------------------------ PERSONALITY: what REC favours */
+/* ANALYST: the roll as it is. SENTINEL: dark, droning, steady. DIPLOMAT: distant, ethereal, soft. EXPLORER: melodic,
+ * quicker, arpeggios. Each re-deals the engines, sequencers, rates, envelopes, tempo, scale and macros of a piece
+ * piece_roll made, from its own pools and ranges; the rest (the contrast, the voices, the sends' scatter) kept */
+typedef struct {
+    const uint8_t *eng[NUM_LAYERS]; uint8_t eng_n[NUM_LAYERS];
+    const uint8_t *seq[NUM_LAYERS]; uint8_t seq_n[NUM_LAYERS];
+    uint8_t rate[NUM_LAYERS][2], att[NUM_LAYERS][2], rel[NUM_LAYERS][2], dens[2], level[NUM_LAYERS];
+    int8_t tone, rv, echo;                       /* TONE moved by; the reverb and echo sends moved by */
+    uint8_t tempo[2], mood[2], motion[2], evolve[2], drift[2];
+    const uint8_t *scales; uint8_t scales_n; const uint8_t *fx; uint8_t fx_n;
+    uint8_t melody;                              /* the chance (%) LIGHT sings a MELODY */
+} Persona;
+#define N_(a) (uint8_t)(sizeof a / sizeof a[0])
+
+static const uint8_t SE_G[] = { E_REESE, E_FOLD, E_SAW, E_ORGAN, E_SHAPES };
+static const uint8_t SE_B[] = { E_SAW, E_STRINGS, E_ORGAN, E_BOARDS, E_WAVES, E_BREATH, E_REESE };
+static const uint8_t SE_L[] = { E_BOWL, E_WAVES, E_SHAPES, E_BREATH, E_FOLD, E_CHOIR };
+static const uint8_t SE_D[] = { E_BREATH, E_BREATH, E_SHAPES, E_GLASS, E_GLASS };
+static const uint8_t SS_G[] = { S_LORENZ, S_DRUNK, S_PHASE }, SS_B[] = { S_PHASE, S_LORENZ, S_DRUNK, S_ORBITS };
+static const uint8_t SS_L[] = { S_ORBITS, S_DRUNK, S_LORENZ, S_PHASE }, SS_D[] = { S_CHIMES, S_LIFE, S_DRUNK };
+static const uint8_t SSC[] = { 1, 1, 3, 3, 3, 7, 16 }, SFX[] = { FX_CRUSH, FX_CRUSH, FX_FOLD, FX_FOLD, FX_HAZE };
+
+static const uint8_t DE_G[] = { E_SINE, E_SINE, E_SUB, E_TRI, E_WAVES };
+static const uint8_t DE_B[] = { E_STRINGS, E_STRINGS, E_CHOIR, E_CHOIR, E_WAVES, E_VOX };
+static const uint8_t DE_L[] = { E_CHOIR, E_WAVES, E_STRINGS, E_GLASS, E_SINE, E_TRI, E_BOWL };
+static const uint8_t DE_D[] = { E_GLASS, E_BREATH, E_SINE, E_BOWL, E_CHOIR };
+static const uint8_t DS_G[] = { S_DRUNK, S_ORBITS, S_PHASE, S_EUCLID }, DS_B[] = { S_PHASE, S_ORBITS, S_MARKOV, S_DRUNK };
+static const uint8_t DS_L[] = { S_ORBITS, S_PHASE, S_DRUNK, S_CHIMES }, DS_D[] = { S_CHIMES, S_ORBITS, S_BOUNCE };
+static const uint8_t DSC[] = { 0, 4, 4, 13, 13, 15, 15, 2, 19 }, DFX[] = { FX_SHIMMER, FX_SHIMMER, FX_SHIMMER, FX_SHIMMER, FX_SPACE, FX_REVERSE };
+
+static const uint8_t EE_G[] = { E_SAW, E_SAW, E_SQUARE, E_BOARDS, E_BOARDS, E_SUB };
+static const uint8_t EE_B[] = { E_BOARDS, E_BOARDS, E_STRINGS, E_STRINGS, E_SAW, E_SQUARE };
+static const uint8_t EE_L[] = { E_SAW, E_SQUARE, E_SQUARE, E_BOARDS, E_PULSE, E_TRI };
+static const uint8_t EE_D[] = { E_PULSE, E_SQUARE, E_TRI, E_SAW, E_BOARDS };
+static const uint8_t ES_G[] = { S_TURING, S_EUCLID, S_MARKOV }, ES_B[] = { S_EUCLID, S_TURING, S_LIFE };
+static const uint8_t ES_L[] = { S_MARKOV, S_TURING }, ES_D[] = { S_TURING, S_EUCLID, S_MARKOV, S_DRUNK };
+static const uint8_t ESC[] = { 2, 2, 2, 1, 1, 4, 4, 14, 19 }, EFX[] = { FX_CHORUS, FX_ENSEMBLE, FX_ENSEMBLE, FX_HAZE, FX_HAZE, FX_SPACE };
+
+static const Persona PERSONA[NUM_PERS - 1] = {
+    {   /* SENTINEL */
+        { SE_G, SE_B, SE_L, SE_D }, { N_(SE_G), N_(SE_B), N_(SE_L), N_(SE_D) },
+        { SS_G, SS_B, SS_L, SS_D }, { N_(SS_G), N_(SS_B), N_(SS_L), N_(SS_D) },
+        { { 0, 1 }, { 0, 1 }, { 0, 2 }, { 1, 3 } }, { { 30, 60 }, { 60, 95 }, { 50, 90 }, { 30, 70 } },
+        { { 75, 100 }, { 85, 100 }, { 80, 100 }, { 70, 100 } }, { 10, 25 }, { 80, 72, 54, 48 },
+        -6, 8, -12, { 10, 30 }, { 14, 32 }, { 5, 25 }, { 10, 30 }, { 15, 40 }, SSC, N_(SSC), SFX, N_(SFX), 0 },
+    {   /* DIPLOMAT */
+        { DE_G, DE_B, DE_L, DE_D }, { N_(DE_G), N_(DE_B), N_(DE_L), N_(DE_D) },
+        { DS_G, DS_B, DS_L, DS_D }, { N_(DS_G), N_(DS_B), N_(DS_L), N_(DS_D) },
+        { { 0, 1 }, { 0, 2 }, { 0, 3 }, { 1, 4 } }, { { 45, 75 }, { 75, 100 }, { 65, 100 }, { 65, 100 } },
+        { { 85, 100 }, { 92, 100 }, { 90, 100 }, { 90, 100 } }, { 22, 42 }, { 70, 92, 80, 70 },
+        -14, 40, 35, { 5, 25 }, { 65, 95 }, { 5, 25 }, { 25, 50 }, { 50, 75 }, DSC, N_(DSC), DFX, N_(DFX), 30 },
+    {   /* EXPLORER */
+        { EE_G, EE_B, EE_L, EE_D }, { N_(EE_G), N_(EE_B), N_(EE_L), N_(EE_D) },
+        { ES_G, ES_B, ES_L, ES_D }, { N_(ES_G), N_(ES_B), N_(ES_L), N_(ES_D) },
+        { { 3, 5 }, { 3, 6 }, { 3, 6 }, { 7, 9 } }, { { 0, 12 }, { 10, 35 }, { 5, 20 }, { 0, 5 } },
+        { { 30, 55 }, { 50, 75 }, { 40, 65 }, { 15, 35 } }, { 45, 75 }, { 80, 60, 58, 50 },
+        0, 5, 15, { 40, 70 }, { 55, 85 }, { 45, 70 }, { 35, 60 }, { 10, 30 }, ESC, N_(ESC), EFX, N_(EFX), 90 },
+};
+const char *const PERS_NAME[NUM_PERS] = { "ANALYST", "SENTINEL", "DIPLOMAT", "EXPLORER" };
+
+int piece_roll_as(Piece *p, uint32_t seed, int all, int pers)
+{
+    if (pers <= PERS_ANALYST || pers >= NUM_PERS) { piece_roll(p, seed, all, -1); return -1; }
+    const Persona *x = &PERSONA[pers - 1];
+    Rng r; rng_seed(&r, seed ^ 0x9E2A5u * (uint32_t)pers);
+    int fx = x->fx[rng_int(&r, x->fx_n)];
+    piece_roll(p, seed, all, fx);
+    uint8_t used[NUM_LAYERS];
+    for (int l = 0; l < NUM_LAYERS; l++) {
+        LayerP *lp = &p->l[l];
+        uint8_t c[NUM_SEQS]; int nc = 0, s;      /* four different sequencers: from the pool's still free, else any free */
+        for (int pass = 0; pass < 2 && !nc; pass++)
+            for (int i = 0; i < (pass ? NUM_SEQS : x->seq_n[l]); i++) {
+                int q = pass ? i : x->seq[l][i], taken = 0;
+                for (int k = 0; k < l; k++) taken |= used[k] == q;
+                if (!taken) c[nc++] = (uint8_t)q;
+            }
+        s = c[rng_int(&r, nc)];
+        if (l == L_LIGHT && rng_int(&r, 100) < x->melody) s = S_MELODY;
+        used[l] = (uint8_t)s; lp->seq = (uint8_t)s;
+        lp->engine = x->eng[l][rng_int(&r, x->eng_n[l])];
+        lp->rate = pick(&r, x->rate[l][0], x->rate[l][1]);
+        lp->attack = pick(&r, x->att[l][0], x->att[l][1]);
+        lp->release = pick(&r, x->rel[l][0], x->rel[l][1]);
+        lp->density = pick(&r, x->dens[0], x->dens[1]);
+        lp->level = x->level[l];
+        lp->tone = (uint8_t)clampi_(lp->tone + x->tone, l == L_GROUND ? 34 : 0, l >= L_LIGHT ? 72 : 100);
+        p->s_rv[l] = (uint8_t)clampi_(p->s_rv[l] + x->rv, 0, 100);
+        if (l != L_GROUND) p->s_echo[l] = (uint8_t)clampi_(p->s_echo[l] + x->echo, 0, 100);
+        if (lp->engine == E_REESE) { p->legato[l] = 1; if (!p->glide[l]) p->glide[l] = pers == PERS_SENTINEL ? pick(&r, 10, 25) : pick(&r, 25, 60); }
+        else if (pers == PERS_EXPLORER && l != L_GROUND) p->legato[l] = 0;   /* (arpeggios: every note struck) */
+    }
+    if (pers == PERS_SENTINEL) {                 /* the drone: the bass and the middle held and sliding; everything through the
+                                                  * fuzz (short of the breakup's dropouts), the tape worn, the engines rough */
+        for (int l = 0; l < NUM_LAYERS; l++) p->l[l].weird = pick(&r, 35, 80);
+        p->legato[L_GROUND] = 1; p->glide[L_GROUND] = pick(&r, 12, 30);   /* (the bass held, a short slide: no long sweeps) */
+        for (int l = L_BODY; l < NUM_LAYERS; l++) { p->legato[l] = 0; p->glide[l] = 0; }
+        p->dirt = pick(&r, 20, 32);
+        static const uint8_t DS[NUM_LAYERS][2] = { { 70, 90 }, { 60, 90 }, { 40, 75 }, { 55, 85 } };
+        for (int l = 0; l < NUM_LAYERS; l++) p->s_dirt[l] = pick(&r, DS[l][0], DS[l][1]);
+        p->wear = pick(&r, 10, 30);
+        if (p->l[L_LIGHT].octave < 0) p->l[L_LIGHT].octave = 0;   /* (the top kept up) */
+        if (rng_chance(&r, 0.25f)) p->l[L_DUST].octave = 1;
+    }
+    if (pers == PERS_DIPLOMAT) {                 /* pads, far off: deep in the reverb (its shimmer), the echo long (short of
+                                                  * its reverse smear but in REVERSE ECHO's pieces), the pads sliding */
+        p->reverb = (uint8_t)clampi_(p->reverb, pick(&r, 75, 96), 100);
+        p->wear = pick(&r, 25, 50);              /* (far off: the top dulled, the sides narrower and darker) */
+        p->legato[L_GROUND] = 1; if (!p->glide[L_GROUND]) p->glide[L_GROUND] = pick(&r, 40, 80);
+        if (p->echo < 50) p->echo = pick(&r, 38, 49);
+        if (rng_chance(&r, 0.5f)) { p->legato[L_BODY] = 1; if (!p->glide[L_BODY]) p->glide[L_BODY] = pick(&r, 30, 70); }
+        p->dirt = 0; for (int l = 0; l < NUM_LAYERS; l++) p->s_dirt[l] = 0;
+    }
+    if (pers == PERS_EXPLORER) {                 /* analogue and clean: no fuzz, a little drift; now and then a bass line under
+                                                  * LIGHT's melody, DUST's quick line against both (counterpoint, arpeggios) */
+        p->dirt = 0; for (int l = 0; l < NUM_LAYERS; l++) p->s_dirt[l] = 0;
+        if (p->warble < 15) p->warble = pick(&r, 15, 40);   /* (the VHS wander, in every piece; HAZE's more) */
+        if (p->detune < 15) p->detune = pick(&r, 15, 40);
+        if (p->wear < 10) p->wear = pick(&r, 10, 30);
+        if (!p->grain) { p->grain = pick(&r, 30, 50); for (int l = 1; l < NUM_LAYERS; l++) p->s_grain[l] = pick(&r, 40, 80); }
+        /* the Turing machine's quick loops: DUST's arpeggio always, BODY's chords often (here a sequencer may play on two
+         * layers); the bass a melody of its own in most pieces, LIGHT answering it, else LIGHT the melody */
+        p->l[L_DUST].seq = S_TURING;
+        p->l[L_BODY].seq = rng_chance(&r, 0.5f) ? S_TURING : rng_chance(&r, 0.5f) ? S_EUCLID : S_LIFE;
+        if (rng_chance(&r, 0.6f)) { p->l[L_GROUND].seq = S_MELODY; p->l[L_LIGHT].seq = rng_chance(&r, 0.5f) ? S_MARKOV : S_TURING; }
+        else { p->l[L_LIGHT].seq = S_MELODY; p->l[L_GROUND].seq = rng_chance(&r, 0.6f) ? S_TURING : S_MARKOV; }
+        p->l[L_DUST].octave = rng_chance(&r, 0.3f) ? 1 : 0;
+    }
+    p->tempo = pick(&r, x->tempo[0], x->tempo[1]);
+    p->scale = x->scales[rng_int(&r, x->scales_n)];
+    if (all) {
+        p->mood = pick(&r, x->mood[0], x->mood[1]); p->motion = pick(&r, x->motion[0], x->motion[1]);
+        p->evolve = pick(&r, x->evolve[0], x->evolve[1]); p->weird = pick(&r, x->drift[0], x->drift[1]);
+    }
+    return fx;
+}

@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MPL-2.0
+# PERSONALITY (GLO's third page): AUDIO the personality REC rolls with, VISUAL beside it; REC in its ranges; both kept
+wait 3000
+expect pers 0
+tap GLO
+wait 100
+tap GLO
+wait 100
+tap GLO
+wait 100
+expect page 14
+turn K1 1
+wait 200
+expect pers 1
+turn K3 1
+wait 200
+expect visual 1
+shot personality.png
+tap HOME
+wait 200
+tap REC
+wait 600
+expect tempo <71
+expect mood <33
+tap GLO
+wait 100
+tap GLO
+wait 100
+tap GLO
+wait 100
+expect page 14
+turn K1 2
+wait 200
+expect pers 3
+tap HOME
+wait 200
+tap REC
+wait 600
+expect tempo >79
+expect motion >44
+tap PLAY
+wait 12000
+expect playing 0
+reboot
+wait 2500
+expect pers 3
+expect visual 1

@@ -47,7 +47,10 @@ typedef struct {
     uint8_t palette, ink_gaps, ink_mix, mosh_size;   /* the screen: the palette (dealt by REC); RORSCHACH's GAPS, MIX; MOSH's SIZE */
     uint8_t breed, fade, pegs_set;       /* PEGS: how fast mixes breed, how long things linger (0..100); pegs_set: 2 once all four are set */
     uint8_t peg_n, peg_size;             /* PEGS: COUNT (an index into PEG_NS), SIZE 0..100 */
+    /* v2.9 (pegs_set 8) */
+    uint8_t pers;                        /* AUDIO: the personality REC rolls with (PERS_ANALYST..PERS_EXPLORER) */
 } settings_t;
+#define SET_SIZE_V28 __builtin_offsetof(settings_t, pers)   /* (v2.0-2.8's settings: everything before it) */
 static settings_t set;
 static uint8_t save_over;                /* the last SAVE went over a piece (every slot full): said so */
 static uint32_t xr_seen, xr_saves, save_end;   /* (HOME's DROPS: the saves' kept apart; see store_save) */
@@ -70,7 +73,7 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
     set.usb_full = 0; set.usb_play = 100; set.visual = 0;
     set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.mosh_size = 50;
-    set.breed = 100; set.fade = 100; set.pegs_set = 7; set.peg_n = PEG_N_DEF; set.peg_size = 100;   /* MATRIX: 8 big balls, breeding, lingering */
+    set.breed = 100; set.fade = 100; set.pegs_set = 8; set.peg_n = PEG_N_DEF; set.peg_size = 100; set.pers = PERS_ANALYST;   /* MATRIX: 8 big balls, breeding, lingering */
 }
 
 static void settings_defaults(void)
@@ -88,7 +91,8 @@ static int settings_ok(void)
     if (set.midi_ch > 12 || set.midi_keys > 15 || set.midi_on > 1 || set.mosh_mould > 100 || set.sync >= NSYNC) return 0;
     if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 3 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
-        || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))) return 0;
+        || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))
+        || set.pers >= NUM_PERS) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -116,17 +120,20 @@ static void settings_load(void)
         set.magic = SET_MAGIC;
         if (settings_ok()) { n = (int)sizeof set; store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0; }
     } else memcpy(&set, raw, sizeof set);
+    if (magic == SET_MAGIC && n == (int)SET_SIZE_V28) { set.pers = PERS_ANALYST; n = (int)sizeof set; }   /* (v2.0-2.8's: the
+                                                                     * same, but for the personality after: ANALYST, as before) */
     int was = set.pegs_set;                      /* (the store's version of these) */
-    if (was < 3 || was > 7) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
-    if (was < 4 || was > 7) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
-    if (was < 5 || was > 7) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
+    if (was < 3 || was > 8) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
+    if (was < 4 || was > 8) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
+    if (was < 5 || was > 8) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
         if (set.clock_in || set.mosh_mould) set.sync = set.clock_in ? SYNC_IN : SYNC_OUT;   /* (v0.2-0.12's two: one setting, IN first) */
         set.clock_in = 0; set.mosh_mould = 50; set.mosh_size = 50; set.pegs_set = 5;
     }
-    if (was < 7 || was > 7) {                    /* (v0.31-0.33's OUTPUT, stems and the like: MIX) */
+    if (was < 7 || was > 8) {                    /* (v0.31-0.33's OUTPUT, stems and the like: MIX) */
         set.usb_full &= 1;
         set.pegs_set = 7;
     }
+    if (was < 8 || was > 8) { set.pers = PERS_ANALYST; set.pegs_set = 8; }   /* (before v2.9: the roll as it was) */
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -342,9 +349,9 @@ static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#",
 
 /* ------------------------------------------------------------------ the pages */
 enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_WARBLE, PG_SCALE, PG_SCREEN, PG_MIDI, PG_CHAN, PG_USB,
-       PG_VISUAL, PG_MACROS, NPAGES };   /* (VISUAL and MACROS last: the pages before keep their numbers) */
+       PG_VISUAL, PG_MACROS, NPAGES };   /* (VISUAL and MACROS last: the pages before keep their numbers; VISUAL is PERSONALITY's) */
 static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "SENDS", "EFFECTS", "MOTION", "WARBLE", "SCALE", "SCREEN",
-                                                "MIDI", "CHANNELS", "USB AUDIO", "VISUAL", "MACROS" };
+                                                "MIDI", "CHANNELS", "USB AUDIO", "PERSONALITY", "MACROS" };
 /* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: MACROS, SCALE, VISUAL,
  * SCREEN; ARP: MIDI, CHANNELS, USB AUDIO) */
 static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO, B_GLO };
@@ -352,7 +359,7 @@ static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B
  * (its settings) */
 static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_VIS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE };
+       K_PEGN, K_SYNC, K_VIS, K_PERS, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -375,7 +382,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "CLOCK", K_SYNC, 2, SO(sync) }, { "NOTES OUT", K_ONOFF, 2, SO(midi_on) }, { "NOTES IN", K_NIN, 2, SO(layers_in) }, { "CC IN", K_ONOFF, 2, SO(cc_in) } },
     { { "LAYERS", K_LCH, 2, SO(midi_ch) }, { "KEYS", K_CH, 2, SO(midi_keys) }, { "PLAY CH", K_INCH, 2, SO(in_ch) }, { "", K_NONE, 2, 0 } },
     { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "LEVEL", K_REC, 2, SO(usb_full) }, { "", K_NONE, 2, 0 } },
-    { { "VISUAL", K_VIS, 2, SO(visual) }, { "", K_NONE, 2, 0 }, { "SHAPES", K_SHAPE, 2, SO(clock_in) }, { "", K_NONE, 2, 0 } },
+    { { "AUDIO", K_PERS, 2, SO(pers) }, { "", K_NONE, 2, 0 }, { "VISUAL", K_VIS, 2, SO(visual) }, { "SHAPES", K_SHAPE, 2, SO(clock_in) } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
@@ -429,7 +436,7 @@ static const Knob *knob_of(int pg, int k)
                                         { "MOULD", K_PCT, 2, SO(mosh_mould) }, { "FADE", K_PCT, 2, SO(fade) } };
     if (pg == PG_SCREEN && set.visual == 2) return &MOSH_KNOBS[k];
     if (pg == PG_SCREEN && set.visual == 1) return &INK_KNOBS[k];   /* (SCREEN: the chosen visual's own four) */
-    if (pg == PG_VISUAL && k == 2 && set.visual != 2) return &PAGES[PG_VISUAL][1];   /* (SHAPES: MOSH's alone) */
+    if (pg == PG_VISUAL && k == 3 && set.visual != 2) return &PAGES[PG_VISUAL][1];   /* (SHAPES: MOSH's alone) */
     return &PAGES[pg][k];
 }
 
@@ -464,6 +471,7 @@ static void knob_text(int pg, int k, char *s)
     case K_TONE: if (v >= 48 && v <= 52) text_cat(s, "OPEN"); else { text_cat(s, v < 50 ? "LP " : "HP "); int_text(v < 50 ? (50 - v) * 2 : (v - 50) * 2, s + strlen_(s)); } break;
     case K_PEGN: int_text(PEG_NS[v % NPEG_NS], s); break;
     case K_VIS: text_cat(s, v == 2 ? "MOSH" : v ? "RORSCHACH" : "MATRIX"); break;
+    case K_PERS: text_cat(s, PERS_NAME[v < NUM_PERS ? v : 0]); break;
     case K_SHAPE: text_cat(s, v ? "LINES" : "BLOCKS"); break;
     case K_SYNC: text_cat(s, SYNC_NAME[v % NSYNC]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
@@ -491,6 +499,7 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_REC: return v ? 1.0f : 0.0f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
     case K_VIS: return (float)v * 0.5f;
+    case K_PERS: return (float)v / (float)(NUM_PERS - 1);
     case K_SHAPE: return (float)v;
     case K_SYNC: return (float)v / (NSYNC - 1);
     case K_ENGINE: return (float)v / (NUM_ENGINES - 1);
@@ -576,9 +585,13 @@ static void new_piece(int keep_key)      /* REC: a new piece, a new key and scal
     int fx = fx_next();
     hist_push();
     uint32_t seed = (set.cur.seed * 1664525u + 1013904223u) ^ plat_ms() * 2654435761u ^ plat_ticks24();
-    piece_roll(&set.cur, seed, all, fx);
+    if (set.pers == PERS_ANALYST) piece_roll(&set.cur, seed, all, fx);
+    else fx = piece_roll_as(&set.cur, seed, 1, set.pers);   /* (a personality deals its own effect, and sets the
+                                                                     * HOME macros in its ranges: its character is in them) */
     if (keep_key) { set.cur.key = (uint8_t)key; set.cur.scale = (uint8_t)scale; }
-    else piece_next_key(&set.cur, key, scale, seed);
+    else if (set.pers == PERS_ANALYST) piece_next_key(&set.cur, key, scale, seed);
+    else { int sc = set.cur.scale; piece_next_key(&set.cur, key, scale, seed); set.cur.scale = (uint8_t)sc; }   /* (round the
+                                                                     * circle of fifths, in the personality's scale) */
     set.slot = 255;
     changed();
     piece_name(seed, nm);
@@ -708,6 +721,7 @@ static void knob_turn(int k, int d)
     case K_ROUTE: hi = 1; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
     case K_VIS: hi = 2; step = 1; break;
+    case K_PERS: hi = NUM_PERS - 1; step = 1; break;
     case K_SHAPE: hi = 1; step = 1; break;
     case K_SYNC: hi = NSYNC - 1; step = 1; break;
     case K_ENGINE: hi = NUM_ENGINES - 1; step = 1; wrap = 1; break;
@@ -1605,13 +1619,15 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
-            "CLEAN: WITHOUT FX, TO RECORD DRY", "MATRIX, RORSCHACH OR MOSH", "WHERE THE MUSIC GOES" };
+            "CLEAN: WITHOUT FX, TO RECORD DRY", "WHAT REC MAKES, AND WHAT YOU SEE", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED" : HINT[pg], dim(C_SUB, 0.8f));
     }
     /* four columns: label, value, bar */
     for (int k = 0; k < 4; k++) {
-        int cx = 60 * k + 30, y = y0 + 50;
+        /* (PERSONALITY's: a knob with an empty one beside it centred across both, its long names room) */
+        int wide = pg == PG_VISUAL && k < 3 && knob_of(pg, k + 1)->kind == K_NONE;
+        int cx = 60 * k + 30 + (wide ? 30 : 0), y = y0 + 50;
         int hot = focus && k == ui.last_knob;
         const char *nm = knob_of(pg, k)->name;
         cv_text(cx - text_w(&FONT_XS, nm) / 2, y, &FONT_XS, nm, hot ? pc : C_SUB);
@@ -1626,6 +1642,11 @@ static void draw_panel_rows(int y0)
         if (knob_of(pg, k)->kind == K_VIS) {                    /* the three visuals: a square each, the chosen one lit */
             for (int s = 0; s < 3; s++)
                 cv_rect(cx - 22 + s * 16, y + 42, 12, 6, s == set.visual ? dim(pc, hot ? 1.0f : 0.7f) : C_WELL);
+            continue;
+        }
+        if (knob_of(pg, k)->kind == K_PERS) {                   /* the four personalities: the same */
+            for (int s = 0; s < NUM_PERS; s++)
+                cv_rect(cx - 24 + s * 12, y + 42, 9, 6, s == set.pers ? dim(pc, hot ? 1.0f : 0.7f) : C_WELL);
             continue;
         }
         int bw = 48, fill = (int)(knob_frac(pg, k) * (float)bw + 0.5f);
@@ -1825,6 +1846,9 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "mood")) *got = set.cur.mood;
     else if (!strcmp(what, "reverb")) *got = set.cur.reverb;
     else if (!strcmp(what, "midi_ch")) *got = set.midi_ch;
+    else if (!strcmp(what, "pers")) *got = set.pers;
+    else if (!strcmp(what, "visual")) *got = set.visual;
+    else if (!strcmp(what, "motion")) *got = set.cur.motion;
     else if (!strcmp(what, "hist")) *got = hist_n;
     else if (!strcmp(what, "lastnote")) *got = ui.last_note;
     else if (!strncmp(what, "sweep", 5)) *got = set.cur.sweep[atoi(what + 5) & 3];

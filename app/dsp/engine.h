@@ -44,7 +44,10 @@ extern const char *const RATE_NAME[NUM_RATES];
 extern const float RATES[NUM_RATES];
 
 /* REC: a new piece from a seed (the scale, the key and the tempo kept, unless `all`); one layer anew (SEL + REC) */
-void piece_roll(Piece *p, uint32_t seed, int all, int fx);   /* fx: the effect it features (FX_*), -1 its seed's choice */
+void piece_roll(Piece *p, uint32_t seed, int all, int fx);
+enum { PERS_ANALYST, PERS_SENTINEL, PERS_DIPLOMAT, PERS_EXPLORER, NUM_PERS };   /* PERSONALITY: what REC favours */
+extern const char *const PERS_NAME[NUM_PERS];
+int piece_roll_as(Piece *p, uint32_t seed, int all, int pers);   /* (returns the effect dealt) */   /* fx: the effect it features (FX_*), -1 its seed's choice */
 /* the effect each new piece features (REC deals them from a shuffled deck, none twice in a row) */
 enum { FX_SHIMMER, FX_REVERSE, FX_CHORUS, FX_ENSEMBLE, FX_FOLD, FX_CRUSH, FX_SPACE, FX_HAZE, NUM_FX };
 extern const char *const FX_NAME[NUM_FX];

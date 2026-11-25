@@ -27,7 +27,8 @@ int main(int argc, char **argv)
     if (argc < 4) { fprintf(stderr, "render SEED|default SECONDS OUT.wav [all]\n"); return 2; }
     dsp_init();
     piece_default(&pc);
-    if (strcmp(argv[1], "default")) piece_roll(&pc, (uint32_t)strtoul(argv[1], 0, 0), argc > 4 && !strcmp(argv[4], "all"), argc > 5 ? atoi(argv[5]) : -1);
+    if (getenv("PERS")) piece_roll_as(&pc, (uint32_t)strtoul(argv[1], 0, 0), argc > 4 && !strcmp(argv[4], "all"), atoi(getenv("PERS")));   /* PERS=0..3 */
+    else if (strcmp(argv[1], "default")) piece_roll(&pc, (uint32_t)strtoul(argv[1], 0, 0), argc > 4 && !strcmp(argv[4], "all"), argc > 5 ? atoi(argv[5]) : -1);
     if (getenv("DUMP"))
         for (int l = 0; l < NUM_LAYERS; l++)
             fprintf(stderr, "layer %d: tone %d weight %d weird %d density %d rate %d level %d att %d rel %d oct %d\n", l, pc.l[l].tone,

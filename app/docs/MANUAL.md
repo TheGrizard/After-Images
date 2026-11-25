@@ -17,7 +17,7 @@ REC and it writes a piece, then you steer it. This guide starts with a quick ref
 10. Effects
 11. Motion and warble
 12. Key, scale and tempo
-13. The visuals
+13. Personality and the visuals
 14. Playing the keys
 15. Saving your pieces
 16. MIDI, sync and recording
@@ -49,7 +49,7 @@ REC and it writes a piece, then you steer it. This guide starts with a quick ref
 | ENV, ENV again | MIX, VOICE |
 | FX, FX again | SENDS, EFFECTS |
 | LFO, LFO again | MOTION, WARBLE |
-| GLO, twice, three, four times | MACROS, SCALE, VISUAL, SCREEN |
+| GLO, twice, three, four times | MACROS, SCALE, PERSONALITY, SCREEN |
 | ARP, twice, three times | MIDI, CHANNELS, USB AUDIO |
 | white keys | the scale's notes |
 | black keys | the scale's chords |
@@ -263,19 +263,35 @@ Every note stays in the scale, whatever you change.
 
 When it follows a MIDI clock (see 16), TEMPO shows the clock's tempo, marked **IN**.
 
-## 13. The visuals
+## 13. Personality and the visuals
 
-**GLO three times: VISUAL** chooses the visual. **GLO a fourth time: SCREEN** sets it up. Each REC deals a new colour palette,
-and the four layers always keep four clearly different colours.
+**GLO three times: PERSONALITY.** KNOB 1, **AUDIO**, chooses what kind of piece REC makes. KNOB 3, **VISUAL**, chooses
+what the screen shows.
 
-![The VISUAL page](img/visual.png "GLO three times: choose the visual")
+![The PERSONALITY page](img/personality.png "GLO three times: AUDIO and VISUAL")
+
+The four personalities each favour their own sounds, sequencers, tempos, scales, effects and macro ranges:
+
+- **ANALYST.** The original After Images: anything from drones to melodies, 65 to 110 BPM.
+- **SENTINEL.** Dark, droning and fuzzy. Slow, sparse lines at 50 to 70 BPM on REESE, FOLD and noisy BREATH, everything
+  through the fuzz, MOOD low.
+- **DIPLOMAT.** Distant and ethereal. Slow pads (STRINGS, CHOIR, WAVES, SINE) at 45 to 65 BPM, long swells, deep in the
+  shimmer reverb and the echo, the bass soft.
+- **EXPLORER.** Analogue, melodic and moving, the synthwave side. Turing machine arpeggios and a bass line with a melody
+  of its own, on DRIFT SAW, SQUARE and VHS SYNTH at 80 to 110 BPM, chorused and a little wobbly.
+
+The personality takes effect at your next REC. With SENTINEL, DIPLOMAT or EXPLORER, REC also sets the HOME macros within
+that personality's ranges (on ANALYST they stay as you left them). Everything is still yours to change afterwards.
+
+**GLO a fourth time: SCREEN** sets up the visual. Each REC deals a new colour palette, and the four layers always keep
+four clearly different colours.
 
 - **MATRIX.** A pegboard of light. Each note lights a peg by its pitch and its place in the stereo field. Mixed colours breed between lit pegs and the old ones fade. SCREEN: **COUNT, SIZE, BREED,
   FADE**.
 - **RORSCHACH.** A folded inkblot. Each layer's ink swells with the beat as it plays, the colours bleed together, and
   black voids carve through. SCREEN: **SIZE, GAPS, MIX, FADE**.
-- **MOSH.** Blocks and lines that pile up, mix and stretch where the music sits in the stereo field. On the VISUAL page,
-  **SHAPES** picks BLOCKS (squares, rectangles and lines) or LINES (mostly lines). SCREEN: **SIZE** (the zoom), **BREED,
+- **MOSH.** Blocks and lines that pile up, mix and stretch where the music sits in the stereo field. On the PERSONALITY
+  page, **SHAPES** (KNOB 4) picks BLOCKS (squares, rectangles and lines) or LINES (mostly lines). SCREEN: **SIZE** (the zoom), **BREED,
   MOULD, FADE**.
 
 When you stop, the visual fades to black. While stopped, the keys (and MIDI in) still draw on it, so you can watch your

@@ -85,7 +85,7 @@ Press a page's button again for its next page; dots by the page's name show how 
 | LFO again | WARBLE | WARBLE · FLUTTER · DETUNE · WEAR |
 | GLO | MACROS | MOOD · ACTIVITY · EVOLVE · DRIFT (as HOME held) |
 | GLO again | SCALE | KEY · SCALE · CHORDS · TEMPO |
-| GLO a third time | VISUAL | VISUAL · · SHAPES (MOSH's) · |
+| GLO a third time | PERSONALITY | AUDIO · · VISUAL · SHAPES (MOSH's) |
 | GLO a fourth time | SCREEN | the chosen visual's four (below) |
 | ARP | MIDI | CLOCK · NOTES OUT · NOTES IN · CC IN |
 | ARP again | CHANNELS | LAYERS · KEYS · PLAY CH · |
@@ -127,16 +127,23 @@ Each REC also features one effect: shimmer, reverse echo, chorus, ensemble, tape
 wide space or HAZE (warble, wear, chorus, flat and dark), never the same twice in a row. A slow leveller keeps every piece
 at about the same loudness.
 
+### Personality
+
+AUDIO (GLO three times, KNOB 1) sets what REC favours: **ANALYST** (the original, anything goes), **SENTINEL** (dark,
+droning, fuzzy, 50-70 BPM), **DIPLOMAT** (distant pads deep in shimmer and echo, 45-65 BPM) or **EXPLORER** (analogue
+synthwave: Turing machine arpeggios over a melodic bass line, 80-110 BPM). Each favours its own engines, sequencers,
+scales, effects and macro ranges; no new sounds, just a different hand on the dice.
+
 ## The visuals
 
-Choose on the VISUAL page (GLO three times); set them on SCREEN, the page after (GLO four times). REC deals a new colour palette each time,
+Choose on the PERSONALITY page (GLO three times, KNOB 3); set them on SCREEN, the page after (GLO four times). REC deals a new colour palette each time,
 and the four layers always keep four clearly different hues.
 
 - **MATRIX:** a pegboard. Each note lights the peg at its pitch and stereo position, mixes breed between lit colours,
   the board fills and old ones fade. SCREEN: COUNT, SIZE, BREED, FADE.
 - **RORSCHACH:** a folded inkblot. Each layer's ink swells with the beat and as it sounds, notes drop blots, the colours
   bleed together and voids carve black through. SCREEN: SIZE, GAPS, MIX, FADE.
-- **MOSH:** squares, rectangles and lines (SHAPES on the VISUAL page: BLOCKS, all three; LINES, mostly lines). Each
+- **MOSH:** squares, rectangles and lines (SHAPES on the PERSONALITY page: BLOCKS, all three; LINES, mostly lines). Each
   note lights a block where it sits in the stereo field, mixes breed beside them, overlaps mix and the blocks slowly
   stretch and shrink. SCREEN: SIZE (the zoom), BREED, MOULD, FADE.
 

@@ -556,7 +556,9 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     case E_BREATH: {
         float g = 0.35f * fm_sqrtf(v->p[0]), s = v->p[1];
-        if (v->ff != v->freq || v->sweep > 0.001f) svf_set(&v->f, (f + v->ff) * 0.5f * (0.5f + 0.5f * swf), v->p[0]);
+        /* the resonance is the note: always at its pitch (F.GLIDE and SWEEP moved it, a slow bend up into each note);
+         * SWEEP instead focuses it, breath into pitch, the resonance narrowing as it opens */
+        svf_set(&v->f, f, v->p[0] * (0.25f + 0.75f * swf));
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;
             out[i] *= svf_bp(&v->f, noise(&v->noise)) * g + s * sine_c(v->ph[0]);
@@ -848,9 +850,9 @@ void voice_render(Voice *v, float *L, float *R, int n)
     }
     case E_RUMBLE: {                                             /* wind through two pipes: the note and its fifth */
         float gust = 0.75f + 0.25f * lfo, g = 0.3f * fm_sqrtf(v->p[0]) * gust, c = v->p[1], fifth = v->p[3], s = v->p[2];
-        if (v->ff != v->freq || v->sweep > 0.001f) {
-            float fq = (f + v->ff) * 0.5f * (0.5f + 0.5f * swf);
-            svf_set(&v->f, fq, v->p[0]); svf_set(&v->f2, fq * 1.5f, v->p[0]);
+        {   /* (as BREATH's: the resonances at the note and its fifth always, SWEEP narrowing them, never bending them) */
+            float q = v->p[0] * (0.25f + 0.75f * swf);
+            svf_set(&v->f, f, q); svf_set(&v->f2, f * 1.5f, q);
         }
         for (int i = 0; i < n; i++) {
             v->ph[0] += dt; if (v->ph[0] >= 1.0f) v->ph[0] -= 1.0f;

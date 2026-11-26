@@ -57,7 +57,7 @@ key w3 down 10
 wait 800
 key w3 up
 wait 600
-expect vel_played 100
+expect vel_played 80
 expect peak_db_min -16
 shot keytouch.png
 turn K4 -10
@@ -67,8 +67,8 @@ key w3 down 10
 wait 300
 key w3 up
 wait 300
-expect vel_played >54
-expect vel_played <56
+expect vel_played >39
+expect vel_played <42
 turn K4 -20
 wait 300
 expect key_vel 0

@@ -735,16 +735,21 @@ static void select_layer(int l)
     text_cat(ui.pop_3, s);
 }
 
-/* a key's velocity: as touched (100 without a reading), drawn by KEY VEL towards one fixed velocity: FULL the touch
- * as played, FIXED every note at 100, between them the touch's range narrowed around 100 */
-#define KEY_FIXED 100
+/* a key's velocity: as touched (100 without a reading), stretched, and drawn by KEY VEL towards one fixed velocity: FULL
+ * the touch as played, FIXED every note at KEY_FIXED, between them the touch's range narrowed around it. The FM-1's keys
+ * read about 60-127 as played (fingertips about 100, a whole finger laid on slowly down to about 60, 127 struck): that
+ * range stretched over 10-127, so a light and a firm fingertip sound apart (85 plays 54, 100 plays 80, 115 plays 106) */
+#define KEY_FIXED 80
+#define KEY_FLOOR 60
 static int key_vel_last, key_touch_last;           /* (the last key's, as played and as touched: CHANNELS shows them) */
 static uint32_t key_touch_at;
 static int key_vel(uint32_t kk)
 {
     int v = touch_vel(kk);
-    if (!v) v = KEY_FIXED;
+    if (!v) v = 100;
     key_touch_last = v; key_touch_at = plat_ms() | 1u;
+    v = 10 + (v - KEY_FLOOR) * 117 / (127 - KEY_FLOOR);   /* (under the floor: down towards 1, rare) */
+    if (v < 1) v = 1;
     v += ((KEY_FIXED - v) * set.key_vel + (KEY_FIXED >= v ? 50 : -50)) / 100;
     key_vel_last = v < 1 ? 1 : v > 127 ? 127 : v;
     return key_vel_last;

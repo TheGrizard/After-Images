@@ -320,7 +320,9 @@ The keys play the chosen layer's sound, always in the scale, so there are no wro
 
 Your notes ride along with the piece, through its effects.
 
-The keys sense how hard you play them, and play at the same level whether the piece is playing or stopped. A chord on
+The keys sense how hard you play them, and play at the same level whether the piece is playing or stopped. Played
+with fingertips the FM-1's keys read in a narrow range, so After Images stretches it: a light tap plays softly, a firm one
+loud. A chord on
 a black key is as loud as a single note. To even out your touch, turn up **KEY VEL** (ARP twice, KNOB 4).
 
 ## 15. Saving your pieces

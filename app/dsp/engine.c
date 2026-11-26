@@ -407,7 +407,7 @@ static void svf_coef(Svf *d, const Svf *s) { d->a1 = s->a1; d->a2 = s->a2; d->a3
  * out alone: a pluck's quick fall, BOWED and SYNC soft, BREATH and RUMBLE hot). The layers' own notes are left as
  * they are */
 #ifndef KEY_GAIN
-#define KEY_GAIN 0.8f
+#define KEY_GAIN 1.0f                    /* (0.8 before v3.5, the touch then not stretched: 100 now plays as 80) */
 #endif
 static const float KEY_TRIM[NUM_ENGINES] = {
     /* DRIFT SAW */ 1.0f, /* FM */ 1.0f, /* STRING */ 2.0f, /* DX */ 1.0f, /* BLEEP */ 1.0f, /* GLASS */ 1.0f,

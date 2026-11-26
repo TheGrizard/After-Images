@@ -77,6 +77,9 @@ M-VAVE's own firmware back at any time, and you can go back to any earlier versi
 7. **Press SAVE** to keep a piece. Turn the ALGORITHM knob to step through the ones you've saved.
 8. **Stop with PLAY before you switch off,** and wait a few seconds. It keeps the piece and your settings by itself.
 
+When you switch on, the sound fades in after about a second, once the FM-1 has read its volume knob, so it never
+blasts out with the knob turned down.
+
 ![The FM-1's screen at home: the notes as a pegboard of light](img/home.png "At home: the music as light")
 
 ## 4. The screen
@@ -318,12 +321,17 @@ The keys play the chosen layer's sound, always in the scale, so there are no wro
 - **OCT- and OCT+** move the keys down or up an octave at a time (three each way). The button stays lit while
   you're shifted. On a GLO page they step through earlier pieces instead.
 
-Your notes ride along with the piece, through its effects.
+Your notes ride along with the piece, through its effects, and play at the same level whether the piece is playing
+or stopped, so you can audition sounds with PLAY off and they won't jump out when it starts.
 
-The keys sense how hard you play them, and play at the same level whether the piece is playing or stopped. Played
-with fingertips the FM-1's keys read in a narrow range, so After Images stretches it: a light tap plays softly, a firm one
-loud. A chord on
-a black key is as loud as a single note. To even out your touch, turn up **KEY VEL** (ARP twice, KNOB 4).
+**How hard you play.** The keys sense your touch. Played with fingertips, the FM-1's keys only read a narrow range
+(about 85 to 127 out of 127, a whole finger laid on slowly reaching down to about 60), so After Images stretches that
+range: a light tap plays softly, a firm one loud. A chord on a black key is as loud as a single note.
+
+- **KEY VEL** (ARP twice, KNOB 4) sets how much your touch counts, from **FULL** (every difference heard) to **FIXED**
+  (every note the same). See 16.
+- **To see your touch,** open that page and play: for a few seconds it shows **TOUCHED** (what the key read) and
+  **PLAYED** (the velocity the note got).
 
 ## 15. Saving your pieces
 
@@ -357,10 +365,11 @@ a black key is as loud as a single note. To even out your touch, turn up **KEY V
 - **LAYERS** sets the four layers' channels: 1–4 by default, or any four in a row.
 - **KEYS** sets the channel the notes you play go out on (5).
 - **PLAY CH** sets which incoming channel plays the chosen layer. ANY means every channel that isn't a layer's.
-- **KEY VEL** sets how much your touch counts. At **FULL** (the default) the keys play as hard as you play them. Turning
-  it up narrows the range towards one firm velocity, so soft and hard notes come closer together, until at **FIXED**
-  every note plays the same. It only changes the FM-1's own keys, not incoming MIDI. For a few seconds after you play a key,
-  the page shows how hard it was touched and the velocity it played at (out of 127).
+- **KEY VEL** sets how much your touch counts on the FM-1's own keys (not incoming MIDI). At **FULL** (the default)
+  they play as hard as you play them. Turning it up draws soft and hard notes together, towards one firm velocity,
+  until at **FIXED** every note plays the same. For a few seconds after you play a key, the line under CHANNELS shows
+  **TOUCHED** (what the key read) and **PLAYED** (the velocity the note got, after KEY VEL), both out of 127. The notes
+  you play go out over MIDI at the PLAYED velocity.
 
 Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS jack, and goes out over USB.
 
@@ -398,6 +407,9 @@ record it straight into your DAW.
 
 - **No sound.** Check the layer levels at home (K1 to K4) and the FM-1's volume, and that it's playing: the PLAY light
   is green.
+- **The keys are too loud, too quiet, or don't follow your touch.** Turn KEY VEL (ARP twice, KNOB 4) towards FIXED for
+  an even level. To check what the keys read, play a few notes on that page and watch TOUCHED and PLAYED.
+- **Clipping in your DAW or AUM.** On USB AUDIO (ARP three times), set CONTROL to FIXED and turn GAIN down from 80.
 - **Crackles or pops.** Tap HOME and look at DROPS. If it rises when you hear them, the FM-1 is running out of time: try
   fewer busy layers or less ACTIVITY. It also sheds notes by itself under heavy load.
 - **A setting seems to do nothing.** Many settings act on the chosen layer: check which layer SEL has chosen (the page

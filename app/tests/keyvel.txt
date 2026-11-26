@@ -50,7 +50,8 @@ turn K4 20
 wait 300
 expect key_vel 100
 shot keyvel.png
-# FIXED: the same soft touch plays as a firm one
+# FIXED: the same soft touch plays as a firm one (and CHANNELS says so, the knob's focus gone)
+wait 2500
 peakreset
 key w3 down 10
 wait 800
@@ -58,6 +59,7 @@ key w3 up
 wait 600
 expect vel_played 100
 expect peak_db_min -16
+shot keytouch.png
 turn K4 -10
 wait 300
 expect key_vel 50

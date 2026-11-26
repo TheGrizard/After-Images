@@ -738,11 +738,13 @@ static void select_layer(int l)
 /* a key's velocity: as touched (100 without a reading), drawn by KEY VEL towards one fixed velocity: FULL the touch
  * as played, FIXED every note at 100, between them the touch's range narrowed around 100 */
 #define KEY_FIXED 100
-static int key_vel_last;                          /* (the last key's: for the tests) */
+static int key_vel_last, key_touch_last;           /* (the last key's, as played and as touched: CHANNELS shows them) */
+static uint32_t key_touch_at;
 static int key_vel(uint32_t kk)
 {
     int v = touch_vel(kk);
     if (!v) v = KEY_FIXED;
+    key_touch_last = v; key_touch_at = plat_ms() | 1u;
     v += ((KEY_FIXED - v) * set.key_vel + (KEY_FIXED >= v ? 50 : -50)) / 100;
     key_vel_last = v < 1 ? 1 : v > 127 ? 127 : v;
     return key_vel_last;
@@ -1636,6 +1638,15 @@ static void draw_levels(int y0)
     }
 }
 
+/* CHANNELS, a few seconds after a key: how hard it was touched, and the velocity it played at (KEY VEL's doing) */
+static const char *touch_hint(void)
+{
+    static char s[40]; char n[8];
+    s[0] = 0; text_cat(s, "TOUCHED "); int_text(key_touch_last, n); text_cat(s, n);
+    text_cat(s, ", PLAYED "); int_text(key_vel_last, n); text_cat(s, n);
+    return s;
+}
+
 static void draw_panel_rows(int y0)
 {
     int pg = ui.page, lay = page_has_layer(pg);
@@ -1665,7 +1676,8 @@ static void draw_panel_rows(int y0)
             "CLEAN: WITHOUT FX, TO RECORD DRY", "WHAT REC MAKES, AND WHAT YOU SEE", "WHERE THE MUSIC GOES" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED"
-                : pg == PG_USB && !(set.usb_full >> 1 & 1) ? "MIX: THE FULL MIX, WITH FX" : HINT[pg], dim(C_SUB, 0.8f));   /* (USB
+                : pg == PG_USB && !(set.usb_full >> 1 & 1) ? "MIX: THE FULL MIX, WITH FX"
+                : pg == PG_CHAN && key_touch_at && plat_ms() - key_touch_at < 8000u ? touch_hint() : HINT[pg], dim(C_SUB, 0.8f));   /* (USB
                                                                      * AUDIO's: what OUTPUT sends, MIX or CLEAN) */
     }
     /* four columns: label, value, bar */

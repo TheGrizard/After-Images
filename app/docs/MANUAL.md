@@ -357,7 +357,8 @@ a black key is as loud as a single note. To even out your touch, turn up **KEY V
 - **PLAY CH** sets which incoming channel plays the chosen layer. ANY means every channel that isn't a layer's.
 - **KEY VEL** sets how much your touch counts. At **FULL** (the default) the keys play as hard as you play them. Turning
   it up narrows the range towards one firm velocity, so soft and hard notes come closer together, until at **FIXED**
-  every note plays the same. It only changes the FM-1's own keys, not incoming MIDI.
+  every note plays the same. It only changes the FM-1's own keys, not incoming MIDI. For a few seconds after you play a key,
+  the page shows how hard it was touched and the velocity it played at (out of 127).
 
 Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS jack, and goes out over USB.
 

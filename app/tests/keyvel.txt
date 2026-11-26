@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MPL-2.0
 # the keys' level: the same playing or stopped (once 5x louder playing), a black key's chord as loud as one key, and
-# KEY VEL (CHANNELS, KNOB 4: 10..100 %, from 100) scaling the touch; kept
+# KEY VEL (CHANNELS, KNOB 4): FULL (the touch as played, the default) .. FIXED (every note at one velocity); kept
 wait 3000
-expect key_vel 100
+expect key_vel 0
 tap HOME
 spin K1 -60
 spin K2 -60
@@ -33,28 +33,44 @@ wait 800
 key b2 up
 wait 600
 expect peak_db_max -6
+# FULL: a soft touch plays soft
+peakreset
+key w3 down 10
+wait 800
+key w3 up
+wait 600
+expect vel_played <40
+expect peak_db_max -14
 tap ARP
 wait 200
 tap ARP
 wait 200
 expect page 12
-shot keyvel.png
-turn K4 -10
+turn K4 20
 wait 300
-expect key_vel 50
+expect key_vel 100
+shot keyvel.png
+# FIXED: the same soft touch plays as a firm one
 peakreset
-key w3 down 100
+key w3 down 10
 wait 800
 key w3 up
 wait 600
-expect peak_db_max -13
-turn K4 -30
+expect vel_played 100
+expect peak_db_min -16
+turn K4 -10
 wait 300
-expect key_vel 10
-turn K4 30
+expect key_vel 50
+key w3 down 10
 wait 300
-expect key_vel 100
-turn K4 -6
+key w3 up
+wait 300
+expect vel_played >54
+expect vel_played <56
+turn K4 -20
+wait 300
+expect key_vel 0
+turn K4 14
 wait 300
 expect key_vel 70
 tap HOME

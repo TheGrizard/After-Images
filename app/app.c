@@ -52,7 +52,7 @@ typedef struct {
     /* v2.11 (pegs_set 9) */
     uint8_t usb_lvl;                     /* USB AUDIO's GAIN, with LEVEL FIXED: 0..100 (100: the old FULL) */
     /* v3.2 (pegs_set 10) */
-    uint8_t key_vel;                     /* KEY VEL: the built-in keys' velocity scaled, 10..100 % */
+    uint8_t key_vel;                     /* KEY VEL: the built-in keys' touch, 0 (FULL: as played) .. 100 (FIXED) */
 } settings_t;
 #define SET_SIZE_V28 __builtin_offsetof(settings_t, pers)   /* (v2.0-2.8's settings: everything before it) */
 static settings_t set;
@@ -77,7 +77,7 @@ static void settings_v2(void)             /* what v0.2 added, as it starts */
     set.in_ch = 0; set.layers_in = 1; set.clock_in = 0; set.cc_in = 1;
     set.usb_full = 0; set.usb_play = 100; set.visual = 0;
     set.palette = 0; set.ink_gaps = 50; set.ink_mix = 50; set.mosh_size = 50;
-    set.breed = 100; set.fade = 100; set.pegs_set = 10; set.peg_n = PEG_N_DEF; set.peg_size = 100; set.pers = PERS_ANALYST; set.usb_lvl = 80; set.key_vel = 100;   /* MATRIX: 8 big balls, breeding, lingering */
+    set.breed = 100; set.fade = 100; set.pegs_set = 11; set.peg_n = PEG_N_DEF; set.peg_size = 100; set.pers = PERS_ANALYST; set.usb_lvl = 80; set.key_vel = 0;   /* MATRIX: 8 big balls, breeding, lingering */
 }
 
 static void settings_defaults(void)
@@ -96,7 +96,7 @@ static int settings_ok(void)
     if (set.in_ch > 16 || set.layers_in > 2 || set.clock_in > 1 || set.cc_in > 1 || set.usb_full > 3 || set.usb_play > 100
         || set.palette >= NPAL || set.breed > 100 || set.fade > 100 || set.peg_n >= NPEG_NS || set.peg_size > 100
         || (set.pegs_set >= 3 && (set.visual > 2 || set.ink_gaps > 100 || set.ink_mix > 100 || set.mosh_size > 100))
-        || set.pers >= NUM_PERS || set.usb_lvl > 100 || set.key_vel < 10 || set.key_vel > 100) return 0;
+        || set.pers >= NUM_PERS || set.usb_lvl > 100 || set.key_vel > 100) return 0;
     if (!piece_ok(&set.cur)) return 0;
     for (int i = 0; i < set.nsaved; i++) if (!piece_ok(&set.saved[i])) return 0;
     return 1;
@@ -127,20 +127,21 @@ static void settings_load(void)
     if (magic == SET_MAGIC && n == (int)SET_SIZE_V28) { set.pers = PERS_ANALYST; n = (int)sizeof set; }   /* (v2.0-2.8's: the
                                                                      * same, but for the personality after: ANALYST, as before) */
     int was = set.pegs_set;                      /* (the store's version of these) */
-    if (was < 3 || was > 10) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
-    if (was < 4 || was > 10) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
-    if (was < 5 || was > 10) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
+    if (was < 3 || was > 11) { set.visual = 0; set.ink_gaps = 50; set.ink_mix = 50; }   /* (before RORSCHACH) */
+    if (was < 4 || was > 11) { set.peg_n = PEG_N_DEF; set.peg_size = 100; set.breed = 100; set.fade = 100; }   /* (before v0.21: MATRIX's defaults) */
+    if (was < 5 || was > 11) {                    /* (before MOSH: its bytes were the old CLOCK switches') */
         if (set.clock_in || set.mosh_mould) set.sync = set.clock_in ? SYNC_IN : SYNC_OUT;   /* (v0.2-0.12's two: one setting, IN first) */
         set.clock_in = 0; set.mosh_mould = 50; set.mosh_size = 50; set.pegs_set = 5;
     }
-    if (was < 7 || was > 10) {                    /* (v0.31-0.33's OUTPUT, stems and the like: MIX) */
+    if (was < 7 || was > 11) {                    /* (v0.31-0.33's OUTPUT, stems and the like: MIX) */
         set.usb_full &= 1;
         set.pegs_set = 7;
     }
-    if (was < 8 || was > 10) { set.pers = PERS_ANALYST; set.pegs_set = 8; }   /* (before v2.9: the roll as it was) */
-    if (was < 9 || was > 10) { set.usb_lvl = 80; set.pegs_set = 9; }   /* (before v2.11: FULL was 100; FIXED starts at 80,
+    if (was < 8 || was > 11) { set.pers = PERS_ANALYST; set.pegs_set = 8; }   /* (before v2.9: the roll as it was) */
+    if (was < 9 || was > 11) { set.usb_lvl = 80; set.pegs_set = 9; }   /* (before v2.11: FULL was 100; FIXED starts at 80,
                                                                      * clear of the top) */
-    if (was < 10 || was > 10) { set.key_vel = 100; set.pegs_set = 10; }  /* (before v3.2: the keys as touched, unscaled) */
+    if (was < 11 || was > 11) { set.key_vel = 0; set.pegs_set = 11; }   /* (before v3.3: KEY VEL a scale, 10..100 %; now
+                                                                     * from FULL, the keys as touched) */
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -480,7 +481,7 @@ static void knob_text(int pg, int k, char *s)
     case K_INCH: if (v) int_text(v, s); else text_cat(s, "ANY"); break;
     case K_REC: text_cat(s, v ? "FIXED" : "MASTER"); break;   /* (MASTER: as the FM-1's volume knob has it; FIXED: GAIN) */
     case K_ULVL: int_text(v, s); break;
-    case K_KVEL: int_text(v, s); text_cat(s, "%"); break;
+    case K_KVEL: if (!v) text_cat(s, "FULL"); else if (v >= 100) text_cat(s, "FIXED"); else int_text(v, s); break;
     case K_PLAYIN: if (v) int_text(v, s); else text_cat(s, "OFF"); break;
     case K_ROUTE: text_cat(s, v ? "CLEAN" : "MIX"); break;
     case K_RVB: if (v <= 50) int_text(v * 2, s); else { text_cat(s, "SHIM "); int_text((v - 50) * 2, s + strlen_(s)); } break;
@@ -517,7 +518,7 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_INCH: return (float)v / 16.0f;
     case K_REC: return (float)v;
     case K_ULVL: return (float)v * 0.01f;
-    case K_KVEL: return (float)(v - 10) / 90.0f;
+    case K_KVEL: return (float)v * 0.01f;
     case K_PEGN: return (float)v / (NPEG_NS - 1);
     case K_VIS: return (float)v * 0.5f;
     case K_PERS: return (float)v / (float)(NUM_PERS - 1);
@@ -734,12 +735,17 @@ static void select_layer(int l)
     text_cat(ui.pop_3, s);
 }
 
-/* a key's velocity: as touched (100 without a reading), scaled by KEY VEL */
+/* a key's velocity: as touched (100 without a reading), drawn by KEY VEL towards one fixed velocity: FULL the touch
+ * as played, FIXED every note at 100, between them the touch's range narrowed around 100 */
+#define KEY_FIXED 100
+static int key_vel_last;                          /* (the last key's: for the tests) */
 static int key_vel(uint32_t kk)
 {
     int v = touch_vel(kk);
-    v = ((v ? v : 100) * set.key_vel + 50) / 100;
-    return v < 1 ? 1 : v > 127 ? 127 : v;
+    if (!v) v = KEY_FIXED;
+    v += ((KEY_FIXED - v) * set.key_vel + (KEY_FIXED >= v ? 50 : -50)) / 100;
+    key_vel_last = v < 1 ? 1 : v > 127 ? 127 : v;
+    return key_vel_last;
 }
 
 static void knob_turn(int k, int d)
@@ -751,7 +757,7 @@ static void knob_turn(int k, int d)
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
     case K_ULVL: hi = 100; step = 5; break;
-    case K_KVEL: lo = 10; hi = 100; step = 5; break;
+    case K_KVEL: hi = 100; step = 5; break;
     case K_ROUTE: hi = 1; step = 1; break;
     case K_PEGN: hi = NPEG_NS - 1; step = 1; break;
     case K_VIS: hi = 2; step = 1; break;
@@ -1890,6 +1896,7 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "pers")) *got = set.pers;
     else if (!strcmp(what, "usb_lvl")) *got = set.usb_lvl;
     else if (!strcmp(what, "key_vel")) *got = set.key_vel;
+    else if (!strcmp(what, "vel_played")) *got = key_vel_last;
     else if (!strcmp(what, "engine")) *got = set.cur.l[ui.sel].engine;
     else if (!strcmp(what, "attack")) *got = set.cur.l[ui.sel].attack;
     else if (!strcmp(what, "tone")) *got = set.cur.l[ui.sel].tone;

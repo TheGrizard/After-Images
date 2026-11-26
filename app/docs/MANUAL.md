@@ -321,7 +321,7 @@ The keys play the chosen layer's sound, always in the scale, so there are no wro
 Your notes ride along with the piece, through its effects.
 
 The keys sense how hard you play them, and play at the same level whether the piece is playing or stopped. A chord on
-a black key is as loud as a single note. To play them softer, turn down **KEY VEL** (ARP twice, KNOB 4).
+a black key is as loud as a single note. To even out your touch, turn up **KEY VEL** (ARP twice, KNOB 4).
 
 ## 15. Saving your pieces
 
@@ -355,8 +355,9 @@ a black key is as loud as a single note. To play them softer, turn down **KEY VE
 - **LAYERS** sets the four layers' channels: 1–4 by default, or any four in a row.
 - **KEYS** sets the channel the notes you play go out on (5).
 - **PLAY CH** sets which incoming channel plays the chosen layer. ANY means every channel that isn't a layer's.
-- **KEY VEL** scales how hard the keys play, from 10% to 100% (the default: as you touch them). Lower it if the keys
-  sit too loud over the piece. It only changes the FM-1's own keys, not incoming MIDI.
+- **KEY VEL** sets how much your touch counts. At **FULL** (the default) the keys play as hard as you play them. Turning
+  it up narrows the range towards one firm velocity, so soft and hard notes come closer together, until at **FIXED**
+  every note plays the same. It only changes the FM-1's own keys, not incoming MIDI.
 
 Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS jack, and goes out over USB.
 

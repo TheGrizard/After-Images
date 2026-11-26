@@ -156,7 +156,7 @@ and the four layers always keep four clearly different hues.
   layer), CHOSEN (all the chosen layer) or OFF; all put into the scale. **CC IN:** 20-23 move HOME's macros, 24-27 the
   effects, 28-31 MOTION.
 - **CHANNELS** (ARP again): the layers' four, the keys', PLAY CH, the channel that plays the chosen layer, and KEY VEL,
-  how hard the FM-1's own keys play (10–100%).
+  how much your touch counts on the FM-1's own keys, from FULL to FIXED.
 - **Following a clock**, it locks to the leader's beats and bars, not only its tempo, and stays there through a new
   piece or a change of tempo. With an **Ableton Move**: a USB cable from Move's USB-A port to the FM-1, Move's MIDI
   Sync set to Out, and CLOCK at IN.

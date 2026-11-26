@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: MPL-2.0
+# the keys' level: the same playing or stopped (once 5x louder playing), a black key's chord as loud as one key, and
+# KEY VEL (CHANNELS, KNOB 4: 10..100 %, from 100) scaling the touch; kept
+wait 3000
+expect key_vel 100
+tap HOME
+spin K1 -60
+spin K2 -60
+spin K3 -60
+spin K4 -60
+wait 3000
+expect playing 1
+peakreset
+key w3 down 100
+wait 800
+key w3 up
+wait 600
+expect peak_db_max -6
+expect peak_db_min -14
+tap PLAY
+wait 3000
+expect playing 0
+peakreset
+key w3 down 100
+wait 800
+key w3 up
+wait 600
+expect peak_db_max -6
+expect peak_db_min -14
+peakreset
+key b2 down 100
+wait 800
+key b2 up
+wait 600
+expect peak_db_max -6
+tap ARP
+wait 200
+tap ARP
+wait 200
+expect page 12
+shot keyvel.png
+turn K4 -10
+wait 300
+expect key_vel 50
+peakreset
+key w3 down 100
+wait 800
+key w3 up
+wait 600
+expect peak_db_max -13
+turn K4 -30
+wait 300
+expect key_vel 10
+turn K4 30
+wait 300
+expect key_vel 100
+turn K4 -6
+wait 300
+expect key_vel 70
+tap HOME
+wait 25000
+reboot
+wait 3000
+expect key_vel 70

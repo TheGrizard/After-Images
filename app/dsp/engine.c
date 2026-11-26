@@ -403,6 +403,19 @@ static void cost_add(Engine *e, int k, uint32_t t0) { if (e->clock) e->cost[k] +
 
 static void svf_coef(Svf *d, const Svf *s) { d->a1 = s->a1; d->a2 = s->a2; d->a3 = s->a3; d->k = s->k; }   /* (its state its own) */
 
+/* the keys: one level, played or stopped, the engines' own levels evened out (as the mix has them, a few stood far
+ * out alone: a pluck's quick fall, BOWED and SYNC soft, BREATH and RUMBLE hot). The layers' own notes are left as
+ * they are */
+#ifndef KEY_GAIN
+#define KEY_GAIN 0.8f
+#endif
+static const float KEY_TRIM[NUM_ENGINES] = {
+    /* DRIFT SAW */ 1.0f, /* FM */ 1.0f, /* STRING */ 2.0f, /* DX */ 1.0f, /* BLEEP */ 1.0f, /* GLASS */ 1.0f,
+    /* BREATH */ 0.56f, /* VOICE */ 0.71f, /* FOLD */ 1.0f, /* SUB */ 1.0f, /* STRINGS */ 1.0f, /* E.PIANO */ 1.0f,
+    /* TRIANGLE */ 1.0f, /* SINE */ 1.0f, /* SQUARE */ 1.0f, /* CZ */ 1.0f, /* SYNC */ 2.0f, /* SHAPES */ 1.0f,
+    /* VHS SYNTH */ 1.0f, /* REESE */ 1.0f, /* ORGAN */ 1.0f, /* BOWL */ 1.0f, /* MALLET */ 1.0f, /* WAVES */ 1.0f,
+    /* CHOIR */ 1.0f, /* JUNO */ 1.0f, /* LADDER */ 1.0f, /* BRASS */ 1.0f, /* BOWED */ 1.8f, /* RUMBLE */ 0.63f };
+
 void engine_block_begin(Engine *e, int nsub)
 {
     uint32_t t0 = now(e);
@@ -423,6 +436,7 @@ void engine_block_begin(Engine *e, int nsub)
     }
     g_voice_floor = 0.001f + 0.014f * (1.0f - e->gov);   /* -60 dB; under load up to -37 */
     int back = 0; uint32_t now_on = 0;
+    float key_trim = KEY_TRIM[p->l[e->key_layer & 3].engine % NUM_ENGINES];
     for (int k = 0; k < e->nsub; k++) {
         control(e, k);
         for (int l = 0; l < NUM_LAYERS; l++) {
@@ -433,7 +447,7 @@ void engine_block_begin(Engine *e, int nsub)
             if (k == 0) back += g >= 1e-4f && !(e->sounding >> l & 1u);
             if (k == 0) now_on |= (uint32_t)(g >= 1e-4f) << l;
         }
-        e->gains[k][KEYS] = e->fade * 1.2f + 0.3f;
+        e->gains[k][KEYS] = KEY_GAIN * key_trim;   /* (the same playing or stopped: once 5x louder playing) */
     }
     /* layers coming back in (DRIFT, EVOLVE's sections): all their voices sounding again at once, the load jumping, so
      * room made before it lands: fewer new notes and the faintest tails let go, the load guard easing back as it settles */

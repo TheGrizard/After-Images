@@ -188,7 +188,9 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
     {   /* MOOD's shape: dark (left) longer, softer-edged notes; 12 o'clock as set; bright (right) shorter, crisper */
         float d = (u(p->mood) - 0.5f) * 2.0f * g_mood_env;
         if (d < 0.0f) { d = -d; dur *= 1.0f + 0.8f * d; snd.release *= 1.0f + 1.5f * d; snd.attack *= 1.0f + 2.0f * d; }
-        else { dur *= 1.0f - 0.6f * d; snd.release *= 1.0f - 0.7f * d; snd.attack *= 1.0f - 0.7f * d; }
+        else if (l == L_GROUND) { dur *= 1.0f - 0.15f * d; snd.release *= 1.0f - 0.2f * d; snd.attack *= 1.0f - 0.7f * d; }
+        else { dur *= 1.0f - 0.6f * d; snd.release *= 1.0f - 0.7f * d; snd.attack *= 1.0f - 0.7f * d; }   /* (GROUND above: crisp
+                                                         * starts, its length nearly kept: at full it carries the bass) */
         snd.attack = clampf(snd.attack, 0.002f, 5.0f); snd.release = clampf(snd.release, 0.04f, 12.0f);
     }
     float w = ROLES[l].width;
@@ -449,7 +451,8 @@ void engine_block_begin(Engine *e, int nsub)
         for (int l = 0; l < NUM_LAYERS; l++) {
             float lv = u(p->l[l].level), g = lv * lv * e->L[l].present * e->fade * 1.6f * e->L[l].im_g;   /* (DRIFT's fading) */
             if (l == L_BODY || l == L_DUST) g *= 1.0f - e->duck;
-            if (l == L_GROUND) g *= 1.0f + 0.4f * clamp01((0.5f - u(p->mood)) * 2.0f);   /* (MOOD dark: the bass up) */
+            if (l == L_GROUND) g *= 1.0f + 0.4f * clamp01((0.5f - u(p->mood)) * 2.0f)   /* (MOOD dark: the bass up; bright: a */
+                                    + 0.25f * clamp01((u(p->mood) - 0.5f) * 2.0f);      /*  little up too, it carrying it alone) */
             e->gains[k][l] = g;
             if (k == 0) back += g >= 1e-4f && !(e->sounding >> l & 1u);
             if (k == 0) now_on |= (uint32_t)(g >= 1e-4f) << l;
@@ -468,10 +471,10 @@ void engine_block_begin(Engine *e, int nsub)
         if (t > 0.5f) t = fm_minf(t, fm_maxf(u(p->l[l].tone), 0.5f));   /* (DRIFT's TONE wanders dark, never into the high-pass) */
         float lo = t < 0.5f ? (0.5f - t) * 2.0f : 0.0f, hi = t > 0.5f ? (t - 0.5f) * 2.0f : 0.0f;
         /* MOOD: a tilt, 12 o'clock as set. Darker, the upper layers a shade duller (and the bass up: the gains, the
-         * shelf); brighter, they open and lose their lows, so at full GROUND alone carries the bass */
+         * shelf); brighter, they open and thin out below (an octave), GROUND carrying the bass, a little up */
         float m = u(p->mood), dark = clamp01((0.5f - m) * 2.0f), bright = clamp01((m - 0.5f) * 2.0f);
         float lp = ROLES[l].lp * fm_exp2f(l == L_GROUND ? 0.0f : 0.5f * bright - 1.0f * dark) * fm_exp2f(-7.0f * lo);
-        float hp = ROLES[l].hp * fm_exp2f(6.5f * hi + (l == L_GROUND ? 0.0f : 2.0f * bright));   /* (DRIFT: far off by its level and reverb alone) */
+        float hp = ROLES[l].hp * fm_exp2f(6.5f * hi + (l == L_GROUND ? 0.0f : 1.0f * bright));   /* (DRIFT: far off by its level and reverb alone) */
         /* patched: the source layer's activity opens this one's filter, the random voltage moves it (LINK, DRIFT) */
         lp *= fm_exp2f(u(p->link) * 1.8f * (e->L[L->src].cv - 0.25f) + u(p->drift) * 0.9f * L->rnd);
         lp *= g_band_lp; lp = clampf(lp, 40.0f, 18000.0f); hp = clampf(hp, 15.0f, 12000.0f);

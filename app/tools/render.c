@@ -55,6 +55,8 @@ int main(int argc, char **argv)
     }
     if (getenv("GRAIN")) pc.grain = (uint8_t)atoi(getenv("GRAIN"));   /* GRAIN=0..100: the shared GRAIN */
     if (getenv("DIRT")) pc.dirt = (uint8_t)atoi(getenv("DIRT"));
+    if (getenv("MOOD")) pc.mood = (uint8_t)atoi(getenv("MOOD"));   /* MOOD=0..100 */
+    { extern float g_mood_env; if (getenv("MOODENV")) g_mood_env = (float)atof(getenv("MOODENV")); }
     if (getenv("WEAR")) pc.wear = (uint8_t)atoi(getenv("WEAR"));
     { extern float g_band_lp; if (getenv("BANDLP")) g_band_lp = (float)atof(getenv("BANDLP")); }   /* BANDLP=x: the bands' low-pass times x */
     if (getenv("ENT")) for (int l = 0; l < NUM_LAYERS; l++) pc.l[l].weird = (uint8_t)atoi(getenv("ENT"));   /* ENT=0..100: ENTROPY */

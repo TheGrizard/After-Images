@@ -56,7 +56,7 @@ Most FM-1 firmwares are instruments you play or program. After Images composes.
 | Control | What it does |
 |---|---|
 | K1 to K4 | at HOME the layers' levels (shown while you turn); elsewhere the page's four settings |
-| HOME held + K1 to K4 | the macros: **MOOD** (a tilt round 12 o'clock: left darker with more sub, right brighter with GROUND the only bass; triads to sevenths to ninths), **ACTIVITY**, **EVOLVE** (how much the form changes), **DRIFT** (the ambient mixer: 0 keeps everything as set) |
+| HOME held + K1 to K4 | the macros: **MOOD** (a tilt round 12 o'clock: left darker, longer and smoother with more sub, right brighter, shorter and crisper with GROUND the only bass; triads to sevenths to ninths), **ACTIVITY**, **EVOLVE** (how much the form changes), **DRIFT** (the ambient mixer: 0 keeps everything as set) |
 | REC | a new piece, in a key that follows on from the last |
 | REC held | a new piece in the same key and scale |
 | SEL held + REC | the chosen layer anew: a new sequencer and sound |

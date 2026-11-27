@@ -119,7 +119,9 @@ Hold **HOME** and turn the knobs, or press **GLO** for the same four as a page o
 
 - **K1, MOOD.** Darker to the left, brighter to the right, with 12 o'clock as REC dealt it. Darker brings in more sub
   bass and plainer chords (triads). Brighter opens the upper layers, colours the chords (sevenths, then ninths), and
-  leaves GROUND carrying the bass alone.
+  leaves GROUND carrying the bass alone. MOOD shapes the notes too: to the left they're longer, with softer starts and
+  longer tails, smooth and blurred; to the right shorter, with sharper starts and quicker tails, staccato and crisp.
+  At 12 o'clock they're as the piece has them. (It shapes the piece's notes, not the ones you play on the keys.)
 - **K2, ACTIVITY.** How busy it is: from a few notes to many.
 - **K3, EVOLVE.** How much the form changes: whole sections with layers dropping out and coming back, and new chords.
   At 0 it stays put.

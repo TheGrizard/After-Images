@@ -49,7 +49,8 @@ static void midi_due(Engine *e)
 
 /* each bus's ghost: a note whose voice a new one took, fading out over ~80 ms, not cut off (in the RAM beside the
  * engine's, not the pool's: the pool keeps its headroom) */
-float g_band_lp = 1.0f;                          /* (the bands' low-pass scaled: the renderer's A/B; 1 on the FM-1) */
+float g_band_lp = 1.0f;
+float g_mood_env = 1.0f;                 /* (the renderer: MOODENV=0 for MOOD without its shape, as before v3.6) */                          /* (the bands' low-pass scaled: the renderer's A/B; 1 on the FM-1) */
 static Shifter g_shim;                           /* the shimmer's pitch shifter (8 KB: beside the engine, not in the pool) */
 
 /* the mix's buffers, a block's (engine_mix_*: the stages two cores share) */
@@ -184,6 +185,12 @@ static void play(Engine *e, int l, int sub, const SeqNote *sn)
         snd.release *= 0.7f + 0.6f * sn->mod;
     }
     float beat_s = 60.0f / e->bpm, dur = sn->dur * beat_s, vel = sn->vel * (0.75f + 0.25f * u(lp->weight));
+    {   /* MOOD's shape: dark (left) longer, softer-edged notes; 12 o'clock as set; bright (right) shorter, crisper */
+        float d = (u(p->mood) - 0.5f) * 2.0f * g_mood_env;
+        if (d < 0.0f) { d = -d; dur *= 1.0f + 0.8f * d; snd.release *= 1.0f + 1.5f * d; snd.attack *= 1.0f + 2.0f * d; }
+        else { dur *= 1.0f - 0.6f * d; snd.release *= 1.0f - 0.7f * d; snd.attack *= 1.0f - 0.7f * d; }
+        snd.attack = clampf(snd.attack, 0.002f, 5.0f); snd.release = clampf(snd.release, 0.04f, 12.0f);
+    }
     float w = ROLES[l].width;
     for (int i = 0; i < nn; i++) {
         int note = notes[i];

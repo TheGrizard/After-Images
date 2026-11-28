@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MPL-2.0
+# CLOCK THRU (MIDI, KNOB 1, past OUT): follows the clock coming in (TRS here) and passes it on to USB and Bluetooth,
+# never back where it came from; back to INT, nothing passed on
+wait 2000
+tap ARP
+wait 200
+expect page 11
+turn K1 3
+wait 300
+expect sync 1
+expect thru 1
+shot thru.png
+tap ARP
+tap ARP
+tap ARP
+wait 200
+expect page 16
+turn K1 1
+wait 1500
+ble connect
+wait 300
+midi TRS FA 00 00
+midi TRS F8 00 00
+wait 50
+expect_out USB F8
+expect_out BLE F8
+out
+midi USB F8 00 00
+wait 50
+expect_out BLE F8
+expect_no_out USB F8
+tap HOME
+wait 200
+tap ARP
+wait 200
+turn K1 -3
+wait 300
+expect sync 0
+expect thru 0
+expect bt_on 1

@@ -151,7 +151,8 @@ and the four layers always keep four clearly different hues.
 
 ## MIDI and sync
 
-- **CLOCK** (ARP): INT (its own tempo), IN (following) or OUT (sending clock, start and stop).
+- **CLOCK** (ARP): INT (its own tempo), IN (following), OUT (sending clock, start and stop) or THRU (following, and
+  passing the clock on to USB and Bluetooth: TRS in, Bluetooth out, say).
 - **NOTES OUT** (USB): each layer on its own channel (1 to 4 by default), the keys on another (5), with their chords.
 - **NOTES IN** (USB, or the FM-1's TRS jack): LAYERS (notes on a layer's channel play that layer, others the chosen
   layer), CHOSEN (all the chosen layer) or OFF; all put into the scale. **CC IN:** 20-23 move HOME's macros, 24-27 the

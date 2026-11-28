@@ -73,8 +73,12 @@ static uint32_t autosave_at;
 static volatile uint32_t key_events;      /* (notes played, keys or MIDI in: the autosave waits till they have been still a while) */
 #define AUTOSAVE_MS 8000u
 enum { SYNC_INT, SYNC_IN, SYNC_OUT, NSYNC };   /* CLOCK: our own tempo; following MIDI clock; sending it */
-static const char *const SYNC_NAME[NSYNC] = { "INT", "IN", "OUT" };
-#define CLK_IN (set.sync == SYNC_IN)
+static const char *const SYNC_NAME[NSYNC + 1] = { "INT", "IN", "OUT", "THRU" };
+#define CLK_IN (set.sync == SYNC_IN)      /* (THRU too: following, and passing the clock on) */
+#define CLK_THRU (set.sync == SYNC_IN && (set.bt_on >> 2 & 1u))   /* CLOCK THRU: IN, and the clock passed on to USB and
+                                                  * Bluetooth (bit 2 of bt_on's byte: the settings' size and version kept,
+                                                  * so back to v3.10 it reads as IN, Bluetooth off) */
+#define BT_MODE (set.bt_on & 3u)            /* BT MIDI: 0 OFF, 1 FIND ME, 2 HOST */
 #define CLK_OUT (set.sync == SYNC_OUT)
 
 static void settings_v2(void)             /* what v0.2 added, as it starts */
@@ -147,7 +151,7 @@ static void settings_load(void)
                                                                      * clear of the top) */
     if (was < 11 || was > 11) { set.key_vel = 0; set.pegs_set = 11; }   /* (before v3.3: KEY VEL a scale, 10..100 %; now
                                                                      * from FULL, the keys as touched) */
-    if (set.bt_on > 2u) set.bt_on = 0;
+    if (set.bt_on > 7u || (set.bt_on & 3u) > 2u) set.bt_on = 0;
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -215,6 +219,9 @@ static void midi_in(void)
     const Scale *sc = &SCALES[set.cur.scale % NUM_SCALES];
     while (plat_midi_in(&pkt, &port)) {
         uint32_t st = (pkt >> 8) & 0xFFu, d1 = (pkt >> 16) & 0x7Fu, d2 = pkt >> 24 & 0x7Fu, ch = st & 15u, ty = st & 0xF0u;
+        if (CLK_THRU && (st == 0xF8u || st == 0xFAu || st == 0xFBu || st == 0xFCu || st == 0xF2u))
+            plat_midi_send(pkt, (TO_USB | TO_BLE) & ~plat_midi_in_from());   /* CLOCK THRU: the clock, start, stop,
+                                                  * continue and song position passed on, never back where they came from */
         if (st == 0xF8u) {                               /* clock: 24 a beat, its tempo timed over the last 8 beats */
             /* (the clocks are read a screen frame at a time, so one beat's timing is off by up to a frame: over 8 the
              * error is an eighth of that. A new tempo, more than 4 % off for two beats running, starts the count again) */
@@ -493,7 +500,8 @@ static uint8_t *knob_ptr(int pg, int k)
 
 static int knob_get(const Knob *kn, const uint8_t *p)   /* (TO COMP and OUTPUT share a byte: bit 0, bits 1-2) */
 {
-    return kn->kind == K_REC ? (*p & 1) : kn->kind == K_ROUTE ? (*p >> 1) : *p;
+    return kn->kind == K_REC ? (*p & 1) : kn->kind == K_ROUTE ? (*p >> 1) : kn->kind == K_BT ? (*p & 3)
+         : kn->kind == K_SYNC ? (CLK_THRU ? NSYNC : *p) : *p;
 }
 
 static void knob_text(int pg, int k, char *s)
@@ -517,7 +525,7 @@ static void knob_text(int pg, int k, char *s)
     case K_VIS: text_cat(s, v == 2 ? "MOSH" : v ? "RORSCHACH" : "MATRIX"); break;
     case K_PERS: text_cat(s, PERS_NAME[v < NUM_PERS ? v : 0]); break;
     case K_SHAPE: text_cat(s, v ? "LINES" : "BLOCKS"); break;
-    case K_SYNC: text_cat(s, SYNC_NAME[v % NSYNC]); break;
+    case K_SYNC: text_cat(s, SYNC_NAME[v % (NSYNC + 1)]); break;
     case K_ENGINE: text_cat(s, ENGINE_NAME[v % NUM_ENGINES]); break;
     case K_SEQ: text_cat(s, SEQ_NAME[v % NUM_SEQS]); break;
     case K_RATE: text_cat(s, RATE_NAME[v % NUM_RATES]); break;
@@ -529,7 +537,7 @@ static void knob_text(int pg, int k, char *s)
     case K_ONOFF: text_cat(s, v ? "ON" : "OFF"); break;
     case K_BT: text_cat(s, v == 2 ? "HOST" : v == 1 ? "FIND ME" : "OFF"); break;
     case K_BTDEV: bt_dev_text(s); break;
-    case K_BTLINK: text_cat(s, set.bt_on != 2 ? "-" : btdev_ready() ? "ON" : btdev_busy() ? "WAIT" : "OFF"); break;
+    case K_BTLINK: text_cat(s, BT_MODE != 2 ? "-" : btdev_ready() ? "ON" : btdev_busy() ? "WAIT" : "OFF"); break;
     case K_LCH: { int_text(v + 1, s); text_cat(s, "-"); char n[4]; int_text(v + 4, n); text_cat(s, n); break; }   /* the four layers' */
     case K_CH: int_text(v + 1, s); break;
     case K_NIN: text_cat(s, v == 1 ? "LAYERS" : v == 2 ? "OFF" : "CHOSEN"); break;
@@ -550,7 +558,7 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_VIS: return (float)v * 0.5f;
     case K_PERS: return (float)v / (float)(NUM_PERS - 1);
     case K_SHAPE: return (float)v;
-    case K_SYNC: return (float)v / (NSYNC - 1);
+    case K_SYNC: return (float)v / NSYNC;
     case K_ENGINE: return (float)v / (NUM_ENGINES - 1);
     case K_SEQ: return (float)v / (NUM_SEQS - 1);
     case K_RATE: return (float)v / (NUM_RATES - 1);
@@ -775,7 +783,7 @@ static void select_layer(int l)
  * the name come from this FM-1's own ID, the same every start */
 int app_ble_load(struct plat_ble_rec *r) { (void)r; return 0; }
 int app_ble_save(const struct plat_ble_rec *r) { (void)r; return 1; }
-int app_bt_at_boot(void) { return set.bt_on != 0; }
+int app_bt_at_boot(void) { return BT_MODE != 0; }
 
 static int key_vel_last, key_touch_last;           /* (the last key's, as played and as touched: CHANNELS shows them) */
 static uint32_t key_touch_at;
@@ -798,8 +806,8 @@ static void knob_turn(int k, int d)
     if (kn->kind == K_NONE) return;
     if (kn->kind == K_BTDEV || kn->kind == K_BTLINK) {   /* (HOST: DEVICE the one found to connect to; CONNECT it, or
                                                   * let it go. Not settings) */
-        if (kn->kind == K_BTDEV && set.bt_on == 2 && !btdev_busy()) btdev_choose(btdev_pick() + d);
-        if (kn->kind == K_BTLINK && set.bt_on == 2 && (d > 0) != (btdev_busy() != 0)
+        if (kn->kind == K_BTDEV && BT_MODE == 2 && !btdev_busy()) btdev_choose(btdev_pick() + d);
+        if (kn->kind == K_BTLINK && BT_MODE == 2 && (d > 0) != (btdev_busy() != 0)
             && btdev_save() == BTDEV_NO_DEVICE) app_say("BT MIDI", "NO DEVICE FOUND");
         ui.last_knob = k; ui.knob_at = plat_ms(); ui.pop_until = 0;
         if (ann_on()) { char s[24]; knob_text(ui.page, k, s); say_text(kn->name, s); }
@@ -816,7 +824,7 @@ static void knob_turn(int k, int d)
     case K_VIS: hi = 2; step = 1; break;
     case K_PERS: hi = NUM_PERS - 1; step = 1; break;
     case K_SHAPE: hi = 1; step = 1; break;
-    case K_SYNC: hi = NSYNC - 1; step = 1; break;
+    case K_SYNC: hi = NSYNC; step = 1; break;   /* (INT, IN, OUT, THRU) */
     case K_ENGINE: hi = NUM_ENGINES - 1; step = 1; wrap = 1; break;
     case K_SEQ: hi = NUM_SEQS - 1; step = 1; wrap = 1; break;
     case K_RATE: hi = NUM_RATES - 1; step = 1; break;
@@ -837,6 +845,11 @@ static void knob_turn(int k, int d)
     if (kn->kind == K_OCT) *(int8_t *)p = (int8_t)v;
     else if (kn->kind == K_REC) *p = (uint8_t)((*p & ~1u) | (unsigned)v);
     else if (kn->kind == K_ROUTE) *p = (uint8_t)((*p & 1u) | (unsigned)v << 1);
+    else if (kn->kind == K_BT) *p = (uint8_t)((*p & ~3u) | (unsigned)v);
+    else if (kn->kind == K_SYNC) {           /* THRU: IN, with bt_on's bit 2 */
+        set.sync = (uint8_t)(v == NSYNC ? SYNC_IN : v);
+        set.bt_on = (uint8_t)((set.bt_on & 3u) | (v == NSYNC ? 4u : 0u));
+    }
     else *p = (uint8_t)v;
     if (kn->kind == K_PERS) pers_due = 1;
     if (kn->where == 2) { autosave_at = plat_ms() + AUTOSAVE_MS; settings_apply(); }
@@ -851,10 +864,10 @@ static void settings_apply(void)
 {
     static int bt_was = -1;
     plat_usb_audio_full(set.usb_full & 1);
-    if (set.bt_on != bt_was) {          /* (at the start: Bluetooth starts by itself when on, APP_BLE_AT_BOOT) */
+    if ((int)BT_MODE != bt_was) {       /* (at the start: Bluetooth starts by itself when on, APP_BLE_AT_BOOT) */
         if (bt_was == 2 && btdev_busy()) btdev_save();                    /* (out of HOST: the device let go) */
-        if (bt_was >= 0 && (set.bt_on != 0) != (bt_was != 0)) plat_ble_enable(set.bt_on != 0);
-        bt_was = set.bt_on;
+        if (bt_was >= 0 && (BT_MODE != 0) != (bt_was != 0)) plat_ble_enable(BT_MODE != 0);
+        bt_was = (int)BT_MODE;
     }
     palette_apply();
 }
@@ -1699,7 +1712,7 @@ static void draw_levels(int y0)
 static void bt_dev_text(char *s)
 {
     char n[21];
-    if (set.bt_on != 2) { text_cat(s, "-"); return; }
+    if (BT_MODE != 2) { text_cat(s, "-"); return; }
     if (btdev_busy()) { text_cat(s, btdev_name()); return; }
     if (btdev_found(btdev_pick(), n, 0)) { text_cat(s, n); return; }
     text_cat(s, plat_ble_state() == BLE_READY ? "SEARCHING" : "-");
@@ -1715,10 +1728,10 @@ static const char *bt_hint(void)
     uint32_t h = 0, i = 1;
     while (u && i < 16u && u[i] == u[0]) i++;
     s[0] = 0;
-    if (!set.bt_on) { text_cat(s, "OFF: THE RADIO QUIET"); return s; }
+    if (!BT_MODE) { text_cat(s, "OFF: THE RADIO QUIET"); return s; }
     int st = plat_ble_state();
     if (st != BLE_READY) { text_cat(s, st == BLE_FAILED ? "BLUETOOTH FAILED TO START" : "STARTING"); return s; }
-    if (set.bt_on == 2) {                        /* HOST: btdev's line, "LOOKING FOR MIDI DEVICES", "CONNECTED: ..." */
+    if (BT_MODE == 2) {                        /* HOST: btdev's line, "LOOKING FOR MIDI DEVICES", "CONNECTED: ..." */
         btdev_title(s);
         for (char *c = s; *c; c++) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 32);
         return s;
@@ -1939,7 +1952,7 @@ void app_frame(void)
     }
     input();
     {   int ev;                                  /* Bluetooth MIDI devices: looked for while the page is up in HOST */
-        btdev_page(ui.page == PG_BT && set.bt_on == 2);
+        btdev_page(ui.page == PG_BT && BT_MODE == 2);
         while ((ev = btdev_event()) != BTDEV_NONE)
             if (ev != BTDEV_COMPUTER && ev != BTDEV_COMPUTER_GONE) app_say("BT MIDI", btdev_word(ev));
     }
@@ -2012,7 +2025,8 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "pers")) *got = set.pers;
     else if (!strcmp(what, "usb_lvl")) *got = set.usb_lvl;
     else if (!strcmp(what, "key_vel")) *got = set.key_vel;
-    else if (!strcmp(what, "bt_on")) *got = set.bt_on;
+    else if (!strcmp(what, "bt_on")) *got = (int)BT_MODE;
+    else if (!strcmp(what, "thru")) *got = CLK_THRU;
     else if (!strcmp(what, "bt_state")) *got = plat_ble_state();
     else if (!strcmp(what, "bt_ready")) *got = btdev_ready();
     else if (!strcmp(what, "bt_found")) *got = btdev_count();

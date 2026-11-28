@@ -352,8 +352,10 @@ range: a light tap plays softly, a firm one loud. A chord on a black key is as l
 
 **ARP: MIDI**
 
-- **CLOCK** sets where the tempo comes from: **INT** (its own), **IN** (following another device's clock) or **OUT**
-  (leading: sending its clock, start and stop).
+- **CLOCK** sets where the tempo comes from: **INT** (its own), **IN** (following another device's clock), **OUT**
+  (leading: sending its clock, start and stop) or **THRU** (following, as IN, and passing the clock, start and stop on
+  to USB and Bluetooth, never back where they came from). THRU links a chain: a drum machine into the TRS jack, After
+  Images following it, and Expectation Reality following both over Bluetooth.
 - **NOTES OUT** sends every layer's notes, each on its own channel, and the notes you play, so you can double the
   piece on other synths. It doesn't affect the clock.
 - **NOTES IN** decides what incoming notes play:

@@ -90,6 +90,7 @@ Press a page's button again for its next page; dots by the page's name show how 
 | ARP | MIDI | CLOCK · NOTES OUT · NOTES IN · CC IN |
 | ARP again | CHANNELS | LAYERS · KEYS · PLAY CH · KEY VEL |
 | ARP a third time | USB AUDIO | OUTPUT · · CONTROL · GAIN (FIXED's) |
+| ARP a fourth time | BLUETOOTH | BLUETOOTH (ON · OFF) |
 
 ### What the settings do
 
@@ -162,6 +163,9 @@ and the four layers always keep four clearly different hues.
   Sync set to Out, and CLOCK at IN.
 - **USB audio** (ARP a third time): a stereo pair to the computer. OUTPUT: MIX, or CLEAN (without FX's effects, the
   speaker too). CONTROL: the volume knob (MASTER), or FIXED at GAIN's 0-100 (80 to start; 100 full scale).
+- **Bluetooth MIDI** (ARP a fourth time): off until turned on. On, it shows its name (FM-1 and four characters) and
+  whether it's connected; connected, clock, start/stop and notes go out to it and come in from it, as over USB. No
+  pairing; iPad (AUM), Mac and phones connect to it.
 
 ## Saving
 

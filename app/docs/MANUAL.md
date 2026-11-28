@@ -50,7 +50,7 @@ REC and it writes a piece, then you steer it. This guide starts with a quick ref
 | FX, FX again | SENDS, EFFECTS |
 | LFO, LFO again | MOTION, WARBLE |
 | GLO, twice, three, four times | MACROS, SCALE, PERSONALITY, SCREEN |
-| ARP, twice, three times | MIDI, CHANNELS, USB AUDIO |
+| ARP, twice, three, four times | MIDI, CHANNELS, USB AUDIO, BLUETOOTH |
 | white keys | the scale's notes |
 | black keys | the scale's chords |
 
@@ -374,7 +374,8 @@ range: a light tap plays softly, a firm one loud. A chord on a black key is as l
   **TOUCHED** (what the key read) and **PLAYED** (the velocity the note got, after KEY VEL), both out of 127. The notes
   you play go out over MIDI at the PLAYED velocity.
 
-Incoming notes are put into the scale. MIDI comes in over USB or the FM-1's TRS jack, and goes out over USB.
+Incoming notes are put into the scale. MIDI comes in over USB, Bluetooth (when it's on) or the FM-1's TRS jack, and
+goes out over USB and Bluetooth.
 
 **Syncing to an Ableton Move.** Connect Move's USB-A port to the FM-1. On Move, set MIDI Sync to Out. On the FM-1, set
 CLOCK (ARP) to IN. Press play on Move: the FM-1 starts with it, follows its tempo (the screen shows, say, 116 BPM IN), and
@@ -391,6 +392,18 @@ record it straight into your DAW.
   with FIXED): 0 to 100, starting at 80. 100 is full scale, where the peaks touch the top; 80 (about 4 dB down) leaves
   headroom for your DAW or AUM. With FIXED, GAIN turns the speaker and headphones down by the same amount, under the
   volume knob.
+
+**ARP a fourth time: BLUETOOTH.** Bluetooth MIDI, wireless, to an iPad, a phone, a computer or another FM-1 that can
+connect to one.
+
+- **BLUETOOTH** turns it **ON** or **OFF** (the default). It stays as you leave it, from one start to the next. Off, the
+  radio is quiet. Turning it on pauses the sound for about a second while the radio starts.
+- The line under the page shows its name, **FM-1** and four characters (each FM-1 its own), and whether something is
+  connected (**CONNECTED**) or not yet (**WAITING**). That name is what the other end lists.
+- Connected, it works like USB: clock, start and stop and NOTES OUT go to it, and its clock and notes come in, as the
+  MIDI page sets. **To connect from an iPad** in AUM: Settings, Bluetooth MIDI Devices, then this FM-1's name. On a Mac:
+  Audio MIDI Setup, the MIDI Studio window, the Bluetooth button. No pairing is needed.
+- Measured on the FM-1, it adds no load you can see on HOME.
 
 ## 17. Ideas to try
 

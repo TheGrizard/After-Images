@@ -5,7 +5,7 @@
   "author": "TheGrizard",
   "license": "MPL-2.0",
   "tagline": "a generative synth: four layers, one button, endless pieces",
-  "description": "After Images makes endless ambient pieces: four layers (GROUND, BODY, LIGHT, DUST), each a generative sequencer (eleven, from Euclidean and Markov to Lorenz and Conway's Life) driving one of thirty sound engines in its own part of the spectrum. Press REC for a new piece, following on from the last round the circle of fifths, in one of four personalities: the original ANALYST, dark and droning SENTINEL, ethereal DIPLOMAT or analogue, arpeggiating EXPLORER. Shimmer, reverse echo, chorus and tape, three visuals, MIDI clock sync, and USB audio to the computer, with or without the effects.",
+  "description": "After Images makes endless ambient pieces: four layers (GROUND, BODY, LIGHT, DUST), each a generative sequencer (eleven, from Euclidean and Markov to Lorenz and Conway's Life) driving one of thirty sound engines in its own part of the spectrum. Press REC for a new piece, following on from the last round the circle of fifths, in one of four personalities: the original ANALYST, dark and droning SENTINEL, ethereal DIPLOMAT or analogue, arpeggiating EXPLORER. Shimmer, reverse echo, chorus and tape, three visuals, MIDI over USB or Bluetooth, and USB audio to the computer, with or without effects.",
   "tags": ["ambient", "generative", "synth"],
   "install": "https://github.com/TheGrizard/After-Images/releases/latest",
   "source": "https://github.com/TheGrizard/After-Images",
@@ -13,7 +13,7 @@
   "hardware": {
     "models": ["FM-1"],
     "flash": ["856014", "B36014"],
-    "features": ["usb-audio-in", "second-core", "velocity", "pressure", "screen-reader"]
+    "features": ["bluetooth-midi", "usb-audio-in", "second-core", "velocity", "pressure", "screen-reader"]
   },
   "credits": "Built on fm1-base by Charles Vestal and felucca-bsp by Leo Kuroshita."
 }

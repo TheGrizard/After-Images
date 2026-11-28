@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
-# BLUETOOTH (ARP four times): off at first; on, it starts, and MIDI clock goes out to a connected Bluetooth listener
+# BT MIDI (ARP four times): OFF at first; FIND ME, it starts, and MIDI clock goes out to a connected Bluetooth listener;
+# HOST, it finds a device while the page is up, connects to it (CONNECT) and lets it go
 wait 2000
 expect bt_on 0
 tap ARP
@@ -25,3 +26,32 @@ turn K1 2
 wait 1500
 expect_out BLE F8
 shot bt_clock.png
+tap HOME
+wait 300
+ble disconnect
+tap ARP
+tap ARP
+tap ARP
+tap ARP
+wait 300
+expect page 16
+turn K1 1
+wait 1500
+expect bt_on 2
+expect bt_found 1
+shot bt_host.png
+turn K4 1
+wait 800
+expect bt_ready 1
+shot bt_host_on.png
+turn K4 -1
+wait 500
+expect bt_ready 0
+turn K1 -2
+wait 500
+expect bt_on 0
+tap HOME
+wait 20000
+reboot
+wait 2000
+expect bt_on 0

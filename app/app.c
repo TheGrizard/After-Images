@@ -19,6 +19,7 @@
  *   white keys         the scale's notes, up from the key; black keys: the scale's chords, I to VII then I to IV */
 #include "fastmath.h"
 #include "dsp/engine.h"
+#include "btdev.h"
 
 static Engine eng PLAT_POOL;
 
@@ -53,7 +54,8 @@ typedef struct {
     uint8_t usb_lvl;                     /* USB AUDIO's GAIN, with LEVEL FIXED: 0..100 (100: the old FULL) */
     /* v3.2 (pegs_set 10) */
     uint8_t key_vel;                     /* KEY VEL: the built-in keys' touch, 0 (FULL: as played) .. 100 (FIXED) */
-    uint8_t bt_on;                       /* BLUETOOTH (ARP four times): Bluetooth MIDI on, from the next start too. In the
+    uint8_t bt_on;                       /* BT MIDI (ARP four times): 0 OFF, 1 FIND ME (an iPad, a Mac, another FM-1
+                                          * connects to it), 2 HOST (it connects to a device); kept. In the
                                           * padding byte after key_vel: the size and pegs_set as v3.7's, so going back to
                                           * v3.7 keeps everything (it ignores this byte); read as 0 or 1 whatever was there */
 } settings_t;
@@ -145,7 +147,7 @@ static void settings_load(void)
                                                                      * clear of the top) */
     if (was < 11 || was > 11) { set.key_vel = 0; set.pegs_set = 11; }   /* (before v3.3: KEY VEL a scale, 10..100 %; now
                                                                      * from FULL, the keys as touched) */
-    set.bt_on &= 1u;
+    if (set.bt_on > 2u) set.bt_on = 0;
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -217,8 +219,14 @@ static void midi_in(void)
             /* (the clocks are read a screen frame at a time, so one beat's timing is off by up to a frame: over 8 the
              * error is an eighth of that. A new tempo, more than 4 % off for two beats running, starts the count again) */
             static uint32_t count, bt[9]; static int bn, odd;
-            uint32_t now = plat_ms();
-            if (now - ext_last > 500u) { count = 0; bn = 0; }   /* (a pause: start counting again) */
+            uint32_t now = plat_ms(), age = 0;
+            if (port == PORT_BLE) {               /* (Bluetooth: when it was sent, not when the radio's connection event
+                                                  * brought it, bunched: fm1.toml ble_midi_time) */
+                age = (plat_ticks24() - plat_midi_in_t24()) / (PLAT_TICKS_PER_US * 1000u);
+                if (age > 60u) age = 0;
+                now -= age;
+            }
+            if ((int32_t)(now - ext_last) > 500) { count = 0; bn = 0; }   /* (a pause: start counting again) */
             ext_last = now;
             if (count++ % 24u == 0) {
                 if (bn == 9) { for (int i = 0; i < 8; i++) bt[i] = bt[i + 1]; bn = 8; }
@@ -237,7 +245,7 @@ static void midi_in(void)
             if (CLK_IN && set.playing && ++clk_n % 24u == 0) {
                 /* within a bar: a new piece (REC) starts our count again, a missed Start leaves it anywhere; the bars stay
                  * the leader's either way (at most two beats to take up) */
-                float err = (float)(clk_n / 24u) - eng.beat;
+                float err = (float)(clk_n / 24u) + (float)age * eng.bpm * (1.0f / 60000.0f) - eng.beat;
                 err += AUDIO_AHEAD_BEATS(eng.bpm);   /* (our sound comes out a block after it's made: made that much
                                                   * ahead, so it lands on the leader's beat) */
                 err -= 4.0f * fm_floorf(err * 0.25f + 0.5f);
@@ -388,7 +396,8 @@ static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B
  * (its settings) */
 static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9, 16 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
-       K_PEGN, K_SYNC, K_VIS, K_PERS, K_ULVL, K_KVEL, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE };
+       K_PEGN, K_SYNC, K_VIS, K_PERS, K_ULVL, K_KVEL, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE,
+       K_BT, K_BTDEV, K_BTLINK };   /* (K_BTDEV, K_BTLINK: not settings, btdev's) */
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
                                                                                   * 3 the piece's per-layer arrays (VOICE) */
 #define PO(f) (uint16_t)__builtin_offsetof(Piece, f)
@@ -413,7 +422,8 @@ static const Knob PAGES[NPAGES][4] = {
     { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "CONTROL", K_REC, 2, SO(usb_full) }, { "GAIN", K_ULVL, 2, SO(usb_lvl) } },
     { { "AUDIO", K_PERS, 2, SO(pers) }, { "", K_NONE, 2, 0 }, { "VISUAL", K_VIS, 2, SO(visual) }, { "SHAPES", K_SHAPE, 2, SO(clock_in) } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
-    { { "BLUETOOTH", K_ONOFF, 2, SO(bt_on) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
+    { { "BT MIDI", K_BT, 2, SO(bt_on) }, { "DEVICE", K_BTDEV, 2, 0 }, { "", K_NONE, 2, 0 }, { "CONNECT", K_BTLINK, 2, 0 } },   /* (DEVICE's
+                                                  * name has the third's room) */
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
 
@@ -457,6 +467,7 @@ static struct {
 } ui;
 
 static void settings_apply(void);
+static void bt_dev_text(char *s);
 
 static const Knob *knob_of(int pg, int k)
 {
@@ -516,6 +527,9 @@ static void knob_text(int pg, int k, char *s)
     case K_CHORD: text_cat(s, CHORD_NAME[v % NUM_CHORDS]); break;
     case K_TEMPO: if (eng.ext_bpm > 20.0f) { int_text(shown_bpm(), s); text_cat(s, " IN"); } else int_text(40 + v, s); break;
     case K_ONOFF: text_cat(s, v ? "ON" : "OFF"); break;
+    case K_BT: text_cat(s, v == 2 ? "HOST" : v == 1 ? "FIND ME" : "OFF"); break;
+    case K_BTDEV: bt_dev_text(s); break;
+    case K_BTLINK: text_cat(s, set.bt_on != 2 ? "-" : btdev_ready() ? "ON" : btdev_busy() ? "WAIT" : "OFF"); break;
     case K_LCH: { int_text(v + 1, s); text_cat(s, "-"); char n[4]; int_text(v + 4, n); text_cat(s, n); break; }   /* the four layers' */
     case K_CH: int_text(v + 1, s); break;
     case K_NIN: text_cat(s, v == 1 ? "LAYERS" : v == 2 ? "OFF" : "CHOSEN"); break;
@@ -546,6 +560,9 @@ static float knob_frac(int pg, int k)    /* the bar under the value */
     case K_CHORD: return (float)v / (NUM_CHORDS - 1);
     case K_TEMPO: return (float)v / 140.0f;
     case K_ONOFF: return v ? 1.0f : 0.0f;
+    case K_BT: return (float)v * 0.5f;
+    case K_BTDEV: { int n = btdev_count(); return n > 1 ? (float)btdev_pick() / (float)(n - 1) : (float)(n > 0); }
+    case K_BTLINK: return btdev_ready() ? 1.0f : btdev_busy() ? 0.5f : 0.0f;
     case K_CH: return (float)v / 15.0f;
     case K_LCH: return (float)v / 12.0f;
     case K_NIN: return (float)v / 2.0f;
@@ -779,7 +796,17 @@ static void knob_turn(int k, int d)
     const Knob *kn = knob_of(ui.page, k); uint8_t *p = knob_ptr(ui.page, k);
     int v = kn->kind == K_OCT ? (int8_t)*p : knob_get(kn, p), lo = 0, hi = 100, step = 2, wrap = 0;
     if (kn->kind == K_NONE) return;
+    if (kn->kind == K_BTDEV || kn->kind == K_BTLINK) {   /* (HOST: DEVICE the one found to connect to; CONNECT it, or
+                                                  * let it go. Not settings) */
+        if (kn->kind == K_BTDEV && set.bt_on == 2 && !btdev_busy()) btdev_choose(btdev_pick() + d);
+        if (kn->kind == K_BTLINK && set.bt_on == 2 && (d > 0) != (btdev_busy() != 0)
+            && btdev_save() == BTDEV_NO_DEVICE) app_say("BT MIDI", "NO DEVICE FOUND");
+        ui.last_knob = k; ui.knob_at = plat_ms(); ui.pop_until = 0;
+        if (ann_on()) { char s[24]; knob_text(ui.page, k, s); say_text(kn->name, s); }
+        return;
+    }
     switch (kn->kind) {
+    case K_BT: hi = 2; step = 1; break;
     case K_INCH: hi = 16; step = 1; break;
     case K_REC: hi = 1; step = 1; break;
     case K_ULVL: hi = 100; step = 5; break;
@@ -825,7 +852,8 @@ static void settings_apply(void)
     static int bt_was = -1;
     plat_usb_audio_full(set.usb_full & 1);
     if (set.bt_on != bt_was) {          /* (at the start: Bluetooth starts by itself when on, APP_BLE_AT_BOOT) */
-        if (bt_was >= 0) plat_ble_enable(set.bt_on);
+        if (bt_was == 2 && btdev_busy()) btdev_save();                    /* (out of HOST: the device let go) */
+        if (bt_was >= 0 && (set.bt_on != 0) != (bt_was != 0)) plat_ble_enable(set.bt_on != 0);
         bt_was = set.bt_on;
     }
     palette_apply();
@@ -1667,6 +1695,16 @@ static void draw_levels(int y0)
     }
 }
 
+/* DEVICE (HOST): the one connecting or connected, or the pick of those found */
+static void bt_dev_text(char *s)
+{
+    char n[21];
+    if (set.bt_on != 2) { text_cat(s, "-"); return; }
+    if (btdev_busy()) { text_cat(s, btdev_name()); return; }
+    if (btdev_found(btdev_pick(), n, 0)) { text_cat(s, n); return; }
+    text_cat(s, plat_ble_state() == BLE_READY ? "SEARCHING" : "-");
+}
+
 /* BLUETOOTH: its name, as another FM-1, a phone or a computer lists it (radio.c ble_midi_name's: "FM-1 " and four hex
  * digits from this FM-1's own ID), and whether anything is connected */
 static const char *bt_hint(void)
@@ -1678,6 +1716,13 @@ static const char *bt_hint(void)
     while (u && i < 16u && u[i] == u[0]) i++;
     s[0] = 0;
     if (!set.bt_on) { text_cat(s, "OFF: THE RADIO QUIET"); return s; }
+    int st = plat_ble_state();
+    if (st != BLE_READY) { text_cat(s, st == BLE_FAILED ? "BLUETOOTH FAILED TO START" : "STARTING"); return s; }
+    if (set.bt_on == 2) {                        /* HOST: btdev's line, "LOOKING FOR MIDI DEVICES", "CONNECTED: ..." */
+        btdev_title(s);
+        for (char *c = s; *c; c++) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 32);
+        return s;
+    }
     text_cat(s, "FM-1 ");
     if (u && i < 16u) {
         char n[5];
@@ -1687,8 +1732,7 @@ static const char *bt_hint(void)
         for (i = 0; i < 4u; i++) n[i] = hex[h >> (12u - 4u * i) & 15u];
         n[4] = 0; text_cat(s, n);
     }
-    int st = plat_ble_state();
-    text_cat(s, st == BLE_READY ? (plat_ble_connected() ? ": CONNECTED" : ": WAITING") : st == BLE_FAILED ? ": FAILED" : ": STARTING");
+    text_cat(s, plat_ble_connected() ? ": CONNECTED" : plat_ble_linked() ? ": LINKED" : ": WAITING");
     return s;
 }
 
@@ -1894,6 +1938,11 @@ void app_frame(void)
         if (xr != xr_seen) { if (save_end && now - save_end < 500u) xr_saves += xr - xr_seen; xr_seen = xr; }
     }
     input();
+    {   int ev;                                  /* Bluetooth MIDI devices: looked for while the page is up in HOST */
+        btdev_page(ui.page == PG_BT && set.bt_on == 2);
+        while ((ev = btdev_event()) != BTDEV_NONE)
+            if (ev != BTDEV_COMPUTER && ev != BTDEV_COMPUTER_GONE) app_say("BT MIDI", btdev_word(ev));
+    }
     speak();
     if (ui.splash_on) {
         static uint32_t last;
@@ -1965,6 +2014,8 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "key_vel")) *got = set.key_vel;
     else if (!strcmp(what, "bt_on")) *got = set.bt_on;
     else if (!strcmp(what, "bt_state")) *got = plat_ble_state();
+    else if (!strcmp(what, "bt_ready")) *got = btdev_ready();
+    else if (!strcmp(what, "bt_found")) *got = btdev_count();
     else if (!strcmp(what, "vel_played")) *got = key_vel_last;
     else if (!strcmp(what, "engine")) *got = set.cur.l[ui.sel].engine;
     else if (!strcmp(what, "attack")) *got = set.cur.l[ui.sel].attack;

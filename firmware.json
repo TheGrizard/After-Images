@@ -13,7 +13,7 @@
   "hardware": {
     "models": ["FM-1"],
     "flash": ["856014", "B36014"],
-    "features": ["bluetooth-midi", "usb-audio-in", "second-core", "velocity", "pressure", "screen-reader"]
+    "features": ["bluetooth-midi", "bluetooth-midi-devices", "usb-audio-in", "second-core", "velocity", "pressure", "screen-reader"]
   },
   "credits": "Built on fm1-base by Charles Vestal and felucca-bsp by Leo Kuroshita."
 }

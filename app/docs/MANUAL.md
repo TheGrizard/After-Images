@@ -393,17 +393,29 @@ record it straight into your DAW.
   headroom for your DAW or AUM. With FIXED, GAIN turns the speaker and headphones down by the same amount, under the
   volume knob.
 
-**ARP a fourth time: BLUETOOTH.** Bluetooth MIDI, wireless, to an iPad, a phone, a computer or another FM-1 that can
-connect to one.
+**ARP a fourth time: BLUETOOTH.** Bluetooth MIDI, wireless: to an iPad, a phone or a computer, or straight to another
+FM-1 (Expectation Reality, say), no cable and no hub.
 
-- **BLUETOOTH** turns it **ON** or **OFF** (the default). It stays as you leave it, from one start to the next. Off, the
-  radio is quiet. Turning it on pauses the sound for about a second while the radio starts.
-- The line under the page shows its name, **FM-1** and four characters (each FM-1 its own), and whether something is
-  connected (**CONNECTED**) or not yet (**WAITING**). That name is what the other end lists.
-- Connected, it works like USB: clock, start and stop and NOTES OUT go to it, and its clock and notes come in, as the
-  MIDI page sets. **To connect from an iPad** in AUM: Settings, Bluetooth MIDI Devices, then this FM-1's name. On a Mac:
-  Audio MIDI Setup, the MIDI Studio window, the Bluetooth button. No pairing is needed.
-- Measured on the FM-1, it adds no load you can see on HOME.
+- **BT MIDI** chooses what it does, and stays as you leave it from one start to the next:
+  - **OFF** (the default): the radio is quiet.
+  - **FIND ME**: it waits for something to connect to it, an iPad, a Mac or another FM-1 set to HOST. The line under
+    the page shows its name, **FM-1** and four characters (each FM-1 its own), and **WAITING** or **CONNECTED**.
+    That name is what the other end lists.
+  - **HOST**: it connects to a Bluetooth MIDI device itself, such as another FM-1 set to FIND ME. While this page is
+    up it looks for devices nearby (the line says LOOKING FOR MIDI DEVICES, then CONNECTED and the name).
+- **DEVICE** (HOST): turn to choose one of the devices found. Another FM-1 shows as FM-1 and four characters, the
+  name on its own BLUETOOTH page.
+- **CONNECT** (HOST): turn right to connect to it (WAIT, then ON), left to let it go.
+- Turning Bluetooth on from OFF pauses the sound for about a second while the radio starts.
+- Connected either way, it works like USB: clock, start and stop and NOTES OUT go to it, and its clock and notes come
+  in, as the MIDI page sets. A clock followed over Bluetooth is timed by when it was sent, so the tempo doesn't wobble
+  with Bluetooth's uneven delivery.
+- Bluetooth holds one connection at a time: as HOST to a device, or in FIND ME from an iPad, a Mac or an FM-1.
+- **From an iPad** in AUM: Settings, Bluetooth MIDI Devices, then this FM-1's name. **On a Mac**: Audio MIDI Setup, the
+  MIDI Studio window, the Bluetooth button. No pairing is needed.
+- **Two FM-1s:** one on FIND ME, the other on HOST, choose it under DEVICE and turn CONNECT right. For After Images to
+  lead, set its CLOCK to OUT and the other's to follow.
+- Measured on the FM-1, Bluetooth adds no load you can see on HOME.
 
 ## 17. Ideas to try
 

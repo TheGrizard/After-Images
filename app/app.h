@@ -14,9 +14,10 @@ void app_overload(void);
 #define APP_TOUCH                        /* velocity from the keys (lib/touch.h) */
 #define APP_CANVAS_PX (240u * 60u)       /* the screen drawn in bands of 60 rows: the pool's RAM goes to the sound */
 
-/* Bluetooth MIDI (fm1.toml ble, the own stack): off unless BLUETOOTH is on (ARP four times); its record kept nowhere
+/* Bluetooth MIDI (fm1.toml ble, the own stack): off unless BT MIDI is FIND ME or HOST (ARP four times); its record kept nowhere
  * (no pairing: nothing to keep, app.c app_ble_load) */
 #define APP_BLE_STORE
+#define APP_BTDEV                        /* HOST: Bluetooth MIDI devices found and connected (lib/btdev.h) */
 int app_bt_at_boot(void);
 #define APP_BLE_AT_BOOT (app_bt_at_boot())
 

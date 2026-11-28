@@ -99,7 +99,7 @@ jobs:
           cp "app/build/$pkg.fwsc" build/release-assets/
           cp "app/build/$pkg.bin" "build/release-assets/$pkg-app.bin"
           ./build.sh --rfm1
-          cp app/build/rfm1/"$pkg"-dev+*.rfm1 "build/release-assets/$pkg.rfm1"
+          cp app/build/rfm1/*-dev+*.rfm1 "build/release-assets/$pkg.rfm1"   # (the dev .rfm1 is named after_images-dev+...)
         fi
         # the firmware described for hubs (base/docs/FIRMWARE-JSON.md), from the build with Bluetooth
         cp app/build/firmware.json build/release-assets/

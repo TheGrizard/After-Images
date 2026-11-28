@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MPL-2.0
+# BLUETOOTH (ARP four times): off at first; on, it starts, and MIDI clock goes out to a connected Bluetooth listener
+wait 2000
+expect bt_on 0
+tap ARP
+wait 200
+tap ARP
+wait 200
+tap ARP
+wait 200
+tap ARP
+wait 300
+expect page 16
+shot bt_off.png
+turn K1 1
+wait 2500
+expect bt_on 1
+shot bt_on.png
+ble connect
+wait 500
+tap ARP
+wait 300
+expect page 11
+turn K1 2
+wait 1500
+expect_out BLE F8
+shot bt_clock.png

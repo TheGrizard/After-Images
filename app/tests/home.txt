@@ -115,6 +115,9 @@ expect page 13
 shot usb.png
 tap ARP
 wait 200
+expect page 16
+tap ARP
+wait 200
 expect page 11
 tap HOME
 wait 200

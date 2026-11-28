@@ -428,6 +428,8 @@ connect to one.
 - **Clipping in your DAW or AUM.** On USB AUDIO (ARP three times), set CONTROL to FIXED and turn GAIN down from 80.
 - **Crackles or pops.** Tap HOME and look at DROPS. If it rises when you hear them, the FM-1 is running out of time: try
   fewer busy layers or less ACTIVITY. It also sheds notes by itself under heavy load.
+- **Crackles when another device sends it MIDI.** Check for a MIDI loop: with NOTES OUT on, if the other end (AUM, a
+  DAW) sends the FM-1's own notes back to it, every note plays twice. Remove that route, or turn NOTES OUT off.
 - **A setting seems to do nothing.** Many settings act on the chosen layer: check which layer SEL has chosen (the page
   shows it in the layer's colour).
 - **It didn't remember my changes.** It saves a few seconds after you stop with PLAY. Switching off while it plays

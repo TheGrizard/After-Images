@@ -187,6 +187,12 @@ static inline float soft(float x)
     return x < 0 ? -y : y;
 }
 
+#if defined(FM1B_AUDIO_AHEAD) && FM1B_AUDIO_AHEAD
+#define AUDIO_AHEAD_BEATS(bpm) ((float)(BLK * ENGINE_SUB) / SR * (bpm) / 60.0f)   /* (fm1.toml audio_ahead: a block, 5.8 ms,
+                                                                                  * in beats) */
+#else
+#define AUDIO_AHEAD_BEATS(bpm) 0.0f
+#endif
 static void midi_send(uint32_t pkt) { plat_midi_send(pkt, TO_USB | TO_BLE); }   /* (to Bluetooth only while connected) */
 
 static void cc_set(uint8_t *v, uint32_t x) { *v = (uint8_t)(x * 100u / 127u); }
@@ -232,6 +238,8 @@ static void midi_in(void)
                 /* within a bar: a new piece (REC) starts our count again, a missed Start leaves it anywhere; the bars stay
                  * the leader's either way (at most two beats to take up) */
                 float err = (float)(clk_n / 24u) - eng.beat;
+                err += AUDIO_AHEAD_BEATS(eng.bpm);   /* (our sound comes out a block after it's made: made that much
+                                                  * ahead, so it lands on the leader's beat) */
                 err -= 4.0f * fm_floorf(err * 0.25f + 0.5f);
                 eng.beat_adj = err;
             }

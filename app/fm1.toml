@@ -16,6 +16,9 @@ usb_audio_out = false          # the computer's audio never played through the F
 cpu2 = true                    # the second core renders some of the layers (app_render)
 cpu2_fallback = true           # if it fails, carry on with one core instead of restarting
 cpu2_stack = 8192
+audio_ahead = true             # a block rendered ahead: one busy moment (a pile of notes starting at once) rides through
+                               # instead of dropping; two in a row still drop. 2 KB of RAM, 5.8 ms more latency
+                               # (a followed clock allows for it: app.c AUDIO_AHEAD_BEATS)
 # the site and firmware.json
 tagline = "a generative synth: four layers, one button, endless pieces"
 licence = "MPL-2.0"

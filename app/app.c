@@ -53,6 +53,9 @@ typedef struct {
     uint8_t usb_lvl;                     /* USB AUDIO's GAIN, with LEVEL FIXED: 0..100 (100: the old FULL) */
     /* v3.2 (pegs_set 10) */
     uint8_t key_vel;                     /* KEY VEL: the built-in keys' touch, 0 (FULL: as played) .. 100 (FIXED) */
+    uint8_t bt_on;                       /* BLUETOOTH (ARP four times): Bluetooth MIDI on, from the next start too. In the
+                                          * padding byte after key_vel: the size and pegs_set as v3.7's, so going back to
+                                          * v3.7 keeps everything (it ignores this byte); read as 0 or 1 whatever was there */
 } settings_t;
 #define SET_SIZE_V28 __builtin_offsetof(settings_t, pers)   /* (v2.0-2.8's settings: everything before it) */
 static settings_t set;
@@ -142,6 +145,7 @@ static void settings_load(void)
                                                                      * clear of the top) */
     if (was < 11 || was > 11) { set.key_vel = 0; set.pegs_set = 11; }   /* (before v3.3: KEY VEL a scale, 10..100 %; now
                                                                      * from FULL, the keys as touched) */
+    set.bt_on &= 1u;
     if (n != (int)sizeof set || !settings_ok()) {
         settings_defaults();
         store_ok = plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0;
@@ -183,7 +187,7 @@ static inline float soft(float x)
     return x < 0 ? -y : y;
 }
 
-static void midi_send(uint32_t pkt) { plat_midi_send(pkt, TO_USB); }
+static void midi_send(uint32_t pkt) { plat_midi_send(pkt, TO_USB | TO_BLE); }   /* (to Bluetooth only while connected) */
 
 static void cc_set(uint8_t *v, uint32_t x) { *v = (uint8_t)(x * 100u / 127u); }
 
@@ -298,7 +302,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         static int was_out = -1; int out = CLK_OUT;
         if (was_out >= 0 && out != was_out && set.playing) {
             if (out) eng.sync_req = 1;
-            plat_midi_send(0x0Fu | (out ? 0xFAu : 0xFCu) << 8, TO_USB);
+            plat_midi_send(0x0Fu | (out ? 0xFAu : 0xFCu) << 8, TO_USB | TO_BLE);
         }
         was_out = out;
     }
@@ -366,15 +370,15 @@ static const char *const NOTE_NAME[12] = { "C", "C#", "D", "D#", "E", "F", "F#",
 
 /* ------------------------------------------------------------------ the pages */
 enum { PG_HOME, PG_SOUND, PG_SEQ, PG_MIX, PG_VOICE, PG_FX, PG_FXG, PG_MOTION, PG_WARBLE, PG_SCALE, PG_SCREEN, PG_MIDI, PG_CHAN, PG_USB,
-       PG_VISUAL, PG_MACROS, NPAGES };   /* (VISUAL and MACROS last: the pages before keep their numbers; VISUAL is PERSONALITY's) */
+       PG_VISUAL, PG_MACROS, PG_BT, NPAGES };   /* (VISUAL and MACROS last: the pages before keep their numbers; VISUAL is PERSONALITY's) */
 static const char *const PAGE_NAME[NPAGES] = { "HOME", "SOUND", "SEQUENCE", "MIX", "VOICE", "SENDS", "EFFECTS", "MOTION", "WARBLE", "SCALE", "SCREEN",
-                                                "MIDI", "CHANNELS", "USB AUDIO", "PERSONALITY", "MACROS" };
+                                                "MIDI", "CHANNELS", "USB AUDIO", "PERSONALITY", "MACROS", "BLUETOOTH" };
 /* each page's button: pressed again, the next page of the same button (ENV: MIX, VOICE; GLO: MACROS, SCALE, VISUAL,
- * SCREEN; ARP: MIDI, CHANNELS, USB AUDIO) */
-static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO, B_GLO };
+ * SCREEN; ARP: MIDI, CHANNELS, USB AUDIO, BLUETOOTH) */
+static const uint8_t PAGE_BTN[NPAGES] = { B_HOME, B_EDIT, B_SEQ, B_ENV, B_ENV, B_FX, B_FX, B_LFO, B_LFO, B_GLO, B_GLO, B_ARP, B_ARP, B_ARP, B_GLO, B_GLO, B_ARP };
 /* the order a button steps through its pages: GLO's MACROS (HOME held's, as a page), SCALE, VISUAL (which), then SCREEN
  * (its settings) */
-static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9 };
+static const uint8_t PAGE_ORD[NPAGES] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 14, 15, 11, 9, 16 };
 enum { K_NONE, K_PCT, K_ENGINE, K_SEQ, K_RATE, K_OCT, K_KEY, K_SCALE, K_CHORD, K_TEMPO, K_ONOFF, K_CH, K_INCH, K_REC,
        K_PEGN, K_SYNC, K_VIS, K_PERS, K_ULVL, K_KVEL, K_SHAPE, K_DIRT, K_RVB, K_ECHO, K_GRAIN, K_TONE, K_NIN, K_LCH, K_PLAYIN, K_ROUTE };
 typedef struct { const char *name; uint8_t kind, where; uint16_t off; } Knob;   /* where: 0 the piece, 1 the layer, 2 the settings,
@@ -401,6 +405,7 @@ static const Knob PAGES[NPAGES][4] = {
     { { "OUTPUT", K_ROUTE, 2, SO(usb_full) }, { "", K_NONE, 2, 0 }, { "CONTROL", K_REC, 2, SO(usb_full) }, { "GAIN", K_ULVL, 2, SO(usb_lvl) } },
     { { "AUDIO", K_PERS, 2, SO(pers) }, { "", K_NONE, 2, 0 }, { "VISUAL", K_VIS, 2, SO(visual) }, { "SHAPES", K_SHAPE, 2, SO(clock_in) } },
     { { "MOOD", K_PCT, 0, PO(mood) }, { "ACTIVITY", K_PCT, 0, PO(motion) }, { "EVOLVE", K_PCT, 0, PO(evolve) }, { "DRIFT", K_PCT, 0, PO(weird) } },
+    { { "BLUETOOTH", K_ONOFF, 2, SO(bt_on) }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 }, { "", K_NONE, 2, 0 } },
 };
 static int page_has_layer(int pg) { return pg == PG_SOUND || pg == PG_SEQ || pg == PG_MIX || pg == PG_VOICE || pg == PG_FX; }
 
@@ -741,6 +746,12 @@ static void select_layer(int l)
  * range stretched over 10-127, so a light and a firm fingertip sound apart (85 plays 54, 100 plays 80, 115 plays 106) */
 #define KEY_FIXED 80
 #define KEY_FLOOR 60
+/* Bluetooth's record (app.h APP_BLE_STORE): nothing kept. Without pairing there is no bond to keep, and the address and
+ * the name come from this FM-1's own ID, the same every start */
+int app_ble_load(struct plat_ble_rec *r) { (void)r; return 0; }
+int app_ble_save(const struct plat_ble_rec *r) { (void)r; return 1; }
+int app_bt_at_boot(void) { return set.bt_on != 0; }
+
 static int key_vel_last, key_touch_last;           /* (the last key's, as played and as touched: CHANNELS shows them) */
 static uint32_t key_touch_at;
 static int key_vel(uint32_t kk)
@@ -803,7 +814,12 @@ static void knob_turn(int k, int d)
 /* the settings that reach the platform and the screen */
 static void settings_apply(void)
 {
+    static int bt_was = -1;
     plat_usb_audio_full(set.usb_full & 1);
+    if (set.bt_on != bt_was) {          /* (at the start: Bluetooth starts by itself when on, APP_BLE_AT_BOOT) */
+        if (bt_was >= 0) plat_ble_enable(set.bt_on);
+        bt_was = set.bt_on;
+    }
     palette_apply();
 }
 
@@ -1643,6 +1659,31 @@ static void draw_levels(int y0)
     }
 }
 
+/* BLUETOOTH: its name, as another FM-1, a phone or a computer lists it (radio.c ble_midi_name's: "FM-1 " and four hex
+ * digits from this FM-1's own ID), and whether anything is connected */
+static const char *bt_hint(void)
+{
+    static char s[40];
+    static const char hex[] = "0123456789ABCDEF";
+    const uint8_t *u = plat_chip_uid();
+    uint32_t h = 0, i = 1;
+    while (u && i < 16u && u[i] == u[0]) i++;
+    s[0] = 0;
+    if (!set.bt_on) { text_cat(s, "OFF: THE RADIO QUIET"); return s; }
+    text_cat(s, "FM-1 ");
+    if (u && i < 16u) {
+        char n[5];
+        h = 2166136261u;
+        for (i = 0; i < 16u; i++) h = (h ^ u[i]) * 16777619u;
+        h ^= h >> 16;
+        for (i = 0; i < 4u; i++) n[i] = hex[h >> (12u - 4u * i) & 15u];
+        n[4] = 0; text_cat(s, n);
+    }
+    int st = plat_ble_state();
+    text_cat(s, st == BLE_READY ? (plat_ble_connected() ? ": CONNECTED" : ": WAITING") : st == BLE_FAILED ? ": FAILED" : ": STARTING");
+    return s;
+}
+
 /* CHANNELS, a few seconds after a key: how hard it was touched, and the velocity it played at (KEY VEL's doing) */
 static const char *touch_hint(void)
 {
@@ -1678,24 +1719,25 @@ static void draw_panel_rows(int y0)
             "THE FILTER GLIDES, THE PITCH NEVER",
             "THIS LAYER INTO EACH EFFECT", "PAST HALF: SHIMMER, REVERSE ECHO", "HOW THE LAYERS MOVE", "THE PITCH WANDERING, AN OLD TAPE'S", "EVERYTHING IN THE SCALE",
             "THE PEGBOARD OF LIGHT", "SYNC, AND NOTES IN AND OUT", "IN AND OUT: LAYERS, KEYS, CHOSEN",
-            "CLEAN: WITHOUT FX, TO RECORD DRY", "WHAT REC MAKES, AND WHAT YOU SEE", "WHERE THE MUSIC GOES" };
+            "CLEAN: WITHOUT FX, TO RECORD DRY", "WHAT REC MAKES, AND WHAT YOU SEE", "WHERE THE MUSIC GOES", "" };
         cv_text(6, y0 + 26, &FONT_XS, pg == PG_SCREEN && set.visual == 2 ? "BLOCKS, BREEDING, MOULDING"
                 : pg == PG_SCREEN && set.visual == 1 ? "THE INKBLOT, FOLDED"
                 : pg == PG_USB && !(set.usb_full >> 1 & 1) ? "MIX: THE FULL MIX, WITH FX"
-                : pg == PG_CHAN && key_touch_at && plat_ms() - key_touch_at < 8000u ? touch_hint() : HINT[pg], dim(C_SUB, 0.8f));   /* (USB
+                : pg == PG_CHAN && key_touch_at && plat_ms() - key_touch_at < 8000u ? touch_hint()
+                : pg == PG_BT ? bt_hint() : HINT[pg], dim(C_SUB, 0.8f));   /* (USB
                                                                      * AUDIO's: what OUTPUT sends, MIX or CLEAN) */
     }
     /* four columns: label, value, bar */
     for (int k = 0; k < 4; k++) {
         /* (PERSONALITY's: a knob with an empty one beside it centred across both, its long names room) */
-        int wide = (pg == PG_VISUAL || pg == PG_USB) && k < 3 && knob_of(pg, k + 1)->kind == K_NONE;
+        int wide = (pg == PG_VISUAL || pg == PG_USB || pg == PG_BT) && k < 3 && knob_of(pg, k + 1)->kind == K_NONE;
         int cx = 60 * k + 30 + (wide ? 30 : 0), y = y0 + 50;
         int hot = focus && k == ui.last_knob;
         const char *nm = knob_of(pg, k)->name;
         cv_text(cx - text_w(&FONT_XS, nm) / 2, y, &FONT_XS, nm, hot ? pc : C_SUB);
         char v[24]; knob_text(pg, k, v);
         int room = k < 3 && knob_of(pg, k + 1)->kind == K_NONE ? 112 : 56;   /* (the next column empty: its room too) */
-        const felucca_font_t *f = text_w(&FONT_M, v) <= room && pg != PG_VISUAL && pg != PG_USB ? &FONT_M   /* (PERSONALITY's
+        const felucca_font_t *f = text_w(&FONT_M, v) <= room && pg != PG_VISUAL && pg != PG_USB && pg != PG_BT ? &FONT_M   /* (PERSONALITY's
                                                                      * and USB AUDIO's all one size: their longest need the smaller) */
                                 : text_w(&FONT_B, v) <= room + 2 ? &FONT_B : &FONT_XS;
         if (text_w(f, v) > room + 2) v[9] = 0;
@@ -1913,6 +1955,8 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "pers")) *got = set.pers;
     else if (!strcmp(what, "usb_lvl")) *got = set.usb_lvl;
     else if (!strcmp(what, "key_vel")) *got = set.key_vel;
+    else if (!strcmp(what, "bt_on")) *got = set.bt_on;
+    else if (!strcmp(what, "bt_state")) *got = plat_ble_state();
     else if (!strcmp(what, "vel_played")) *got = key_vel_last;
     else if (!strcmp(what, "engine")) *got = set.cur.l[ui.sel].engine;
     else if (!strcmp(what, "attack")) *got = set.cur.l[ui.sel].attack;

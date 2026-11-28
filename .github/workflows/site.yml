@@ -39,15 +39,24 @@ jobs:
         run: |
           set -euo pipefail
           # (the one published last, not the list's first or the highest number: a tag made by mistake can't take over)
-          tag=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[] | select(.draft == false)] | sort_by(.published_at) | last | .tag_name')
+          # (pre-releases aside: a test build never takes the front page; it gets its own, test/, below)
+          rels=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")
+          tag=$(echo "$rels" | jq -r '[.[] | select(.draft == false and .prerelease == false)] | sort_by(.published_at) | last | .tag_name')
           [ -n "$tag" ] && [ "$tag" != null ] || { echo 'no release yet'; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#[vV]}" >> "$GITHUB_OUTPUT"
+          # a test build: the newest pre-release, if it came after that release (a later release retires it)
+          at=$(echo "$rels" | jq -r --arg t "$tag" '.[] | select(.tag_name == $t) | .published_at')
+          pre=$(echo "$rels" | jq -r --arg at "$at" '[.[] | select(.draft == false and .prerelease == true and .published_at > $at)] | sort_by(.published_at) | last | .tag_name // empty')
+          echo "pre=$pre" >> "$GITHUB_OUTPUT"
+          echo "pre_version=${pre#[vV]}" >> "$GITHUB_OUTPUT"
+          echo "pre_title=$(echo "$rels" | jq -r --arg t "$pre" '.[] | select(.tag_name == $t) | .name')" >> "$GITHUB_OUTPUT"
           # the installer writes the release's signed package; the page, the words and the browser's emulator come
           # from this commit's source
           git submodule update --init --recursive
           mkdir -p app/build
           gh release download "$tag" --pattern '*.fwsc' --dir app/build
+          if [ -n "$pre" ]; then mkdir -p app/build/test; gh release download "$pre" --pattern '*.fwsc' --dir app/build/test; fi
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065   # v5.6.0
         with:
@@ -66,11 +75,43 @@ jobs:
       - name: The emulator and the site
         env:
           VERSION: ${{ steps.rel.outputs.version }}
+          PRE: ${{ steps.rel.outputs.pre }}
+          PRE_VERSION: ${{ steps.rel.outputs.pre_version }}
+          PRE_TITLE: ${{ steps.rel.outputs.pre_title }}
         run: |
           set -euo pipefail
           set +u; source "$RUNNER_TEMP/emsdk/emsdk_env.sh"; set -u
           ./build.sh --web --release "$VERSION"
           python3 base/tools/make_site.py app "app/build/after-images-$VERSION.fwsc" "$VERSION" site
+          if [ -n "$PRE" ]; then
+            # the test build: its own installer at test/ (the user guide and the emulator stay the release's), and a
+            # line on the front page pointing to it
+            python3 base/tools/make_site.py app "app/build/test/after-images-$PRE_VERSION.fwsc" "$PRE_VERSION" "$RUNNER_TEMP/test"
+            mkdir -p site/test
+            cp -r "$RUNNER_TEMP/test/install" "$RUNNER_TEMP/test/firmware" site/test/
+            [ -d "$RUNNER_TEMP/test/words" ] && cp -r "$RUNNER_TEMP/test/words" site/test/
+            python3 - "$PRE_VERSION" "$PRE_TITLE" "$VERSION" <<'PY'
+          import html, sys
+          pv, title, v = (html.escape(a) for a in sys.argv[1:4])
+          page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>{title}</title><style>body{{font:17px/1.5 system-ui,sans-serif;max-width:40em;margin:2em auto;padding:0 1em;color:#eee;background:#111}}
+          a{{color:#8fb4ff}} .b{{display:inline-block;padding:.6em 1.2em;background:#3b6fd9;color:#fff;border-radius:6px;text-decoration:none}}</style></head><body>
+          <h1>{title}</h1>
+          <p>A test build of After Images, not the release: try it, and go back to the release ({v}) any time from the
+          <a href="../install/">main installer</a>. Your settings and saved pieces are kept either way.</p>
+          <p><a class="b" href="install/">Install the test build ({pv})</a></p>
+          <p>Chrome or Edge on a computer, or Chrome on an Android phone with a USB-C cable. iPhones and iPads can't install
+          firmware (no Web MIDI in their browsers). <a href="firmware/after-images-{pv}.fwsc">Download the file</a> for
+          the command-line installer.</p>
+          <p><a href="../">Back to After Images</a></p></body></html>"""
+          open("site/test/index.html", "w").write(page)
+          idx = open("site/index.html").read()
+          note = f'<p style="border:1px solid #3b6fd9;border-radius:6px;padding:.6em 1em"><b>Test build:</b> {title}. <a href="test/">Try it</a></p>'
+          i = idx.find("<h2")
+          idx = idx[:i] + note + idx[i:] if i >= 0 else idx.replace("</main>", note + "</main>", 1)
+          open("site/index.html", "w").write(idx)
+          PY
+          fi
           touch site/.nojekyll
 
       - name: Publish to the gh-pages branch
